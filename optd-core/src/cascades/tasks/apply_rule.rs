@@ -17,9 +17,11 @@ use crate::{
 
 use super::Task;
 
+/// Applys a rule to a multi-expression.
 pub struct ApplyRuleTask {
     rule_id: RuleId,
     expr_id: ExprId,
+    /// When this flag is on, only fire transformation rules for the expression (no implementation rule).
     exploring: bool,
 }
 
@@ -36,7 +38,7 @@ impl ApplyRuleTask {
 fn match_node<T: RelNodeTyp>(
     typ: &T,
     children: &[RuleMatcher<T>],
-    pick_to: Option<usize>,
+    pick_to: Option<usize>, // integer id for an user-requested expression (unique within a matcher)
     node: RelMemoNodeRef<T>,
     optimizer: &CascadesOptimizer<T>,
 ) -> Vec<HashMap<usize, RelNode<T>>> {
@@ -132,6 +134,7 @@ fn match_and_pick_group<T: RelNodeTyp>(
 ) -> Vec<HashMap<usize, RelNode<T>>> {
     let mut matches = vec![];
     for expr_id in optimizer.get_all_exprs_in_group(group_id) {
+        // get corresponding expr memoed.
         let node = optimizer.get_expr_memoed(expr_id);
         matches.extend(match_and_pick(matcher, node, optimizer));
     }
@@ -149,6 +152,7 @@ fn match_and_pick<T: RelNodeTyp>(
             children,
             pick_to,
         } => {
+            // check node type
             if &node.typ != typ {
                 return vec![];
             }
@@ -170,10 +174,11 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
     }
 
     fn execute(&self, optimizer: &mut CascadesOptimizer<T>) -> Result<Vec<Box<dyn Task<T>>>> {
+        // rule has been fired against mexpr
         if optimizer.is_rule_fired(self.expr_id, self.rule_id) {
             return Ok(vec![]);
         }
-
+        
         if optimizer.is_rule_disabled(self.rule_id) {
             optimizer.mark_rule_fired(self.expr_id, self.rule_id);
             return Ok(vec![]);
@@ -181,6 +186,7 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
 
         let rule = optimizer.rules()[self.rule_id].clone();
         trace!(event = "task_begin", task = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id, rule = %rule.name());
+        // get the group id of the group whose root has expr_id
         let group_id = optimizer.get_group_id(self.expr_id);
         let mut tasks = vec![];
         let binding_exprs = match_and_pick_group(rule.matcher(), group_id, optimizer);

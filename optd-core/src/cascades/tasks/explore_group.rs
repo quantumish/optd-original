@@ -11,6 +11,8 @@ use crate::{
 
 use super::Task;
 
+/// Expands a group by creating all target logical operator that could belong to the group.
+/// Only invoked on demand by `OptimizeExpressionTask`
 pub struct ExploreGroupTask {
     group_id: GroupId,
 }

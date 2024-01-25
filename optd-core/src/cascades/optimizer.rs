@@ -25,6 +25,7 @@ pub type RuleId = usize;
 #[derive(Default, Clone, Debug)]
 pub struct OptimizerContext {
     pub upper_bound: Option<f64>,
+    /// After set to true, transformation rules are not fired anymore (used for partial exploration).
     pub budget_used: bool,
     pub rules_applied: usize,
 }
@@ -225,7 +226,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         // get the task from the stack
         self.ctx.budget_used = false;
         let plan_space_begin = self.memo.compute_plan_space();
-        let mut iter = 0;
+        let mut iter: usize = 0;
         while let Some(task) = self.tasks.pop_back() {
             let new_tasks = task.execute(self)?;
             self.tasks.extend(new_tasks);
@@ -276,6 +277,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         self.memo.get_expr_info(expr)
     }
 
+    /// Adds group expr to memo if `group_id` is None
     pub(super) fn add_group_expr(
         &mut self,
         expr: RelNodeRef<T>,
@@ -284,6 +286,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         self.memo.add_new_group_expr(expr, group_id)
     }
 
+    /// Gets a memoized group info of for the group with `group_id`.
     pub(super) fn get_group_info(&self, group_id: GroupId) -> GroupInfo {
         self.memo.get_group_info(group_id)
     }
@@ -325,6 +328,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
             .get_all_group_bindings(group_id, true, true, Some(10))
     }
 
+    /// Checks if a group is already explored.
     pub(super) fn is_group_explored(&self, group_id: GroupId) -> bool {
         self.explored_group.contains(&group_id)
     }
