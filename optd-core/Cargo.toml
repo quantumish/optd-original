@@ -14,3 +14,10 @@ ordered-float = "4"
 tracing-subscriber = "0.3"
 pretty-xmlish = "0.1"
 itertools = "0.11"
+parquet = "50.0.0"
+arrow = "5.0.0"
+arrow-schema = "50.0.0"
+
+[[test]]
+name = "gungnir-stats"
+path = "tests/gungnir/stats.rs"
