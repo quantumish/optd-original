@@ -9,3 +9,4 @@
 // KIND, either express or implied.
 
 pub mod stats;
+mod tdigest;

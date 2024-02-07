@@ -13,6 +13,8 @@ use arrow_schema::DataType;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use std::fs::File;
 
+use super::tdigest::TDigest;
+
 /// Represents the statistics of a one-dimensional column for a table in memory.
 /// NOTE: Subject to change if we use T-Digest.
 struct StatsData<T: PartialOrd> {
@@ -44,7 +46,7 @@ pub fn compute_stats(path: &str) -> Result<Vec<Stats>, Box<dyn std::error::Error
 
         for column in batch.columns() {
             match column.data_type() {
-                DataType::Int32 => {
+                DataType::Float64 => {
                     // Cast in proper type and iterate over values.
                 }
                 _ => {
@@ -55,4 +57,26 @@ pub fn compute_stats(path: &str) -> Result<Vec<Stats>, Box<dyn std::error::Error
     }
 
     Ok(stats)
+}
+
+pub fn t_digest() {
+    let mut t_digest = TDigest::new(4.0);
+
+    // Add some sample data
+    for i in 0..1000 {
+        t_digest.add(i as f64);
+        // Perform compression only after every 10 data points
+        if i % 100 == 0 {
+            t_digest.compress();
+        }
+    }
+
+    // Calculate and print some quantiles
+    println!("Quantile at 0.01: {}", t_digest.quantile(0.001));
+    println!("Quantile at 0.01: {}", t_digest.quantile(0.01));
+    println!("Quantile at 0.25: {}", t_digest.quantile(0.25));
+    println!("Quantile at 0.5: {}", t_digest.quantile(0.5));
+    println!("Quantile at 0.75: {}", t_digest.quantile(0.75));
+    println!("Quantile at 0.99: {}", t_digest.quantile(0.99));
+    println!("Quantile at 0.999: {}", t_digest.quantile(0.999));
 }

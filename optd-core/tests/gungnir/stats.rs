@@ -9,9 +9,11 @@
 // KIND, either express or implied.
 
 use optd_core::gungnir::stats::compute_stats;
+use optd_core::gungnir::stats::t_digest;
 
 #[test]
 fn run() {
     // Just an access point... Generate benchmark with python script!
     compute_stats("optd-core/tests/gungnir/tpch_sf_1/customer.parquet");
+    t_digest();
 }
