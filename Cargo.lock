@@ -2649,6 +2649,7 @@ dependencies = [
  "ordered-float 4.2.0",
  "parquet 50.0.0",
  "pretty-xmlish",
+ "rand",
  "tracing",
  "tracing-subscriber",
 ]

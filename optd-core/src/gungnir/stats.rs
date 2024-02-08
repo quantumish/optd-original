@@ -1,17 +1,22 @@
-// The Gungnir™ team licenses this file to you under the MIT License (MIT);
-// you may not use this file except in compliance with the License.
-//
-// Author: Alexis Schlomer <aschlome@andrew.cmu.edu>
-//
-// Unless required by applicable law or agreed to in writing,
-// software distributed under the License is distributed on an
-// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied.
+//----------------------------------------------------//
+//   This free (MIT) Software is provided to you by   //
+//       _____                         _              //
+//      / ____|                       (_)             //
+//      | |  __ _   _ _ __   __ _ _ __  _ _ __        //
+//      | | |_ | | | | '_ \ / _` | '_ \| | '__|       //
+//      | |__| | |_| | | | | (_| | | | | | |          //
+//       \_____|\__,_|_| |_|\__, |_| |_|_|_|          //
+//                           __/ |                    //
+//                          |___/                     //
+//                                                    //
+// Author: Alexis Schlomer <aschlome@andrew.cmu.edu>  //
+//----------------------------------------------------//
 
 use arrow::array::{Array, Int32Array};
 use arrow_schema::DataType;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
-use std::fs::File;
+use std::{fs::File, time::Instant};
+use rand::distributions::{Distribution, Uniform};
 
 use super::tdigest::TDigest;
 
@@ -59,24 +64,44 @@ pub fn compute_stats(path: &str) -> Result<Vec<Stats>, Box<dyn std::error::Error
     Ok(stats)
 }
 
+// TODO(Alexis): Pure testing playground for now.
 pub fn t_digest() {
-    let mut t_digest = TDigest::new(4.0);
+    let mut t_digest = TDigest::new(100.0);
 
-    // Add some sample data
-    /*for i in 0..1000 {
-        t_digest.add(i as f64);
-        // Perform compression only after every 10 data points
-        if i % 100 == 0 {
-            t_digest.compress();
+    let between = Uniform::new(-1000.0, 1.0);
+    let mut rng = rand::thread_rng();
+
+    let num_vectors = 10000;
+    let vector_size = 1024;
+
+
+    let start_time = Instant::now();
+
+    for _ in 0..num_vectors {
+        // Create a new vector
+        let mut new_vector = vec![0.0; vector_size];
+
+        // Fill the vector with random values from the uniform distribution
+        for elem in new_vector.iter_mut() {
+            *elem = between.sample(&mut rng);
         }
+
+        // Add the new vector to the result vector
+        t_digest = t_digest.merge_values(&mut new_vector);
+        // println!("{:#?}", t_digest);
     }
 
-    // Calculate and print some quantiles
-    println!("Quantile at 0.01: {}", t_digest.quantile(0.001));
-    println!("Quantile at 0.01: {}", t_digest.quantile(0.01));
-    println!("Quantile at 0.25: {}", t_digest.quantile(0.25));
-    println!("Quantile at 0.5: {}", t_digest.quantile(0.5));
-    println!("Quantile at 0.75: {}", t_digest.quantile(0.75));
-    println!("Quantile at 0.99: {}", t_digest.quantile(0.99));
-    println!("Quantile at 0.999: {}", t_digest.quantile(0.999));*/
+    let elapsed_time = start_time.elapsed();
+
+
+    println!("0.0: {:#?}", t_digest.quantile(0.0));
+    println!("0.001: {:#?}", t_digest.quantile(0.001));
+    println!("0.01: {:#?}", t_digest.quantile(0.01));
+    println!("0.10: {:#?}", t_digest.quantile(0.10));
+    println!("0.50: {:#?}", t_digest.quantile(0.50));
+    println!("0.90: {:#?}", t_digest.quantile(0.90));
+    println!("0.99: {:#?}", t_digest.quantile(0.99));
+    println!("1.0: {:#?}", t_digest.quantile(1.0));
+
+    println!("Elapsed time: {:?}", elapsed_time);
 }
