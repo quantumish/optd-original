@@ -14,9 +14,7 @@ use std::result;
 use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{optimizer::Optimizer, rel_node::RelNode};
 
-use crate::plan_nodes::{
-    ConstantType, Expr, LogicalEmptyRelation, LogicalFilter, LogicalSort, OptRelNode, OptRelNodeTyp,
-};
+use crate::plan_nodes::{Expr, LogicalFilter, LogicalSort, OptRelNode, OptRelNodeTyp};
 
 use super::macros::define_rule;
 
@@ -55,7 +53,7 @@ fn apply_filter_pushdown(
     let result_from_this_step = match child.typ {
         OptRelNodeTyp::Projection => filter_project_transpose(child, cond),
         OptRelNodeTyp::Filter => todo!(), // @todo filter merge rule? Should we do that here?
-        OptRelNodeTyp::Scan => todo!(),
+        OptRelNodeTyp::Scan => todo!(),   // @todo Why doesn't our sort node have a predicate field?
         OptRelNodeTyp::Join(_) => todo!(),
         OptRelNodeTyp::Sort => filter_sort_transpose(child, cond),
         OptRelNodeTyp::Agg => todo!(),
@@ -77,7 +75,7 @@ fn apply_filter_pushdown(
                     let child_as_filter = LogicalFilter::from_rel_node(child.clone()).unwrap();
                     let childs_child = child_as_filter.child().into_rel_node().as_ref().clone();
                     let childs_cond = child_as_filter.cond().into_rel_node().as_ref().clone();
-                    // TODO: make this iterative?
+                    // @todo: make this iterative?
                     let result = apply_filter_pushdown(
                         _optimizer,
                         FilterPushdownRulePicks {
