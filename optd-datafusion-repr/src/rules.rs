@@ -2,6 +2,7 @@
 mod eliminate_duplicated_expr;
 mod eliminate_filter;
 mod eliminate_limit;
+mod filter_pushdown;
 mod joins;
 mod macros;
 mod physical;
@@ -12,6 +13,7 @@ pub use eliminate_duplicated_expr::{
 };
 pub use eliminate_filter::EliminateFilterRule;
 pub use eliminate_limit::EliminateLimitRule;
+pub use filter_pushdown::FilterPushdownRule;
 pub use joins::{
     EliminateJoinRule, HashJoinRule, JoinAssocRule, JoinCommuteRule, ProjectionPullUpJoin,
 };
