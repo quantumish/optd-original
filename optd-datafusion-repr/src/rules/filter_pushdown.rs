@@ -16,6 +16,7 @@ use optd_core::{optimizer::Optimizer, rel_node::RelNode};
 use crate::plan_nodes::{
     Expr, LogicalFilter, LogicalProjection, LogicalSort, OptRelNode, OptRelNodeTyp,
 };
+use crate::properties::schema::SchemaPropertyBuilder;
 
 use super::macros::define_rule;
 
@@ -29,15 +30,35 @@ define_rule!(
 /// volatile (i.e. non-deterministic) expressions that are present in the filter
 /// Calcite only checks if the projection contains a windowing calculation
 fn filter_project_transpose(
+    optimizer: &impl Optimizer<OptRelNodeTyp>,
     child: RelNode<OptRelNodeTyp>,
     cond: RelNode<OptRelNodeTyp>,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
     let old_proj = LogicalProjection::from_rel_node(child.into()).unwrap();
-    vec![]
+    let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
+
+    let projection_schema_len = optimizer
+        .get_property::<SchemaPropertyBuilder>(old_proj.clone().into_rel_node(), 0)
+        .len();
+    let child_schema_len = optimizer
+        .get_property::<SchemaPropertyBuilder>(old_proj.clone().into_rel_node(), 0)
+        .len();
+
+    let proj_col_map = old_proj.compute_column_mapping().unwrap();
+    proj_col_map.rewrite_condition(
+        cond_as_expr.clone(),
+        projection_schema_len,
+        child_schema_len,
+    );
+
+    let new_filter_node = LogicalFilter::new(old_proj.child(), cond_as_expr);
+    let new_proj = LogicalProjection::new(new_filter_node.into_plan_node(), old_proj.exprs());
+    vec![new_proj.into_rel_node().as_ref().clone()]
 }
 
 /// Filter and sort should always be commutable.
 fn filter_sort_transpose(
+    _optimizer: &impl Optimizer<OptRelNodeTyp>,
     child: RelNode<OptRelNodeTyp>,
     cond: RelNode<OptRelNodeTyp>,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
@@ -50,16 +71,16 @@ fn filter_sort_transpose(
 }
 
 fn apply_filter_pushdown(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<OptRelNodeTyp>,
     FilterPushdownRulePicks { child, cond }: FilterPushdownRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
     // Push filter down one node
     let mut result_from_this_step = match child.typ {
-        OptRelNodeTyp::Projection => filter_project_transpose(child, cond),
+        OptRelNodeTyp::Projection => filter_project_transpose(optimizer, child, cond),
         OptRelNodeTyp::Filter => todo!(), // @todo filter merge rule? Should we do that here?
         // OptRelNodeTyp::Scan => todo!(),   // TODO: Add predicate field to scan node
         OptRelNodeTyp::Join(_) => todo!(),
-        OptRelNodeTyp::Sort => filter_sort_transpose(child, cond),
+        OptRelNodeTyp::Sort => filter_sort_transpose(optimizer, child, cond),
         _ => vec![],
     };
 
@@ -74,7 +95,7 @@ fn apply_filter_pushdown(
                 let childs_cond = child_as_filter.cond().into_rel_node().as_ref().clone();
                 // @todo: make this iterative?
                 let result = apply_filter_pushdown(
-                    _optimizer,
+                    optimizer,
                     FilterPushdownRulePicks {
                         child: childs_child,
                         cond: childs_cond,
@@ -94,19 +115,19 @@ fn apply_filter_pushdown(
 
 #[cfg(test)]
 mod tests {
-    use std::{any::Any, sync::Arc};
+    use std::sync::Arc;
 
     use optd_core::heuristics::{ApplyOrder, HeuristicsOptimizer};
 
     use crate::plan_nodes::{
-        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogicalFilter, LogicalScan,
-        LogicalSort, OptRelNode, OptRelNodeTyp,
+        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogicalProjection,
+        LogicalScan, LogicalSort, OptRelNode, OptRelNodeTyp,
     };
 
     use super::apply_filter_pushdown;
 
     #[test]
-    fn filter_before_sort() {
+    fn push_past_sort() {
         let dummy_optimizer = HeuristicsOptimizer::new_with_rules(vec![], ApplyOrder::TopDown);
 
         let scan = LogicalScan::new("".into());
@@ -118,7 +139,6 @@ mod tests {
             BinOpType::Eq,
         )
         .into_expr();
-        let filter = LogicalFilter::new(sort.clone().into_plan_node(), filter_expr.clone());
 
         let plan = apply_filter_pushdown(
             &dummy_optimizer,
@@ -131,6 +151,35 @@ mod tests {
         let plan = plan.first().unwrap();
 
         assert!(matches!(plan.typ, OptRelNodeTyp::Sort));
+        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
+    }
+
+    #[test]
+    fn push_past_proj_basic() {
+        // TODO: write advanced proj with more complex exprs
+        let dummy_optimizer = HeuristicsOptimizer::new_with_rules(vec![], ApplyOrder::TopDown);
+
+        let scan = LogicalScan::new("".into());
+        let proj = LogicalProjection::new(scan.into_plan_node(), ExprList::new(vec![]));
+
+        let filter_expr = BinOpExpr::new(
+            ColumnRefExpr::new(0).into_expr(),
+            ConstantExpr::int32(5).into_expr(),
+            BinOpType::Eq,
+        )
+        .into_expr();
+
+        let plan = apply_filter_pushdown(
+            &dummy_optimizer,
+            super::FilterPushdownRulePicks {
+                child: Arc::unwrap_or_clone(proj.into_rel_node()),
+                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
+            },
+        );
+
+        let plan = plan.first().unwrap();
+
+        assert!(matches!(plan.typ, OptRelNodeTyp::Projection));
         assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
     }
 }
