@@ -13,7 +13,9 @@ use std::collections::HashMap;
 use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{optimizer::Optimizer, rel_node::RelNode};
 
-use crate::plan_nodes::{Expr, LogicalFilter, LogicalSort, OptRelNode, OptRelNodeTyp};
+use crate::plan_nodes::{
+    Expr, LogicalFilter, LogicalProjection, LogicalSort, OptRelNode, OptRelNodeTyp,
+};
 
 use super::macros::define_rule;
 
@@ -26,12 +28,11 @@ define_rule!(
 /// Datafusion only pushes filter past project when the project does not contain
 /// volatile (i.e. non-deterministic) expressions that are present in the filter
 /// Calcite only checks if the projection contains a windowing calculation
-/// We are checking neither of those things here right now
 fn filter_project_transpose(
-    _child: RelNode<OptRelNodeTyp>,
-    _cond: RelNode<OptRelNodeTyp>,
+    child: RelNode<OptRelNodeTyp>,
+    cond: RelNode<OptRelNodeTyp>,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    // let old_proj = LogicalProjection::from_rel_node(child.into()).unwrap();
+    let old_proj = LogicalProjection::from_rel_node(child.into()).unwrap();
     vec![]
 }
 
@@ -56,11 +57,9 @@ fn apply_filter_pushdown(
     let mut result_from_this_step = match child.typ {
         OptRelNodeTyp::Projection => filter_project_transpose(child, cond),
         OptRelNodeTyp::Filter => todo!(), // @todo filter merge rule? Should we do that here?
-        OptRelNodeTyp::Scan => todo!(),   // @todo Why doesn't our sort node have a predicate field?
+        // OptRelNodeTyp::Scan => todo!(),   // TODO: Add predicate field to scan node
         OptRelNodeTyp::Join(_) => todo!(),
         OptRelNodeTyp::Sort => filter_sort_transpose(child, cond),
-        OptRelNodeTyp::Agg => todo!(),
-        OptRelNodeTyp::Apply(_) => todo!(),
         _ => vec![],
     };
 
@@ -91,4 +90,47 @@ fn apply_filter_pushdown(
     }
 
     result_from_this_step
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{any::Any, sync::Arc};
+
+    use optd_core::heuristics::{ApplyOrder, HeuristicsOptimizer};
+
+    use crate::plan_nodes::{
+        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogicalFilter, LogicalScan,
+        LogicalSort, OptRelNode, OptRelNodeTyp,
+    };
+
+    use super::apply_filter_pushdown;
+
+    #[test]
+    fn filter_before_sort() {
+        let dummy_optimizer = HeuristicsOptimizer::new_with_rules(vec![], ApplyOrder::TopDown);
+
+        let scan = LogicalScan::new("".into());
+        let sort = LogicalSort::new(scan.into_plan_node(), ExprList::new(vec![]));
+
+        let filter_expr = BinOpExpr::new(
+            ColumnRefExpr::new(0).into_expr(),
+            ConstantExpr::int32(5).into_expr(),
+            BinOpType::Eq,
+        )
+        .into_expr();
+        let filter = LogicalFilter::new(sort.clone().into_plan_node(), filter_expr.clone());
+
+        let plan = apply_filter_pushdown(
+            &dummy_optimizer,
+            super::FilterPushdownRulePicks {
+                child: Arc::unwrap_or_clone(sort.into_rel_node()),
+                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
+            },
+        );
+
+        let plan = plan.first().unwrap();
+
+        assert!(matches!(plan.typ, OptRelNodeTyp::Sort));
+        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
+    }
 }

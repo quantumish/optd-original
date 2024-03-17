@@ -57,10 +57,12 @@ impl ProjectionMapping {
         self._backward[col]
     }
 
+    /// Recursively rewrites all ColumnRefs in an Expr to what the projection
+    /// node is rewriting. E.g. if Projection is A -> B, B will be rewritten as A
     pub fn rewrite_condition(
         &self,
         cond: Expr,
-        left_schema_size: usize,
+        schema_size: usize,
         projection_schema_size: usize,
     ) -> Expr {
         if cond.typ() == OptRelNodeTyp::ColumnRef {
@@ -71,8 +73,7 @@ impl ProjectionMapping {
                 return ColumnRefExpr::new(col).into_expr();
             } else {
                 let col = col.index();
-                return ColumnRefExpr::new(col - projection_schema_size + left_schema_size)
-                    .into_expr();
+                return ColumnRefExpr::new(col - projection_schema_size + schema_size).into_expr();
             }
         }
         let expr = cond.into_rel_node();
@@ -81,7 +82,7 @@ impl ProjectionMapping {
             children.push(
                 self.rewrite_condition(
                     Expr::from_rel_node(child.clone()).unwrap(),
-                    left_schema_size,
+                    schema_size,
                     projection_schema_size,
                 )
                 .into_rel_node(),
