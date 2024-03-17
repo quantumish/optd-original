@@ -14,7 +14,8 @@ use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{optimizer::Optimizer, rel_node::RelNode};
 
 use crate::plan_nodes::{
-    Expr, LogicalFilter, LogicalProjection, LogicalSort, OptRelNode, OptRelNodeTyp,
+    BinOpExpr, BinOpType, Expr, LogicalFilter, LogicalProjection, LogicalSort, OptRelNode,
+    OptRelNodeTyp,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
@@ -26,9 +27,23 @@ define_rule!(
     (Filter, child, [cond])
 );
 
+fn filter_merge(
+    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    child: RelNode<OptRelNodeTyp>,
+    cond: RelNode<OptRelNodeTyp>,
+) -> Vec<RelNode<OptRelNodeTyp>> {
+    let child_filter = LogicalFilter::from_rel_node(child.into()).unwrap();
+    let child_filter_cond = child_filter.cond().clone();
+    let curr_cond = Expr::from_rel_node(cond.into()).unwrap();
+    let merged_cond = BinOpExpr::new(curr_cond, child_filter_cond, BinOpType::And).into_expr();
+    let new_filter = LogicalFilter::new(child_filter.child(), merged_cond);
+    vec![new_filter.into_rel_node().as_ref().clone()]
+}
+
 /// Datafusion only pushes filter past project when the project does not contain
 /// volatile (i.e. non-deterministic) expressions that are present in the filter
 /// Calcite only checks if the projection contains a windowing calculation
+/// We check neither of those things and do it always (which may be wrong)
 fn filter_project_transpose(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     child: RelNode<OptRelNodeTyp>,
@@ -37,6 +52,7 @@ fn filter_project_transpose(
     let old_proj = LogicalProjection::from_rel_node(child.into()).unwrap();
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
 
+    // TODO: Implement get_property in heuristics optimizer
     let projection_schema_len = optimizer
         .get_property::<SchemaPropertyBuilder>(old_proj.clone().into_rel_node(), 0)
         .len();
@@ -77,7 +93,7 @@ fn apply_filter_pushdown(
     // Push filter down one node
     let mut result_from_this_step = match child.typ {
         OptRelNodeTyp::Projection => filter_project_transpose(optimizer, child, cond),
-        OptRelNodeTyp::Filter => todo!(), // @todo filter merge rule? Should we do that here?
+        OptRelNodeTyp::Filter => filter_merge(optimizer, child, cond),
         // OptRelNodeTyp::Scan => todo!(),   // TODO: Add predicate field to scan node
         OptRelNodeTyp::Join(_) => todo!(),
         OptRelNodeTyp::Sort => filter_sort_transpose(optimizer, child, cond),
@@ -117,11 +133,12 @@ fn apply_filter_pushdown(
 mod tests {
     use std::sync::Arc;
 
+    use datafusion::arrow::compute::kernels::filter;
     use optd_core::heuristics::{ApplyOrder, HeuristicsOptimizer};
 
     use crate::plan_nodes::{
-        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogicalProjection,
-        LogicalScan, LogicalSort, OptRelNode, OptRelNodeTyp,
+        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogicalFilter,
+        LogicalProjection, LogicalScan, LogicalSort, OptRelNode, OptRelNodeTyp,
     };
 
     use super::apply_filter_pushdown;
@@ -155,8 +172,83 @@ mod tests {
     }
 
     #[test]
+    fn filter_merge() {
+        // TODO: write advanced proj with more expr that need to be transformed
+        let dummy_optimizer = HeuristicsOptimizer::new_with_rules(vec![], ApplyOrder::TopDown);
+
+        let scan = LogicalScan::new("".into());
+        let filter_ch_expr = BinOpExpr::new(
+            ColumnRefExpr::new(0).into_expr(),
+            ConstantExpr::int32(1).into_expr(),
+            BinOpType::Eq,
+        )
+        .into_expr();
+        let filter_ch = LogicalFilter::new(scan.into_plan_node(), filter_ch_expr);
+
+        let filter_expr = BinOpExpr::new(
+            ColumnRefExpr::new(1).into_expr(),
+            ConstantExpr::int32(6).into_expr(),
+            BinOpType::Eq,
+        )
+        .into_expr();
+
+        let plan = apply_filter_pushdown(
+            &dummy_optimizer,
+            super::FilterPushdownRulePicks {
+                child: Arc::unwrap_or_clone(filter_ch.into_rel_node()),
+                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
+            },
+        );
+
+        let plan = plan.first().unwrap();
+
+        assert!(matches!(plan.typ, OptRelNodeTyp::Filter));
+        let bin_op_cond = BinOpExpr::from_rel_node(
+            LogicalFilter::from_rel_node((plan.clone()).into())
+                .unwrap()
+                .cond()
+                .into_rel_node(),
+        )
+        .unwrap();
+        assert!(matches!(bin_op_cond.op_type(), BinOpType::And));
+        let bin_op_left =
+            BinOpExpr::from_rel_node(bin_op_cond.left_child().into_rel_node()).unwrap();
+        assert!(matches!(bin_op_left.op_type(), BinOpType::Eq));
+        assert_eq!(
+            ColumnRefExpr::from_rel_node(bin_op_left.left_child().into_rel_node())
+                .unwrap()
+                .index(),
+            1
+        );
+        assert_eq!(
+            ConstantExpr::from_rel_node(bin_op_left.right_child().into_rel_node())
+                .unwrap()
+                .value()
+                .as_i32(),
+            6
+        );
+        let bin_op_right =
+            BinOpExpr::from_rel_node(bin_op_cond.right_child().into_rel_node()).unwrap();
+        assert!(matches!(bin_op_right.op_type(), BinOpType::Eq));
+        assert_eq!(
+            ColumnRefExpr::from_rel_node(bin_op_right.left_child().into_rel_node())
+                .unwrap()
+                .index(),
+            0
+        );
+        assert_eq!(
+            ConstantExpr::from_rel_node(bin_op_right.right_child().into_rel_node())
+                .unwrap()
+                .value()
+                .as_i32(),
+            1
+        );
+        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Scan));
+    }
+
+    #[test]
     fn push_past_proj_basic() {
-        // TODO: write advanced proj with more complex exprs
+        // TODO: write advanced proj with more expr that need to be transformed
         let dummy_optimizer = HeuristicsOptimizer::new_with_rules(vec![], ApplyOrder::TopDown);
 
         let scan = LogicalScan::new("".into());
