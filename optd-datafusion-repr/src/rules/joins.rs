@@ -88,7 +88,6 @@ define_rule!(
 
 /// Eliminate logical join with constant predicates
 /// True predicates becomes CrossJoin (not yet implemented)
-/// False predicates become EmptyRelation (not yet implemented)
 #[allow(unused_variables)]
 fn apply_eliminate_join(
     optimizer: &impl Optimizer<OptRelNodeTyp>,

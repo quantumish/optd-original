@@ -62,3 +62,24 @@ define_plan_node!(
         { 3, right_keys: ExprList }
     ], { join_type: JoinType }
 );
+
+pub enum MappedColRef {
+    Left(usize),
+    Right(usize),
+}
+
+impl LogicalJoin {
+    pub fn map_through_join(
+        &self,
+        index: usize,
+        left_schema_size: usize,
+        right_schema_size: usize,
+    ) -> MappedColRef {
+        assert!(index < left_schema_size + right_schema_size);
+        if (index < left_schema_size) {
+            MappedColRef::Left(index)
+        } else {
+            MappedColRef::Right(index - left_schema_size)
+        }
+    }
+}

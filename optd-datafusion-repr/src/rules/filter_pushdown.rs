@@ -14,8 +14,8 @@ use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{optimizer::Optimizer, rel_node::RelNode};
 
 use crate::plan_nodes::{
-    BinOpExpr, BinOpType, Expr, LogicalFilter, LogicalProjection, LogicalSort, OptRelNode,
-    OptRelNodeTyp,
+    BinOpExpr, BinOpType, Expr, LogicalFilter, LogicalJoin, LogicalProjection, LogicalSort,
+    OptRelNode, OptRelNodeTyp,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
@@ -27,17 +27,8 @@ define_rule!(
     (Filter, child, [cond])
 );
 
-fn filter_merge(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
-    child: RelNode<OptRelNodeTyp>,
-    cond: RelNode<OptRelNodeTyp>,
-) -> Vec<RelNode<OptRelNodeTyp>> {
-    let child_filter = LogicalFilter::from_rel_node(child.into()).unwrap();
-    let child_filter_cond = child_filter.cond().clone();
-    let curr_cond = Expr::from_rel_node(cond.into()).unwrap();
-    let merged_cond = BinOpExpr::new(curr_cond, child_filter_cond, BinOpType::And).into_expr();
-    let new_filter = LogicalFilter::new(child_filter.child(), merged_cond);
-    vec![new_filter.into_rel_node().as_ref().clone()]
+fn merge_conds(first: Expr, second: Expr) -> Expr {
+    BinOpExpr::new(first, second, BinOpType::And).into_expr()
 }
 
 /// Datafusion only pushes filter past project when the project does not contain
@@ -72,6 +63,34 @@ fn filter_project_transpose(
     vec![new_proj.into_rel_node().as_ref().clone()]
 }
 
+fn filter_merge(
+    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    child: RelNode<OptRelNodeTyp>,
+    cond: RelNode<OptRelNodeTyp>,
+) -> Vec<RelNode<OptRelNodeTyp>> {
+    let child_filter = LogicalFilter::from_rel_node(child.into()).unwrap();
+    let child_filter_cond = child_filter.cond().clone();
+    let curr_cond = Expr::from_rel_node(cond.into()).unwrap();
+    let merged_cond = merge_conds(curr_cond, child_filter_cond);
+    let new_filter = LogicalFilter::new(child_filter.child(), merged_cond);
+    vec![new_filter.into_rel_node().as_ref().clone()]
+}
+
+/// Cases:
+/// - Push down to the left child (only involves keys from the left child)
+/// - Push down to the right child (only involves keys from the right child)
+/// - Push into the join condition (involves keys from both children)
+fn filter_join_transpose(
+    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    child: RelNode<OptRelNodeTyp>,
+    cond: RelNode<OptRelNodeTyp>,
+) -> Vec<RelNode<OptRelNodeTyp>> {
+    let _old_join = LogicalJoin::from_rel_node(child.into()).unwrap();
+    let _cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
+
+    vec![]
+}
+
 /// Filter and sort should always be commutable.
 fn filter_sort_transpose(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
@@ -95,7 +114,7 @@ fn apply_filter_pushdown(
         OptRelNodeTyp::Projection => filter_project_transpose(optimizer, child, cond),
         OptRelNodeTyp::Filter => filter_merge(optimizer, child, cond),
         // OptRelNodeTyp::Scan => todo!(),   // TODO: Add predicate field to scan node
-        OptRelNodeTyp::Join(_) => todo!(),
+        OptRelNodeTyp::Join(_) => filter_join_transpose(optimizer, child, cond),
         OptRelNodeTyp::Sort => filter_sort_transpose(optimizer, child, cond),
         _ => vec![],
     };
