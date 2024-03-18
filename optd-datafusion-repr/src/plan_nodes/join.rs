@@ -76,7 +76,7 @@ impl LogicalJoin {
         right_schema_size: usize,
     ) -> MappedColRef {
         assert!(index < left_schema_size + right_schema_size);
-        if (index < left_schema_size) {
+        if index < left_schema_size {
             MappedColRef::Left(index)
         } else {
             MappedColRef::Right(index - left_schema_size)

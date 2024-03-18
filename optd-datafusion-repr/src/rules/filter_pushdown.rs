@@ -12,10 +12,11 @@ use std::collections::HashMap;
 
 use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{optimizer::Optimizer, rel_node::RelNode};
+use tracing_subscriber::filter::combinator::And;
 
 use crate::plan_nodes::{
-    BinOpExpr, BinOpType, Expr, LogicalFilter, LogicalJoin, LogicalProjection, LogicalSort,
-    OptRelNode, OptRelNodeTyp,
+    BinOpExpr, BinOpType, Expr, ExprList, LogOpExpr, LogOpType, LogicalFilter, LogicalJoin,
+    LogicalProjection, LogicalSort, OptRelNode, OptRelNodeTyp,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
@@ -28,7 +29,9 @@ define_rule!(
 );
 
 fn merge_conds(first: Expr, second: Expr) -> Expr {
-    BinOpExpr::new(first, second, BinOpType::And).into_expr()
+    let new_expr_list = ExprList::new(vec![first, second]);
+    // Flatten nested logical expressions if possible
+    LogOpExpr::new_flattened_nested_logical(LogOpType::And, new_expr_list).into_expr()
 }
 
 /// Datafusion only pushes filter past project when the project does not contain
@@ -156,8 +159,8 @@ mod tests {
     use optd_core::heuristics::{ApplyOrder, HeuristicsOptimizer};
 
     use crate::plan_nodes::{
-        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogicalFilter,
-        LogicalProjection, LogicalScan, LogicalSort, OptRelNode, OptRelNodeTyp,
+        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogOpExpr, LogOpType,
+        LogicalFilter, LogicalProjection, LogicalScan, LogicalSort, OptRelNode, OptRelNodeTyp,
     };
 
     use super::apply_filter_pushdown;
@@ -222,47 +225,42 @@ mod tests {
         let plan = plan.first().unwrap();
 
         assert!(matches!(plan.typ, OptRelNodeTyp::Filter));
-        let bin_op_cond = BinOpExpr::from_rel_node(
+        let cond_log_op = LogOpExpr::from_rel_node(
             LogicalFilter::from_rel_node((plan.clone()).into())
                 .unwrap()
                 .cond()
                 .into_rel_node(),
         )
         .unwrap();
-        assert!(matches!(bin_op_cond.op_type(), BinOpType::And));
-        let bin_op_left =
-            BinOpExpr::from_rel_node(bin_op_cond.left_child().into_rel_node()).unwrap();
-        assert!(matches!(bin_op_left.op_type(), BinOpType::Eq));
-        assert_eq!(
-            ColumnRefExpr::from_rel_node(bin_op_left.left_child().into_rel_node())
-                .unwrap()
-                .index(),
-            1
-        );
-        assert_eq!(
-            ConstantExpr::from_rel_node(bin_op_left.right_child().into_rel_node())
-                .unwrap()
-                .value()
-                .as_i32(),
-            6
-        );
-        let bin_op_right =
-            BinOpExpr::from_rel_node(bin_op_cond.right_child().into_rel_node()).unwrap();
-        assert!(matches!(bin_op_right.op_type(), BinOpType::Eq));
-        assert_eq!(
-            ColumnRefExpr::from_rel_node(bin_op_right.left_child().into_rel_node())
-                .unwrap()
-                .index(),
-            0
-        );
-        assert_eq!(
-            ConstantExpr::from_rel_node(bin_op_right.right_child().into_rel_node())
-                .unwrap()
-                .value()
-                .as_i32(),
-            1
-        );
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Scan));
+        assert!(matches!(cond_log_op.op_type(), LogOpType::And));
+
+        assert!(matches!(
+            cond_log_op.child(0).typ(),
+            OptRelNodeTyp::ColumnRef
+        ));
+        let col_rel_0 = ColumnRefExpr::from_rel_node(cond_log_op.child(0).into_rel_node()).unwrap();
+        assert_eq!(col_rel_0.index(), 0);
+
+        assert!(matches!(
+            cond_log_op.child(1).typ(),
+            OptRelNodeTyp::Constant(_)
+        ));
+        let col_rel_1 = ConstantExpr::from_rel_node(cond_log_op.child(1).into_rel_node()).unwrap();
+        assert_eq!(col_rel_1.value().as_i32(), 1);
+
+        assert!(matches!(
+            cond_log_op.child(2).typ(),
+            OptRelNodeTyp::ColumnRef
+        ));
+        let col_rel_2 = ColumnRefExpr::from_rel_node(cond_log_op.child(2).into_rel_node()).unwrap();
+        assert_eq!(col_rel_2.index(), 1);
+
+        assert!(matches!(
+            cond_log_op.child(3).typ(),
+            OptRelNodeTyp::Constant(_)
+        ));
+        let col_rel_3 = ConstantExpr::from_rel_node(cond_log_op.child(3).into_rel_node()).unwrap();
+        assert_eq!(col_rel_3.value().as_i32(), 6);
     }
 
     #[test]
