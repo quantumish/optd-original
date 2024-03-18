@@ -30,6 +30,7 @@ use datafusion_optd_cli::{
 };
 use mimalloc::MiMalloc;
 use optd_datafusion_bridge::{DatafusionCatalog, OptdQueryPlanner};
+use optd_datafusion_repr::cost::BaseTableStats;
 use optd_datafusion_repr::DatafusionOptimizer;
 use std::collections::HashMap;
 use std::env;
@@ -134,8 +135,12 @@ struct Args {
         default_value = "40"
     )]
     maxrows: MaxRows,
+
     #[clap(long, help = "Turn on datafusion logical optimizer before optd")]
     enable_logical: bool,
+
+    #[clap(long, help = "Turn on adaptive optimization")]
+    enable_adaptive: bool,
 }
 
 #[tokio::main]
@@ -199,9 +204,11 @@ pub async fn main() -> Result<()> {
             state = state.with_physical_optimizer_rules(vec![]);
         }
         // use optd-bridge query planner
-        let optimizer = DatafusionOptimizer::new_physical(Arc::new(DatafusionCatalog::new(
-            state.catalog_list(),
-        )));
+        let optimizer = DatafusionOptimizer::new_physical(
+            Arc::new(DatafusionCatalog::new(state.catalog_list())),
+            BaseTableStats::default(),
+            args.enable_adaptive,
+        );
         state = state.with_query_planner(Arc::new(OptdQueryPlanner::new(optimizer)));
         SessionContext::new_with_state(state)
     };
