@@ -234,33 +234,24 @@ mod tests {
         .unwrap();
         assert!(matches!(cond_log_op.op_type(), LogOpType::And));
 
-        assert!(matches!(
-            cond_log_op.child(0).typ(),
-            OptRelNodeTyp::ColumnRef
-        ));
-        let col_rel_0 = ColumnRefExpr::from_rel_node(cond_log_op.child(0).into_rel_node()).unwrap();
-        assert_eq!(col_rel_0.index(), 0);
-
-        assert!(matches!(
-            cond_log_op.child(1).typ(),
-            OptRelNodeTyp::Constant(_)
-        ));
-        let col_rel_1 = ConstantExpr::from_rel_node(cond_log_op.child(1).into_rel_node()).unwrap();
-        assert_eq!(col_rel_1.value().as_i32(), 1);
-
-        assert!(matches!(
-            cond_log_op.child(2).typ(),
-            OptRelNodeTyp::ColumnRef
-        ));
-        let col_rel_2 = ColumnRefExpr::from_rel_node(cond_log_op.child(2).into_rel_node()).unwrap();
-        assert_eq!(col_rel_2.index(), 1);
-
-        assert!(matches!(
-            cond_log_op.child(3).typ(),
-            OptRelNodeTyp::Constant(_)
-        ));
-        let col_rel_3 = ConstantExpr::from_rel_node(cond_log_op.child(3).into_rel_node()).unwrap();
-        assert_eq!(col_rel_3.value().as_i32(), 6);
+        let cond_exprs = cond_log_op.children();
+        assert_eq!(cond_exprs.len(), 2);
+        let expr_1 = BinOpExpr::from_rel_node(cond_exprs[0].clone().into_rel_node()).unwrap();
+        let expr_2 = BinOpExpr::from_rel_node(cond_exprs[1].clone().into_rel_node()).unwrap();
+        assert!(matches!(expr_1.op_type(), BinOpType::Eq));
+        assert!(matches!(expr_2.op_type(), BinOpType::Eq));
+        let col_1 =
+            ColumnRefExpr::from_rel_node(expr_1.left_child().clone().into_rel_node()).unwrap();
+        let col_2 =
+            ConstantExpr::from_rel_node(expr_1.right_child().clone().into_rel_node()).unwrap();
+        assert_eq!(col_1.index(), 1);
+        assert_eq!(col_2.value().as_i32(), 6);
+        let col_3 =
+            ColumnRefExpr::from_rel_node(expr_2.left_child().clone().into_rel_node()).unwrap();
+        let col_4 =
+            ConstantExpr::from_rel_node(expr_2.right_child().clone().into_rel_node()).unwrap();
+        assert_eq!(col_3.index(), 0);
+        assert_eq!(col_4.value().as_i32(), 1);
     }
 
     #[test]
