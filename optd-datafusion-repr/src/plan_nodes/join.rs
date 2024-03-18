@@ -70,7 +70,6 @@ pub enum MappedColRef {
 
 impl LogicalJoin {
     pub fn map_through_join(
-        &self,
         index: usize,
         left_schema_size: usize,
         right_schema_size: usize,
