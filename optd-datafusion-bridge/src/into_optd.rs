@@ -39,23 +39,43 @@ fn flatten_nested_logical(op: LogOpType, expr_list: ExprList) -> ExprList {
 
 impl OptdPlanContext<'_> {
     fn conv_into_optd_table_scan(&mut self, node: &logical_plan::TableScan) -> Result<PlanNode> {
-        let table_name = node.table_name.to_string();
-        if node.fetch.is_some() {
-            bail!("fetch")
-        }
-        if !node.filters.is_empty() {
-            bail!("no filters")
-        }
-        self.tables.insert(table_name.clone(), node.source.clone());
-        let scan = LogicalScan::new(table_name);
-        if let Some(ref projection) = node.projection {
+        let table_name = ConstantExpr::string(node.table_name.to_string()).into_expr();
+
+        let converted_fetch = if let Some(x) = node.fetch {
+            x.try_into().unwrap()
+        } else {
+            u64::MAX // u64 MAX represents infinity (not the best way to do this)
+        };
+        let converted_fetch = ConstantExpr::uint64(converted_fetch).into_expr();
+
+        let converted_projections = if let Some(projection) = &node.projection {
             let mut exprs = Vec::with_capacity(projection.len());
             for &p in projection {
                 exprs.push(ColumnRefExpr::new(p).into_expr());
             }
-            let projection = LogicalProjection::new(scan.into_plan_node(), ExprList::new(exprs));
-            return Ok(projection.into_plan_node());
-        }
+            ExprList::new(exprs)
+        } else {
+            ExprList::new(vec![])
+        };
+
+        let converted_filters = self
+            .conv_into_optd_expr_list(&node.filters, &node.projected_schema)
+            .unwrap()
+            .into_expr();
+
+        self.tables.insert(
+            ConstantExpr::from_rel_node(table_name.clone().into_rel_node())
+                .unwrap()
+                .value()
+                .to_string(),
+            node.source.clone(),
+        );
+        let scan = LogicalScan::new(
+            table_name,
+            converted_filters,
+            converted_projections,
+            converted_fetch,
+        );
         Ok(scan.into_plan_node())
     }
 
