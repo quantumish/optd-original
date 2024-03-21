@@ -11,24 +11,24 @@ pub struct DummyCostModel;
 impl CostModel<OptRelNodeTyp> for DummyCostModel {
     fn compute_cost(
         &self,
-        node: &OptRelNodeTyp,
-        data: &Option<Value>,
-        children: &[Cost],
-        context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        _node: &OptRelNodeTyp,
+        _data: &Option<Value>,
+        _children: &[Cost],
+        _context: Option<RelNodeContext>,
+        _optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
     ) -> Cost {
         Cost(vec![0.0])
     }
 
-    fn compute_plan_node_cost(&self, node: &RelNode<OptRelNodeTyp>) -> Cost {
+    fn compute_plan_node_cost(&self, _node: &RelNode<OptRelNodeTyp>) -> Cost {
         Cost(vec![0.0])
     }
 
-    fn explain(&self, node: &Cost) -> String {
+    fn explain(&self, _node: &Cost) -> String {
         "Dummy cost".to_string()
     }
 
-    fn accumulate(&self, total_cost: &mut Cost, cost: &Cost) {}
+    fn accumulate(&self, _total_cost: &mut Cost, _cost: &Cost) {}
 
     fn zero(&self) -> Cost {
         Cost(vec![0.0])

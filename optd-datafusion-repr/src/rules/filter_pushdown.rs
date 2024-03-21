@@ -311,26 +311,21 @@ fn apply_filter_pushdown(
 mod tests {
     use std::sync::Arc;
 
-    use optd_core::{
-        cascades::CascadesOptimizer,
-        heuristics::{ApplyOrder, HeuristicsOptimizer},
-    };
-
     use crate::{
         plan_nodes::{
             BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogOpExpr, LogOpType,
             LogicalFilter, LogicalProjection, LogicalScan, LogicalSort, OptRelNode, OptRelNodeTyp,
         },
-        properties::schema::{Catalog, SchemaPropertyBuilder},
+        testing::new_dummy_optimizer,
     };
 
     use super::apply_filter_pushdown;
-    use crate::cost::DummyCostModel;
+
     #[test]
     fn push_past_sort() {
-        let dummy_optimizer = HeuristicsOptimizer::new_with_rules(vec![], ApplyOrder::TopDown);
+        let dummy_optimizer = new_dummy_optimizer();
 
-        let scan = LogicalScan::new("".into());
+        let scan = LogicalScan::new("customer".into());
         let sort = LogicalSort::new(scan.into_plan_node(), ExprList::new(vec![]));
 
         let filter_expr = BinOpExpr::new(
@@ -357,14 +352,9 @@ mod tests {
     #[test]
     fn filter_merge() {
         // TODO: write advanced proj with more expr that need to be transformed
-        let dummy_catalog = Catalog::default();
-        let dummy_optimizer = CascadesOptimizer::new(
-            vec![],
-            DummyCostModel,
-            vec![Box::new(SchemaPropertyBuilder::new(dummy_catalog))],
-        );
+        let dummy_optimizer = new_dummy_optimizer();
 
-        let scan = LogicalScan::new("".into());
+        let scan = LogicalScan::new("customer".into());
         let filter_ch_expr = BinOpExpr::new(
             ColumnRefExpr::new(0).into_expr(),
             ConstantExpr::int32(1).into_expr(),
@@ -423,9 +413,9 @@ mod tests {
     #[test]
     fn push_past_proj_basic() {
         // TODO: write advanced proj with more expr that need to be transformed
-        let dummy_optimizer = HeuristicsOptimizer::new_with_rules(vec![], ApplyOrder::TopDown);
+        let dummy_optimizer = new_dummy_optimizer();
 
-        let scan = LogicalScan::new("".into());
+        let scan = LogicalScan::new("customer".into());
         let proj = LogicalProjection::new(scan.into_plan_node(), ExprList::new(vec![]));
 
         let filter_expr = BinOpExpr::new(

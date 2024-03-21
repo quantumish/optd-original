@@ -28,6 +28,7 @@ mod explain;
 pub mod plan_nodes;
 pub mod properties;
 pub mod rules;
+mod testing;
 
 pub struct DatafusionOptimizer {
     optimizer: CascadesOptimizer<OptRelNodeTyp>,
