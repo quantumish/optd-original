@@ -311,15 +311,21 @@ fn apply_filter_pushdown(
 mod tests {
     use std::sync::Arc;
 
-    use optd_core::heuristics::{ApplyOrder, HeuristicsOptimizer};
+    use optd_core::{
+        cascades::CascadesOptimizer,
+        heuristics::{ApplyOrder, HeuristicsOptimizer},
+    };
 
-    use crate::plan_nodes::{
-        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogOpExpr, LogOpType,
-        LogicalFilter, LogicalProjection, LogicalScan, LogicalSort, OptRelNode, OptRelNodeTyp,
+    use crate::{
+        plan_nodes::{
+            BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogOpExpr, LogOpType,
+            LogicalFilter, LogicalProjection, LogicalScan, LogicalSort, OptRelNode, OptRelNodeTyp,
+        },
+        properties::schema::{Catalog, SchemaPropertyBuilder},
     };
 
     use super::apply_filter_pushdown;
-
+    use crate::cost::DummyCostModel;
     #[test]
     fn push_past_sort() {
         let dummy_optimizer = HeuristicsOptimizer::new_with_rules(vec![], ApplyOrder::TopDown);
@@ -351,7 +357,12 @@ mod tests {
     #[test]
     fn filter_merge() {
         // TODO: write advanced proj with more expr that need to be transformed
-        let dummy_optimizer = HeuristicsOptimizer::new_with_rules(vec![], ApplyOrder::TopDown);
+        let dummy_catalog = Catalog::default();
+        let dummy_optimizer = CascadesOptimizer::new(
+            vec![],
+            DummyCostModel,
+            vec![Box::new(SchemaPropertyBuilder::new(dummy_catalog))],
+        );
 
         let scan = LogicalScan::new("".into());
         let filter_ch_expr = BinOpExpr::new(
