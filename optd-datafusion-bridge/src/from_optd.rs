@@ -74,8 +74,6 @@ impl OptdPlanContext<'_> {
         node: PhysicalScan,
     ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
         let table = node.into_rel_node().data.as_ref().unwrap().as_str();
-        dbg!(table.clone());
-        dbg!(self.tables.clone().keys());
         let source = self.tables.get(table.as_ref()).unwrap();
         let provider = source_as_provider(source)?;
         let plan = provider.scan(self.session_state, None, &[], None).await?;
