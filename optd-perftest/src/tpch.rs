@@ -49,7 +49,7 @@ pub struct TpchKit {
     pub schema_fpath: PathBuf,
 }
 
-/// I keep the same conventions for these methods as I do for PostgresDb
+/// I keep the same conventions for these methods as I do for PostgresDBMS
 impl TpchKit {
     pub fn build<P: AsRef<Path>>(workspace_dpath: P) -> io::Result<Self> {
         log::debug!("[start] building TpchKit");
@@ -193,10 +193,7 @@ impl TpchKit {
     /// If two TpchConfig instances would *not always* generate the same data, then their
     ///   directory names must be different.
     fn get_this_genned_tables_dpath(&self, tpch_config: &TpchConfig) -> PathBuf {
-        let dname = format!(
-            "db{}_sf{}_sd{}",
-            tpch_config.dbms, tpch_config.scale_factor, tpch_config.seed
-        );
+        let dname = format!("db{}_sf{}", tpch_config.dbms, tpch_config.scale_factor,);
         self.genned_tables_dpath.join(dname)
     }
 
