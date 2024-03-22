@@ -48,6 +48,7 @@ macro_rules! define_plan_node {
                 $(, $data_name : Value)?
                 $(, $inner_name : $inner_typ)?
             ) -> $struct_name {
+                #[allow(unused_mut, unused)]
                 let mut data = None;
                 $(
                     data = Some($data_name);

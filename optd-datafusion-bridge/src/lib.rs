@@ -19,7 +19,7 @@ use datafusion::{
 use itertools::Itertools;
 use optd_datafusion_repr::{
     plan_nodes::{
-        ConstantExpr, ConstantType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PhysicalHashJoin,
+        ConstantType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PhysicalHashJoin,
         PhysicalNestedLoopJoin, PlanNode,
     },
     properties::schema::Catalog,
