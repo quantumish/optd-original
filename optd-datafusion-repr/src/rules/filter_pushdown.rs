@@ -34,10 +34,48 @@ fn merge_conds(first: Expr, second: Expr) -> Expr {
     LogOpExpr::new_flattened_nested_logical(LogOpType::And, new_expr_list).into_expr()
 }
 
+enum JoinCondDependency {
+    Left,
+    Right,
+    Both,
+    None,
+}
+
+fn determine_join_cond_dep(
+    children: Vec<Expr>,
+    left_schema_size: usize,
+    right_schema_size: usize,
+) -> JoinCondDependency {
+    let mut left_col = false;
+    let mut right_col = false;
+    for child in children {
+        match child.typ() {
+            OptRelNodeTyp::ColumnRef => {
+                let col_ref = ColumnRefExpr::from_rel_node(child.into_rel_node()).unwrap();
+                let index = col_ref.index();
+                if index < left_schema_size {
+                    left_col = true;
+                } else if index >= left_schema_size && index < left_schema_size + right_schema_size
+                {
+                    right_col = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    match (left_col, right_col) {
+        (true, true) => JoinCondDependency::Both,
+        (true, false) => JoinCondDependency::Left,
+        (false, true) => JoinCondDependency::Right,
+        (false, false) => JoinCondDependency::None,
+    }
+}
+
 // Recursively search through all predicates in the join condition (LogExprs and BinOps),
 // separating them into those that only involve the left child, those that only involve the
 // right child, and those that involve both children. Constant expressions involve neither
 // child.
+// pre-condition: the cond is an AND LogOpExpr
 fn separate_join_conds(
     cond: LogOpExpr,
     left_schema_size: usize,
@@ -48,75 +86,44 @@ fn separate_join_conds(
     let mut join_conds = vec![];
     let mut keep_conds = vec![];
 
-    // For each child, if it is a LogOpExpr, recursively call this function
+    // For each child, if it is a LogOpExpr with and, recursively call this function
     // If it is a BinOpExpr, check both children and add to the appropriate list
     // If this is an AND logopexpr, then each of the conditions can be separated.
     // If this is an OR logopexpr, then we have to check if that entire logopexpr
     // can be separated.
     for child in cond.children() {
-        match child.typ() {
+        let location = match child.typ() {
             OptRelNodeTyp::LogOp(LogOpType::And) => {
-                let log_expr = LogOpExpr::from_rel_node(child.into_rel_node()).unwrap();
-                // Recurse
-                let (left, right, join, keep) =
-                    separate_join_conds(log_expr.clone(), left_schema_size, right_schema_size);
-                left_conds.extend(left);
-                right_conds.extend(right);
-                join_conds.extend(join);
-                keep_conds.extend(keep);
+                // In theory, we could recursively call the function to handle this
+                // case. However, it should not be possible to have nested LogOpExpr
+                // ANDs. So, panic so we can detect a bug
+                panic!("Nested AND LogOpExprs detected in filter pushdown!");
             }
             OptRelNodeTyp::LogOp(LogOpType::Or) => {
-                todo!("LogOpTyp::Or not yet implemented---God help us all")
+                let log_expr = LogOpExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
+                determine_join_cond_dep(log_expr.children(), left_schema_size, right_schema_size)
             }
             OptRelNodeTyp::BinOp(_) => {
-                let bin_expr = BinOpExpr::from_rel_node(child.into_rel_node()).unwrap();
-                // Check if the left and right children are column refs
-                let left_col = bin_expr.left_child();
-                let right_col = bin_expr.right_child();
-                let left_col = match left_col.typ() {
-                    OptRelNodeTyp::ColumnRef => Some(LogicalJoin::map_through_join(
-                        ColumnRefExpr::from_rel_node(left_col.into_rel_node())
-                            .unwrap()
-                            .index(),
-                        left_schema_size,
-                        right_schema_size,
-                    )),
-                    _ => None,
-                };
-                let right_col = match right_col.typ() {
-                    OptRelNodeTyp::ColumnRef => Some(LogicalJoin::map_through_join(
-                        ColumnRefExpr::from_rel_node(right_col.into_rel_node())
-                            .unwrap()
-                            .index(),
-                        left_schema_size,
-                        right_schema_size,
-                    )),
-                    _ => None,
-                };
-                // Check if cols list contains only left, only right, a mix, or is empty
-                // Note that the left col and right col can both be on the right side or left side
-                // of the join, so we need to check both
-                match (left_col, right_col) {
-                    (Some(MappedColRef::Left(_)), Some(MappedColRef::Left(_))) => {
-                        left_conds.push(bin_expr.clone().into_expr());
-                    }
-                    (Some(MappedColRef::Right(_)), Some(MappedColRef::Right(_))) => {
-                        right_conds.push(bin_expr.clone().into_expr());
-                    }
-                    (Some(MappedColRef::Left(_)), Some(MappedColRef::Right(_)))
-                    | (Some(MappedColRef::Right(_)), Some(MappedColRef::Left(_))) => {
-                        join_conds.push(bin_expr.clone().into_expr());
-                    }
-                    _ => {
-                        // If †his is a constant expression, another rule should
-                        // handle it. We won't push it down.
-                        keep_conds.push(bin_expr.clone().into_expr());
-                    }
-                }
+                let bin_expr = BinOpExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
+                determine_join_cond_dep(
+                    vec![bin_expr.left_child(), bin_expr.right_child()],
+                    left_schema_size,
+                    right_schema_size,
+                )
             }
             _ => {
-                panic!("Expression type {} not yet implemented", child.typ())
+                panic!(
+                    "Expression type {} not yet implemented for separate_join_conds",
+                    child.typ()
+                )
             }
+        };
+
+        match location {
+            JoinCondDependency::Left => left_conds.push(child),
+            JoinCondDependency::Right => right_conds.push(child),
+            JoinCondDependency::Both => join_conds.push(child),
+            JoinCondDependency::None => keep_conds.push(child),
         }
     }
 
@@ -177,6 +184,7 @@ fn filter_join_transpose(
     child: RelNode<OptRelNodeTyp>,
     cond: RelNode<OptRelNodeTyp>,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
+    // TODO: Push existing join conditions down as well
     let old_join = LogicalJoin::from_rel_node(child.into()).unwrap();
     let cond_as_logexpr = LogOpExpr::from_rel_node(cond.into()).unwrap();
 
@@ -232,7 +240,7 @@ fn filter_join_transpose(
             }
         }
         _ => {
-            // We don't support modifying the join condition for other join types
+            // We don't support modifying the join condition for other join types yet
             LogicalJoin::new(new_left, new_right, old_join.cond(), old_join.join_type())
         }
     };
@@ -311,10 +319,13 @@ fn apply_filter_pushdown(
 mod tests {
     use std::sync::Arc;
 
+    use datafusion_expr::JoinType;
+
     use crate::{
         plan_nodes::{
             BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogOpExpr, LogOpType,
-            LogicalFilter, LogicalProjection, LogicalScan, LogicalSort, OptRelNode, OptRelNodeTyp,
+            LogicalFilter, LogicalJoin, LogicalProjection, LogicalScan, LogicalSort, OptRelNode,
+            OptRelNodeTyp,
         },
         testing::new_dummy_optimizer,
     };
@@ -437,5 +448,150 @@ mod tests {
 
         assert!(matches!(plan.typ, OptRelNodeTyp::Projection));
         assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
+    }
+
+    #[test]
+    fn push_past_join_conjunction() {
+        // Test pushing a complex filter past a join, where one clause can
+        // be pushed to the left child, one to the right child, one gets incorporated
+        // into the (now inner) join condition, and a constant one remains in the
+        // original filter.
+        let dummy_optimizer = new_dummy_optimizer();
+
+        let scan1 = LogicalScan::new("customer".into());
+
+        let scan2 = LogicalScan::new("orders".into());
+
+        let join = LogicalJoin::new(
+            scan1.into_plan_node(),
+            scan2.into_plan_node(),
+            LogOpExpr::new(
+                LogOpType::And,
+                ExprList::new(vec![BinOpExpr::new(
+                    ColumnRefExpr::new(0).into_expr(),
+                    ConstantExpr::int32(1).into_expr(),
+                    BinOpType::Eq,
+                )
+                .into_expr()]),
+            )
+            .into_expr(),
+            super::JoinType::Inner,
+        );
+
+        let filter_expr = LogOpExpr::new(
+            LogOpType::And,
+            ExprList::new(vec![
+                BinOpExpr::new(
+                    // This one should be pushed to the left child
+                    ColumnRefExpr::new(0).into_expr(),
+                    ConstantExpr::int32(5).into_expr(),
+                    BinOpType::Eq,
+                )
+                .into_expr(),
+                BinOpExpr::new(
+                    // This one should be pushed to the right child
+                    ColumnRefExpr::new(11).into_expr(),
+                    ConstantExpr::int32(6).into_expr(),
+                    BinOpType::Eq,
+                )
+                .into_expr(),
+                BinOpExpr::new(
+                    // This one should be pushed to the join condition
+                    ColumnRefExpr::new(2).into_expr(),
+                    ColumnRefExpr::new(3).into_expr(),
+                    BinOpType::Eq,
+                )
+                .into_expr(),
+                BinOpExpr::new(
+                    // always true, should be removed by other rules
+                    ConstantExpr::int32(2).into_expr(),
+                    ConstantExpr::int32(7).into_expr(),
+                    BinOpType::Eq,
+                )
+                .into_expr(),
+            ]),
+        );
+
+        let plan = apply_filter_pushdown(
+            &dummy_optimizer,
+            super::FilterPushdownRulePicks {
+                child: Arc::unwrap_or_clone(join.into_rel_node()),
+                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
+            },
+        );
+
+        let plan = plan.first().unwrap();
+
+        // Examine original filter + condition
+        let top_level_filter = LogicalFilter::from_rel_node(plan.clone().into()).unwrap();
+        let top_level_filter_cond =
+            LogOpExpr::from_rel_node(top_level_filter.cond().into_rel_node()).unwrap();
+        assert!(matches!(top_level_filter_cond.op_type(), LogOpType::And));
+        assert!(matches!(top_level_filter_cond.children().len(), 1));
+        let bin_op_0 =
+            BinOpExpr::from_rel_node(top_level_filter_cond.children()[0].clone().into_rel_node())
+                .unwrap();
+        assert!(matches!(bin_op_0.op_type(), BinOpType::Eq));
+        let col_0 =
+            ColumnRefExpr::from_rel_node(bin_op_0.left_child().clone().into_rel_node()).unwrap();
+        let col_1 =
+            ConstantExpr::from_rel_node(bin_op_0.right_child().clone().into_rel_node()).unwrap();
+        assert_eq!(col_0.index(), 2);
+        assert_eq!(col_1.value().as_i32(), 3);
+
+        // Examine join node + condition
+        let join_node =
+            LogicalJoin::from_rel_node(top_level_filter.child().clone().into_rel_node()).unwrap();
+        let join_conds = LogOpExpr::from_rel_node(join_node.cond().into_rel_node()).unwrap();
+        assert!(matches!(join_conds.op_type(), LogOpType::And));
+        assert!(matches!(join_conds.children().len(), 2));
+        let bin_op_1 =
+            BinOpExpr::from_rel_node(join_conds.children()[0].clone().into_rel_node()).unwrap();
+        let bin_op_2 =
+            BinOpExpr::from_rel_node(join_conds.children()[1].clone().into_rel_node()).unwrap();
+        assert!(matches!(bin_op_1.op_type(), BinOpType::Eq));
+        assert!(matches!(bin_op_2.op_type(), BinOpType::Eq));
+        let col_2 =
+            ColumnRefExpr::from_rel_node(bin_op_1.left_child().clone().into_rel_node()).unwrap();
+        let col_3 =
+            ColumnRefExpr::from_rel_node(bin_op_1.right_child().clone().into_rel_node()).unwrap();
+        let col_4 =
+            ColumnRefExpr::from_rel_node(bin_op_2.left_child().clone().into_rel_node()).unwrap();
+        let col_5 =
+            ConstantExpr::from_rel_node(bin_op_2.right_child().clone().into_rel_node()).unwrap();
+        assert_eq!(col_2.index(), 2);
+        assert_eq!(col_3.index(), 3);
+        assert_eq!(col_4.index(), 0);
+        assert_eq!(col_5.value().as_i32(), 1);
+
+        // Examine left child filter + condition
+        let filter_1 = LogicalFilter::from_rel_node(join_node.left().into_rel_node()).unwrap();
+        let filter_1_cond = LogOpExpr::from_rel_node(filter_1.cond().into_rel_node()).unwrap();
+        assert!(matches!(filter_1_cond.children().len(), 1));
+        assert!(matches!(filter_1_cond.op_type(), LogOpType::And));
+        let bin_op_3 =
+            BinOpExpr::from_rel_node(filter_1_cond.children()[0].clone().into_rel_node()).unwrap();
+        assert!(matches!(bin_op_3.op_type(), BinOpType::Eq));
+        let col_6 =
+            ColumnRefExpr::from_rel_node(bin_op_3.left_child().clone().into_rel_node()).unwrap();
+        let col_7 =
+            ConstantExpr::from_rel_node(bin_op_3.right_child().clone().into_rel_node()).unwrap();
+        assert_eq!(col_6.index(), 0);
+        assert_eq!(col_7.value().as_i32(), 5);
+
+        // Examine right child filter + condition
+        let filter_2 = LogicalFilter::from_rel_node(join_node.right().into_rel_node()).unwrap();
+        let filter_2_cond = LogOpExpr::from_rel_node(filter_2.cond().into_rel_node()).unwrap();
+        assert!(matches!(filter_2_cond.op_type(), LogOpType::And));
+        assert!(matches!(filter_2_cond.children().len(), 1));
+        let bin_op_4 =
+            BinOpExpr::from_rel_node(filter_2_cond.children()[0].clone().into_rel_node()).unwrap();
+        assert!(matches!(bin_op_4.op_type(), BinOpType::Eq));
+        let col_8 =
+            ColumnRefExpr::from_rel_node(bin_op_4.left_child().clone().into_rel_node()).unwrap();
+        let col_9 =
+            ConstantExpr::from_rel_node(bin_op_4.right_child().clone().into_rel_node()).unwrap();
+        assert_eq!(col_8.index(), 11);
+        assert_eq!(col_9.value().as_i32(), 6);
     }
 }
