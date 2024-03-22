@@ -5,13 +5,17 @@ use datafusion::{
     scalar::ScalarValue,
 };
 use optd_core::rel_node::RelNode;
-use optd_datafusion_repr::plan_nodes::{
-    BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, Expr, ExprList,
-    FuncExpr, FuncType, InListExpr, JoinType, LikeExpr, LogOpExpr, LogOpType, LogicalAgg,
-    LogicalEmptyRelation, LogicalFilter, LogicalJoin, LogicalLimit, LogicalProjection, LogicalScan,
-    LogicalSort, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode, SortOrderExpr, SortOrderType,
-};
 use optd_datafusion_repr::properties::schema::Schema as OPTDSchema;
+use optd_datafusion_repr::{
+    plan_nodes::{
+        BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, Expr, ExprList,
+        FuncExpr, FuncType, InListExpr, JoinType, LikeExpr, LogOpExpr, LogOpType, LogicalAgg,
+        LogicalEmptyRelation, LogicalFilter, LogicalJoin, LogicalLimit, LogicalProjection,
+        LogicalScan, LogicalSort, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode,
+        SortOrderExpr, SortOrderType,
+    },
+    Value,
+};
 
 use crate::OptdPlanContext;
 
@@ -39,7 +43,7 @@ fn flatten_nested_logical(op: LogOpType, expr_list: ExprList) -> ExprList {
 
 impl OptdPlanContext<'_> {
     fn conv_into_optd_table_scan(&mut self, node: &logical_plan::TableScan) -> Result<PlanNode> {
-        let table_name = ConstantExpr::string(node.table_name.to_string()).into_expr();
+        let table_name = Value::String(node.table_name.to_string().into());
 
         let converted_fetch = if let Some(x) = node.fetch {
             x.try_into().unwrap()
@@ -58,23 +62,20 @@ impl OptdPlanContext<'_> {
             ExprList::new(vec![])
         };
 
-        let converted_filters = self
-            .conv_into_optd_expr_list(&node.filters, &node.projected_schema)
-            .unwrap()
-            .into_expr();
+        let converted_filters = LogOpExpr::new(
+            LogOpType::And,
+            self.conv_into_optd_expr_list(&node.filters, &node.projected_schema)
+                .unwrap(),
+        )
+        .into_expr();
 
-        self.tables.insert(
-            ConstantExpr::from_rel_node(table_name.clone().into_rel_node())
-                .unwrap()
-                .value()
-                .to_string(),
-            node.source.clone(),
-        );
+        self.tables
+            .insert(table_name.to_string(), node.source.clone());
         let scan = LogicalScan::new(
-            table_name,
             converted_filters,
             converted_projections,
             converted_fetch,
+            table_name,
         );
         Ok(scan.into_plan_node())
     }

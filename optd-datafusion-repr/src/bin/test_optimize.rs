@@ -53,10 +53,10 @@ pub fn main() {
 
     // The plan: (filter (scan t1) #1=2) join (scan t2) join (scan t3)
     let scan1 = LogicalScan::new(
-        ConstantExpr::new(Value::String("t1".into())).into_expr(),
         ConstantExpr::new(Value::Bool(true)).into_expr(),
         ExprList::new(vec![]),
         ConstantExpr::new(Value::UInt64(u64::MAX)).into_expr(),
+        Value::String("t1".into()),
     );
     let filter_cond = BinOpExpr::new(
         ColumnRefExpr::new(1).0,
@@ -65,17 +65,17 @@ pub fn main() {
     );
     let filter1 = LogicalFilter::new(scan1.0, filter_cond.0);
     let scan2 = LogicalScan::new(
-        ConstantExpr::new(Value::String("t2".into())).into_expr(),
         ConstantExpr::new(Value::Bool(true)).into_expr(),
         ExprList::new(vec![]),
         ConstantExpr::new(Value::UInt64(u64::MAX)).into_expr(),
+        Value::String("t2".into()),
     );
     let join_cond = ConstantExpr::new(Value::Bool(true));
     let scan3 = LogicalScan::new(
-        ConstantExpr::new(Value::String("t3".into())).into_expr(),
         ConstantExpr::new(Value::Bool(true)).into_expr(),
         ExprList::new(vec![]),
         ConstantExpr::new(Value::UInt64(u64::MAX)).into_expr(),
+        Value::String("t3".into()),
     );
     let join_filter = LogicalJoin::new(filter1.0, scan2.0, join_cond.clone().0, JoinType::Inner);
     let fnal = LogicalJoin::new(scan3.0, join_filter.0, join_cond.0, JoinType::Inner);
