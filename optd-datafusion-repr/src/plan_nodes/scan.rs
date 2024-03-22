@@ -21,7 +21,7 @@ pub struct PhysicalScan(pub PlanNode);
 
 define_plan_node!(
     PhysicalScan : PlanNode,
-    Scan, [], [
+    PhysicalScan, [], [
         { 0, filter: Expr },
         { 1, projections: ExprList },
         { 2, fetch: Expr }

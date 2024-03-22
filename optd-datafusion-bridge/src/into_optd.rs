@@ -70,7 +70,7 @@ impl OptdPlanContext<'_> {
         .into_expr();
 
         self.tables
-            .insert(table_name.to_string(), node.source.clone());
+            .insert(table_name.as_str().to_string(), node.source.clone());
         let scan = LogicalScan::new(
             converted_filters,
             converted_projections,
