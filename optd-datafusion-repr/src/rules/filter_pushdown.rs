@@ -16,7 +16,7 @@ use optd_core::{optimizer::Optimizer, rel_node::RelNode};
 
 use crate::plan_nodes::{
     BinOpExpr, ColumnRefExpr, Expr, ExprList, JoinType, LogOpExpr, LogOpType, LogicalFilter,
-    LogicalJoin, LogicalProjection, LogicalSort, MappedColRef, OptRelNode, OptRelNodeTyp,
+    LogicalJoin, LogicalProjection, LogicalSort, OptRelNode, OptRelNodeTyp,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
@@ -25,7 +25,7 @@ use super::macros::define_rule;
 define_rule!(
     FilterPushdownRule,
     apply_filter_pushdown,
-    (Filter, child, [cond])
+    (Filter, [child], [cond])
 );
 
 fn merge_conds(first: Expr, second: Expr) -> Expr {
@@ -121,7 +121,9 @@ fn separate_join_conds(
 
         match location {
             JoinCondDependency::Left => left_conds.push(child),
-            JoinCondDependency::Right => right_conds.push(child),
+            JoinCondDependency::Right => right_conds.push(child.rewrite_column_refs(&|idx| {
+                LogicalJoin::map_through_join(idx, left_schema_size, right_schema_size)
+            })),
             JoinCondDependency::Both => join_conds.push(child),
             JoinCondDependency::None => keep_conds.push(child),
         }
@@ -276,6 +278,7 @@ fn apply_filter_pushdown(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     FilterPushdownRulePicks { child, cond }: FilterPushdownRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
+    dbg!("Reached apply_filter_pushdown with", child.typ.clone());
     // Push filter down one node
     let mut result_from_this_step = match child.typ {
         OptRelNodeTyp::Projection => filter_project_transpose(optimizer, child, cond),
@@ -318,8 +321,6 @@ fn apply_filter_pushdown(
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-
-    use datafusion_expr::JoinType;
 
     use crate::{
         plan_nodes::{

@@ -30,7 +30,7 @@ pub use expr::{
     SortOrderExpr, SortOrderType, UnOpExpr, UnOpType,
 };
 pub use filter::{LogicalFilter, PhysicalFilter};
-pub use join::{JoinType, LogicalJoin, MappedColRef, PhysicalHashJoin, PhysicalNestedLoopJoin};
+pub use join::{JoinType, LogicalJoin, PhysicalHashJoin, PhysicalNestedLoopJoin};
 pub use limit::{LogicalLimit, PhysicalLimit};
 use pretty_xmlish::{Pretty, PrettyConfig};
 pub use projection::{LogicalProjection, PhysicalProjection};
@@ -270,6 +270,37 @@ impl Expr {
 
     pub fn child(&self, idx: usize) -> OptRelNodeRef {
         self.0.child(idx)
+    }
+
+    /// Recursively rewrite all column references in the expression.using a provided
+    /// function that replaces a column index.
+    pub fn rewrite_column_refs(&self, rewrite_fn: &impl Fn(usize) -> usize) -> Self {
+        assert!(self.typ().is_expression());
+        if let OptRelNodeTyp::ColumnRef = self.typ() {
+            let col_ref = ColumnRefExpr::from_rel_node(self.0.clone()).unwrap();
+            let new_col_ref = ColumnRefExpr::new(rewrite_fn(col_ref.index()));
+            return Self(new_col_ref.into_rel_node());
+        }
+
+        let children = self.0.children.clone();
+        let children = children
+            .into_iter()
+            .map(|child| {
+                Expr::from_rel_node(child.clone())
+                    .unwrap()
+                    .rewrite_column_refs(rewrite_fn)
+                    .into_rel_node()
+            })
+            .collect();
+        Expr::from_rel_node(
+            RelNode {
+                typ: self.typ(),
+                children,
+                data: self.0.data.clone(),
+            }
+            .into(),
+        )
+        .unwrap()
     }
 }
 

@@ -26,6 +26,7 @@ fn apply_join_commute(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     JoinCommuteRulePicks { left, right, cond }: JoinCommuteRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
+    // TODO: migrate to new rewrite_column_refs helper
     fn rewrite_column_refs(expr: Expr, left_size: usize, right_size: usize) -> Expr {
         let expr = expr.into_rel_node();
         if let Some(expr) = ColumnRefExpr::from_rel_node(expr.clone()) {
@@ -139,6 +140,7 @@ fn apply_join_assoc(
         cond2,
     }: JoinAssocRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
+    // TODO: migrate to new rewrite_column_refs helper
     fn rewrite_column_refs(expr: Expr, a_size: usize) -> Option<Expr> {
         let expr = expr.into_rel_node();
         if let Some(expr) = ColumnRefExpr::from_rel_node(expr.clone()) {
@@ -289,6 +291,7 @@ fn apply_projection_pull_up_join(
         LogicalJoin::new(
             PlanNode::from_group(left),
             PlanNode::from_group(right),
+            // TODO: possibly migrate to new rewrite_column_refs helper
             mapping.rewrite_condition(
                 Expr::from_rel_node(Arc::new(cond)).unwrap(),
                 left_schema.len(),

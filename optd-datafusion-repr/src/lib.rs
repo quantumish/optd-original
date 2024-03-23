@@ -17,8 +17,8 @@ use properties::{
 };
 use rules::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
-    EliminateJoinRule, EliminateLimitRule, HashJoinRule, JoinAssocRule, JoinCommuteRule,
-    PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule,
+    EliminateJoinRule, EliminateLimitRule, FilterPushdownRule, HashJoinRule, JoinAssocRule,
+    JoinCommuteRule, PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule,
 };
 
 pub use optd_core::rel_node::Value;
@@ -28,6 +28,7 @@ mod explain;
 pub mod plan_nodes;
 pub mod properties;
 pub mod rules;
+#[cfg(test)]
 mod testing;
 
 pub struct DatafusionOptimizer {
@@ -58,6 +59,7 @@ impl DatafusionOptimizer {
         let rules = PhysicalConversionRule::all_conversions();
         let mut rule_wrappers = vec![
             RuleWrapper::new_heuristic(Arc::new(SimplifyFilterRule::new())),
+            RuleWrapper::new_heuristic(Arc::new(FilterPushdownRule::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateFilterRule::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateJoinRule::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateLimitRule::new())),
