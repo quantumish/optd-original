@@ -10,6 +10,7 @@
 
 use core::panic;
 use std::collections::HashMap;
+use std::vec;
 
 use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{optimizer::Optimizer, rel_node::RelNode};
@@ -43,7 +44,7 @@ enum JoinCondDependency {
 }
 
 fn determine_join_cond_dep(
-    children: Vec<Expr>,
+    children: &Vec<Expr>,
     left_schema_size: usize,
     right_schema_size: usize,
 ) -> JoinCondDependency {
@@ -52,7 +53,7 @@ fn determine_join_cond_dep(
     for child in children {
         match child.typ() {
             OptRelNodeTyp::ColumnRef => {
-                let col_ref = ColumnRefExpr::from_rel_node(child.into_rel_node()).unwrap();
+                let col_ref = ColumnRefExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
                 let index = col_ref.index();
                 if index < left_schema_size {
                     left_col = true;
@@ -72,67 +73,49 @@ fn determine_join_cond_dep(
     }
 }
 
-// Recursively search through all predicates in the join condition (LogExprs and BinOps),
-// separating them into those that only involve the left child, those that only involve the
-// right child, and those that involve both children. Constant expressions involve neither
-// child.
-// pre-condition: the cond is an AND LogOpExpr
-fn separate_join_conds(
-    cond: LogOpExpr,
-    left_schema_size: usize,
-    right_schema_size: usize,
-) -> (Vec<Expr>, Vec<Expr>, Vec<Expr>, Vec<Expr>) {
-    let mut left_conds = vec![];
-    let mut right_conds = vec![];
-    let mut join_conds = vec![];
-    let mut keep_conds = vec![];
+/// Do not call directly
+fn categorize_conds_helper(cond: Expr, bottom_level_children: &mut Vec<Expr>) {
+    match cond.typ() {
+        OptRelNodeTyp::LogOp(_) | OptRelNodeTyp::BinOp(_) | OptRelNodeTyp::UnOp(_) => {
+            for child in &cond.into_rel_node().children {
+                categorize_conds_helper(
+                    Expr::from_rel_node(child.clone()).unwrap(),
+                    bottom_level_children,
+                );
+            }
+        }
+        OptRelNodeTyp::ColumnRef | OptRelNodeTyp::Constant(_) => bottom_level_children.push(cond),
+        _ => panic!(
+            "Encountered unhandled expr of type {:?} in categorize_conds_helper",
+            cond.typ()
+        ),
+    }
+}
 
-    // For each child, if it is a LogOpExpr with and, recursively call this function
-    // If it is a BinOpExpr, check both children and add to the appropriate list
-    // If this is an AND logopexpr, then each of the conditions can be separated.
-    // If this is an OR logopexpr, then we have to check if that entire logopexpr
-    // can be separated.
-    for child in cond.children() {
-        dbg!("Working on child: ", child.clone());
-        let location = match child.typ() {
-            OptRelNodeTyp::LogOp(LogOpType::And) => {
-                // In theory, we could recursively call the function to handle this
-                // case. However, it should not be possible to have nested LogOpExpr
-                // ANDs. We panic so that we can notice the bug.
-                panic!("Nested AND LogOpExprs detected in filter pushdown!");
+/// This function recurses/loops to the bottom-level of the expression tree,
+///     building a list of bottom-level exprs for each separable expr
+///
+/// # Arguments
+/// * `categorization_fn` - Function, called with a list of each bottom-level
+///     expression, along with the top-level expression node that will be
+///     categorized.
+/// * `cond` - The top-level expression node to begin separating
+fn categorize_conds(mut categorization_fn: impl FnMut(Expr, &Vec<Expr>), cond: Expr) {
+    let mut categorize_indep_expr = |cond: Expr| {
+        let bottom_level_children = &mut vec![];
+        categorize_conds_helper(cond.clone(), bottom_level_children);
+        categorization_fn(cond, bottom_level_children);
+    };
+    match cond.typ() {
+        OptRelNodeTyp::LogOp(LogOpType::And) => {
+            for child in &cond.into_rel_node().children {
+                categorize_indep_expr(Expr::from_rel_node(child.clone()).unwrap());
             }
-            OptRelNodeTyp::LogOp(LogOpType::Or) => {
-                let log_expr = LogOpExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
-                determine_join_cond_dep(log_expr.children(), left_schema_size, right_schema_size)
-            }
-            OptRelNodeTyp::BinOp(_) => {
-                let bin_expr = BinOpExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
-                determine_join_cond_dep(
-                    vec![bin_expr.left_child(), bin_expr.right_child()],
-                    left_schema_size,
-                    right_schema_size,
-                )
-            }
-            _ => {
-                panic!(
-                    "Expression type {} not yet implemented for separate_join_conds",
-                    child.typ()
-                )
-            }
-        };
-
-        println!("Location: {:?}", location.clone());
-        match location {
-            JoinCondDependency::Left => left_conds.push(child),
-            JoinCondDependency::Right => right_conds.push(child.rewrite_column_refs(&|idx| {
-                LogicalJoin::map_through_join(idx, left_schema_size, right_schema_size)
-            })),
-            JoinCondDependency::Both => join_conds.push(child),
-            JoinCondDependency::None => keep_conds.push(child),
+        }
+        _ => {
+            categorize_indep_expr(cond);
         }
     }
-
-    (left_conds, right_conds, join_conds, keep_conds)
 }
 
 /// Datafusion only pushes filter past project when the project does not contain
@@ -192,7 +175,6 @@ fn filter_join_transpose(
     println!("Filter join transpose hit with type {:?}", child.typ);
     // TODO: Push existing join conditions down as well
     let old_join = LogicalJoin::from_rel_node(child.into()).unwrap();
-    let cond_as_logexpr = LogOpExpr::from_rel_node(cond.into()).unwrap();
 
     let left_schema_size = optimizer
         .get_property::<SchemaPropertyBuilder>(old_join.left().into_rel_node(), 0)
@@ -201,8 +183,23 @@ fn filter_join_transpose(
         .get_property::<SchemaPropertyBuilder>(old_join.right().into_rel_node(), 0)
         .len();
 
-    let (left_conds, right_conds, join_conds, keep_conds) =
-        separate_join_conds(cond_as_logexpr, left_schema_size, right_schema_size);
+    let mut left_conds = vec![];
+    let mut right_conds = vec![];
+    let mut join_conds = vec![];
+    let mut keep_conds = vec![];
+
+    let categorization_fn = |expr: Expr, children: &Vec<Expr>| {
+        let location = determine_join_cond_dep(children, left_schema_size, right_schema_size);
+        match location {
+            JoinCondDependency::Left => left_conds.push(expr),
+            JoinCondDependency::Right => right_conds.push(expr.rewrite_column_refs(&|idx| {
+                LogicalJoin::map_through_join(idx, left_schema_size, right_schema_size)
+            })),
+            JoinCondDependency::Both => join_conds.push(expr),
+            JoinCondDependency::None => keep_conds.push(expr),
+        }
+    };
+    categorize_conds(categorization_fn, Expr::from_rel_node(cond.into()).unwrap());
 
     let new_left = if !left_conds.is_empty() {
         let new_filter_node = LogicalFilter::new(
@@ -278,6 +275,19 @@ fn filter_sort_transpose(
     vec![new_sort.into_rel_node().as_ref().clone()]
 }
 
+/// Filter is commutable past aggregations when the filter condition only
+/// involves the group by columns.
+fn filter_agg_transpose(
+    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    child: RelNode<OptRelNodeTyp>,
+    cond: RelNode<OptRelNodeTyp>,
+) -> Vec<RelNode<OptRelNodeTyp>> {
+    // let mut keep_conds = vec![];
+    // let mut push_conds = vec![];
+
+    vec![]
+}
+
 fn apply_filter_pushdown(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     FilterPushdownRulePicks { child, cond }: FilterPushdownRulePicks,
@@ -289,6 +299,7 @@ fn apply_filter_pushdown(
         // OptRelNodeTyp::Scan => todo!(),   // TODO: Add predicate field to scan node
         OptRelNodeTyp::Join(_) => filter_join_transpose(optimizer, child, cond),
         OptRelNodeTyp::Sort => filter_sort_transpose(optimizer, child, cond),
+        OptRelNodeTyp::Agg => filter_sort_transpose(optimizer, child, cond),
         _ => vec![],
     };
 
