@@ -156,13 +156,13 @@ fn filter_project_transpose(
         .len();
 
     let proj_col_map = old_proj.compute_column_mapping().unwrap();
-    proj_col_map.rewrite_condition(
+    let rewritten_cond = proj_col_map.rewrite_condition(
         cond_as_expr.clone(),
         projection_schema_len,
         child_schema_len,
     );
 
-    let new_filter_node = LogicalFilter::new(old_proj.child(), cond_as_expr);
+    let new_filter_node = LogicalFilter::new(old_proj.child(), rewritten_cond);
     let new_proj = LogicalProjection::new(new_filter_node.into_plan_node(), old_proj.exprs());
     vec![new_proj.into_rel_node().as_ref().clone()]
 }
@@ -427,7 +427,6 @@ mod tests {
 
     #[test]
     fn push_past_proj_basic() {
-        // TODO: write advanced proj with more expr that need to be transformed
         let mut dummy_optimizer = new_dummy_optimizer();
 
         let scan = LogicalScan::new("customer".into());
@@ -461,6 +460,78 @@ mod tests {
 
         assert!(matches!(plan.typ, OptRelNodeTyp::Projection));
         assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
+    }
+
+    #[test]
+    fn push_past_proj_adv() {
+        let mut dummy_optimizer = new_dummy_optimizer();
+
+        let scan = LogicalScan::new("customer".into());
+        let proj = LogicalProjection::new(
+            scan.into_plan_node(),
+            ExprList::new(vec![
+                ColumnRefExpr::new(0).into_expr(),
+                ColumnRefExpr::new(4).into_expr(),
+                ColumnRefExpr::new(5).into_expr(),
+                ColumnRefExpr::new(7).into_expr(),
+            ]),
+        );
+
+        let filter_expr = LogOpExpr::new(
+            LogOpType::And,
+            ExprList::new(vec![
+                BinOpExpr::new(
+                    // This one should be pushed to the left child
+                    ColumnRefExpr::new(1).into_expr(),
+                    ConstantExpr::int32(5).into_expr(),
+                    BinOpType::Eq,
+                )
+                .into_expr(),
+                BinOpExpr::new(
+                    // This one should be pushed to the right child
+                    ColumnRefExpr::new(3).into_expr(),
+                    ConstantExpr::int32(6).into_expr(),
+                    BinOpType::Eq,
+                )
+                .into_expr(),
+            ]),
+        );
+
+        // Initialize groups
+        dummy_optimizer
+            .step_optimize_rel(proj.clone().into_rel_node())
+            .unwrap();
+
+        dummy_optimizer
+            .step_optimize_rel(proj.clone().child().into_rel_node())
+            .unwrap();
+
+        let plan = apply_filter_pushdown(
+            &dummy_optimizer,
+            super::FilterPushdownRulePicks {
+                child: Arc::unwrap_or_clone(proj.into_rel_node()),
+                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
+            },
+        );
+
+        let plan = plan.first().unwrap();
+
+        assert!(matches!(plan.typ, OptRelNodeTyp::Projection));
+        let plan_filter = LogicalFilter::from_rel_node(plan.child(0)).unwrap();
+        assert!(matches!(plan_filter.0.typ(), OptRelNodeTyp::Filter));
+        let plan_filter_expr =
+            LogOpExpr::from_rel_node(plan_filter.cond().into_rel_node()).unwrap();
+        assert!(matches!(plan_filter_expr.op_type(), LogOpType::And));
+        let op_0 = BinOpExpr::from_rel_node(plan_filter_expr.children()[0].clone().into_rel_node())
+            .unwrap();
+        let col_0 =
+            ColumnRefExpr::from_rel_node(op_0.left_child().clone().into_rel_node()).unwrap();
+        assert_eq!(col_0.index(), 4);
+        let op_1 = BinOpExpr::from_rel_node(plan_filter_expr.children()[1].clone().into_rel_node())
+            .unwrap();
+        let col_1 =
+            ColumnRefExpr::from_rel_node(op_1.left_child().clone().into_rel_node()).unwrap();
+        assert_eq!(col_1.index(), 7);
     }
 
     #[test]
