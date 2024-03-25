@@ -172,7 +172,6 @@ fn filter_join_transpose(
     child: RelNode<OptRelNodeTyp>,
     cond: RelNode<OptRelNodeTyp>,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    println!("Filter join transpose hit with type {:?}", child.typ);
     // TODO: Push existing join conditions down as well
     let old_join = LogicalJoin::from_rel_node(child.into()).unwrap();
 
