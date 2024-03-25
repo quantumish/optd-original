@@ -3,7 +3,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
-use cost::{AdaptiveCostModel, BaseTableStats, RuntimeAdaptionStorage, DEFAULT_DECAY};
+use cost::{
+    adaptive_cost::DataFusionAdaptiveCostModel, base_cost::DataFusionBaseTableStats,
+    AdaptiveCostModel, BaseTableStats, RuntimeAdaptionStorage, DEFAULT_DECAY,
+};
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId, OptimizerProperties},
     rel_node::RelNodeMetaMap,
@@ -19,6 +22,7 @@ use rules::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
     EliminateJoinRule, EliminateLimitRule, FilterPushdownRule, HashJoinRule, JoinAssocRule,
     JoinCommuteRule, PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule,
+    SimplifyJoinCondRule,
 };
 
 pub use optd_core::rel_node::Value;
@@ -60,6 +64,7 @@ impl DatafusionOptimizer {
         let mut rule_wrappers = vec![
             RuleWrapper::new_heuristic(Arc::new(SimplifyFilterRule::new())),
             RuleWrapper::new_heuristic(Arc::new(FilterPushdownRule::new())),
+            RuleWrapper::new_heuristic(Arc::new(SimplifyJoinCondRule::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateFilterRule::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateJoinRule::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateLimitRule::new())),
@@ -69,8 +74,8 @@ impl DatafusionOptimizer {
         for rule in rules {
             rule_wrappers.push(RuleWrapper::new_cascades(rule));
         }
-        rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(HashJoinRule::new())));
-        rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(JoinCommuteRule::new())));
+        rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(HashJoinRule::new()))); // 17
+        rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(JoinCommuteRule::new()))); // 18
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(JoinAssocRule::new())));
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
             ProjectionPullUpJoin::new(),
@@ -82,7 +87,7 @@ impl DatafusionOptimizer {
     /// Create an optimizer with partial explore (otherwise it's too slow).
     pub fn new_physical(
         catalog: Arc<dyn Catalog>,
-        stats: BaseTableStats,
+        stats: DataFusionBaseTableStats,
         enable_adaptive: bool,
     ) -> Self {
         let rules = Self::default_rules();
@@ -127,7 +132,7 @@ impl DatafusionOptimizer {
             RuleWrapper::new_heuristic(Arc::new(EliminateFilterRule::new())),
         );
 
-        let cost_model = AdaptiveCostModel::new(1000, BaseTableStats::default()); // very large decay
+        let cost_model = DataFusionAdaptiveCostModel::new(1000, BaseTableStats::default()); // very large decay
         let runtime_statistics = cost_model.get_runtime_map();
         let optimizer = CascadesOptimizer::new(
             rule_wrappers,
