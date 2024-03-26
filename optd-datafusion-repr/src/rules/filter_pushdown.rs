@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn push_past_proj_basic() {
-        let mut dummy_optimizer = new_dummy_optimizer();
+        let dummy_optimizer = new_dummy_optimizer();
 
         let scan = LogicalScan::new("customer".into());
         let proj = LogicalProjection::new(scan.into_plan_node(), ExprList::new(vec![]));
@@ -509,15 +509,6 @@ mod tests {
             BinOpType::Eq,
         )
         .into_expr();
-
-        // Initialize groups
-        dummy_optimizer
-            .step_optimize_rel(proj.clone().into_rel_node())
-            .unwrap();
-
-        dummy_optimizer
-            .step_optimize_rel(proj.clone().child().into_rel_node())
-            .unwrap();
 
         let plan = apply_filter_pushdown(
             &dummy_optimizer,
@@ -535,7 +526,7 @@ mod tests {
 
     #[test]
     fn push_past_proj_adv() {
-        let mut dummy_optimizer = new_dummy_optimizer();
+        let dummy_optimizer = new_dummy_optimizer();
 
         let scan = LogicalScan::new("customer".into());
         let proj = LogicalProjection::new(
@@ -567,15 +558,6 @@ mod tests {
                 .into_expr(),
             ]),
         );
-
-        // Initialize groups
-        dummy_optimizer
-            .step_optimize_rel(proj.clone().into_rel_node())
-            .unwrap();
-
-        dummy_optimizer
-            .step_optimize_rel(proj.clone().child().into_rel_node())
-            .unwrap();
 
         let plan = apply_filter_pushdown(
             &dummy_optimizer,
@@ -611,7 +593,7 @@ mod tests {
         // be pushed to the left child, one to the right child, one gets incorporated
         // into the (now inner) join condition, and a constant one remains in the
         // original filter.
-        let mut dummy_optimizer = new_dummy_optimizer();
+        let dummy_optimizer = new_dummy_optimizer();
 
         let scan1 = LogicalScan::new("customer".into());
 
@@ -666,19 +648,6 @@ mod tests {
                 .into_expr(),
             ]),
         );
-
-        // Initialize groups
-        dummy_optimizer
-            .step_optimize_rel(join.clone().into_rel_node())
-            .unwrap();
-
-        dummy_optimizer
-            .step_optimize_rel(join.clone().left().into_rel_node())
-            .unwrap();
-
-        dummy_optimizer
-            .step_optimize_rel(join.clone().right().into_rel_node())
-            .unwrap();
 
         let plan = apply_filter_pushdown(
             &dummy_optimizer,
@@ -759,7 +728,7 @@ mod tests {
         // Test pushing a filter past an aggregation node, where the filter
         // condition has one clause that can be pushed down to the child and
         // one that must remain in the filter.
-        let mut dummy_optimizer = new_dummy_optimizer();
+        let dummy_optimizer = new_dummy_optimizer();
 
         let scan = LogicalScan::new("customer".into());
 
@@ -788,14 +757,6 @@ mod tests {
                 .into_expr(),
             ]),
         );
-
-        // Initialize groups
-        dummy_optimizer
-            .step_optimize_rel(agg.clone().into_rel_node())
-            .unwrap();
-        dummy_optimizer
-            .step_optimize_rel(scan.into_rel_node())
-            .unwrap();
 
         let plan = apply_filter_pushdown(
             &dummy_optimizer,
