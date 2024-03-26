@@ -28,6 +28,16 @@ define_rule!(
     (Filter, [child], [cond])
 );
 
+/// Emits a LogOpExpr AND if the list has more than one element
+/// Otherwise, returns the single element
+fn and_expr_list_to_expr(exprs: Vec<Expr>) -> Expr {
+    if exprs.len() == 1 {
+        exprs.first().unwrap().clone()
+    } else {
+        LogOpExpr::new(LogOpType::And, ExprList::new(exprs)).into_expr()
+    }
+}
+
 fn merge_conds(first: Expr, second: Expr) -> Expr {
     let new_expr_list = ExprList::new(vec![first, second]);
     // Flatten nested logical expressions if possible
@@ -79,11 +89,6 @@ fn categorize_conds_helper(cond: Expr, bottom_level_children: &mut Vec<Expr>) {
         OptRelNodeTyp::ColumnRef | OptRelNodeTyp::Constant(_) => bottom_level_children.push(cond),
         _ => {
             for child in &cond.clone().into_rel_node().children {
-                println!(
-                    "Helper encountered child of node type: {:?} of type {:?}",
-                    cond.typ(),
-                    child.typ
-                );
                 if child.typ == OptRelNodeTyp::List {
                     // TODO: What should we do when we encounter a List?
                     continue;
@@ -206,20 +211,16 @@ fn filter_join_transpose(
     categorize_conds(categorization_fn, Expr::from_rel_node(cond.into()).unwrap());
 
     let new_left = if !left_conds.is_empty() {
-        let new_filter_node = LogicalFilter::new(
-            old_join.left(),
-            LogOpExpr::new(LogOpType::And, ExprList::new(left_conds)).into_expr(),
-        );
+        let new_filter_node =
+            LogicalFilter::new(old_join.left(), and_expr_list_to_expr(left_conds));
         new_filter_node.into_plan_node()
     } else {
         old_join.left()
     };
 
     let new_right = if !right_conds.is_empty() {
-        let new_filter_node = LogicalFilter::new(
-            old_join.right(),
-            LogOpExpr::new(LogOpType::And, ExprList::new(right_conds)).into_expr(),
-        );
+        let new_filter_node =
+            LogicalFilter::new(old_join.right(), and_expr_list_to_expr(right_conds));
         new_filter_node.into_plan_node()
     } else {
         old_join.right()
@@ -228,10 +229,7 @@ fn filter_join_transpose(
     let new_join = match old_join.join_type() {
         JoinType::Inner => {
             let old_cond = old_join.cond();
-            let new_conds = merge_conds(
-                LogOpExpr::new(LogOpType::And, ExprList::new(join_conds)).into_expr(),
-                old_cond,
-            );
+            let new_conds = merge_conds(and_expr_list_to_expr(join_conds), old_cond);
             LogicalJoin::new(new_left, new_right, new_conds, JoinType::Inner)
         }
         JoinType::Cross => {
@@ -239,7 +237,7 @@ fn filter_join_transpose(
                 LogicalJoin::new(
                     new_left,
                     new_right,
-                    LogOpExpr::new(LogOpType::And, ExprList::new(join_conds)).into_expr(),
+                    and_expr_list_to_expr(join_conds),
                     JoinType::Inner,
                 )
             } else {
@@ -253,10 +251,8 @@ fn filter_join_transpose(
     };
 
     let new_filter = if !keep_conds.is_empty() {
-        let new_filter_node = LogicalFilter::new(
-            new_join.into_plan_node(),
-            LogOpExpr::new(LogOpType::And, ExprList::new(keep_conds)).into_expr(),
-        );
+        let new_filter_node =
+            LogicalFilter::new(new_join.into_plan_node(), and_expr_list_to_expr(keep_conds));
         new_filter_node.into_rel_node().as_ref().clone()
     } else {
         new_join.into_rel_node().as_ref().clone()
