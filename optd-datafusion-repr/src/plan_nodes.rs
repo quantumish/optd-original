@@ -18,7 +18,7 @@ use std::sync::Arc;
 use arrow_schema::DataType;
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
-    rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp, Value},
+    rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp},
 };
 
 pub use agg::{LogicalAgg, PhysicalAgg};
@@ -208,8 +208,15 @@ pub trait OptRelNode: 'static + Clone {
     }
 }
 
-pub trait ExplainData: OptRelNode {
-    fn explain_data(data: &Value) -> Vec<(&'static str, Pretty<'static>)>;
+/// Plan nodes that are defined through `define_plan_node` macro with data
+/// field should implement this trait.
+///
+/// We require plan nodes to explicitly implement this instead of using `Debug`,
+/// because for complex data type (struct), derived debug printing
+/// displays struct name which should be hidden from the user. It also wraps
+/// the fields in braces, unlike the rest of the fields as children.
+pub trait ExplainData<T>: OptRelNode {
+    fn explain_data(data: &T) -> Vec<(&'static str, Pretty<'static>)>;
 }
 
 #[derive(Clone, Debug)]

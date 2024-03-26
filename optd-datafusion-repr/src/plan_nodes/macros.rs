@@ -1,21 +1,3 @@
-/// Plan nodes with data fields must implement `ExplainData` trait. An example:
-///
-/// ```ignore
-/// #[derive(Clone, Debug)]
-/// struct PhysicalDummy(PlanNode);
-///
-/// // Implement `OptRelNode` using `define_plan_node!`...
-///
-/// impl ExplainData for PhysicalDummy {
-///     fn explain_data(data: &Value) -> Vec<(&'static str, Pretty<'static>)> {
-///         if let Value::Int32(i) = data {
-///             vec![("primitive_data", i.to_string().into())]
-///         } else {
-///             unreachable!()
-///         }
-///     }
-/// }
-/// ```
 macro_rules! define_plan_node {
     (
         $struct_name:ident : $meta_typ:tt,
@@ -23,7 +5,7 @@ macro_rules! define_plan_node {
         [ $({ $child_id:literal, $child_name:ident : $child_meta_typ:ty }),* ] ,
         [ $({ $attr_id:literal, $attr_name:ident : $attr_meta_typ:ty }),* ]
         $(, { $inner_name:ident : $inner_typ:ty })?
-        $(, $data_name:ident)?
+        $(, $data_name:ident: $data_typ: ty )?
     ) => {
         impl OptRelNode for $struct_name {
             fn into_rel_node(self) -> OptRelNodeRef {
@@ -49,7 +31,7 @@ macro_rules! define_plan_node {
                 if let Some(meta_map) = meta_map {
                     fields = fields.with_meta(self.0.get_meta(meta_map));
                 };
-                define_plan_node!(@expand_fields self, $struct_name, fields $(, $data_name)?);
+                define_plan_node!(@expand_data_fields self, $struct_name, fields $(, $data_typ)?);
 
                 pretty_xmlish::Pretty::simple_record(
                     stringify!($struct_name),
@@ -65,13 +47,13 @@ macro_rules! define_plan_node {
             pub fn new(
                 $($child_name : $child_meta_typ,)*
                 $($attr_name : $attr_meta_typ),*
-                $($data_name: Value)?
+                $($data_name: $data_typ)?
                 $(, $inner_name : $inner_typ)?
             ) -> $struct_name {
                 #[allow(unused_mut, unused)]
                 let mut data = None;
                 $(
-                    data = Some($data_name);
+                    data = Some($data_name.into());
                 )*
                 $struct_name($meta_typ(
                     optd_core::rel_node::RelNode {
@@ -111,11 +93,11 @@ macro_rules! define_plan_node {
         }
     };
     // Dummy branch that does nothing when data is `None`.
-    (@expand_fields $self:ident, $struct_name:ident, $fields:ident) => {};
+    (@expand_data_fields $self:ident, $struct_name:ident, $fields:ident) => {};
     // Expand explain fields with data.
-    (@expand_fields $self:ident, $struct_name:ident, $fields:ident, $data_name:ident) => {
-        let data = $self.0 .0.data.as_ref().unwrap();
-        $fields.extend($struct_name::explain_data(data));
+    (@expand_data_fields $self:ident, $struct_name:ident, $fields:ident, $data_typ:ty) => {
+        let value = $self.0 .0.data.as_ref().unwrap();
+        $fields.extend($struct_name::explain_data(&value.into()));
     };
 }
 
@@ -151,17 +133,28 @@ mod test {
         #[derive(Clone, Debug)]
         struct PhysicalComplexDummy(PlanNode);
 
-        impl ExplainData for PhysicalComplexDummy {
-            fn explain_data(data: &Value) -> Vec<(&'static str, Pretty<'static>)> {
-                if let Value::Serialized(serialized_data) = data {
-                    let data: ComplexData = bincode::deserialize(serialized_data).unwrap();
-                    vec![
-                        ("a", data.a.to_string().into()),
-                        ("b", data.b.to_string().into()),
-                    ]
+        impl From<ComplexData> for Value {
+            fn from(data: ComplexData) -> Self {
+                Value::Serialized(bincode::serialize(&data).unwrap().into_iter().collect())
+            }
+        }
+
+        impl From<&Value> for ComplexData {
+            fn from(value: &Value) -> Self {
+                if let Value::Serialized(serialized_data) = value {
+                    bincode::deserialize(serialized_data).unwrap()
                 } else {
                     unreachable!()
                 }
+            }
+        }
+
+        impl ExplainData<ComplexData> for PhysicalComplexDummy {
+            fn explain_data(data: &ComplexData) -> Vec<(&'static str, Pretty<'static>)> {
+                vec![
+                    ("a", data.a.to_string().into()),
+                    ("b", data.b.to_string().into()),
+                ]
             }
         }
 
@@ -171,20 +164,15 @@ mod test {
                 { 0, child: PlanNode }
             ], [
             ],
-            complex_data
+            complex_data: ComplexData
         );
 
         let node = PhysicalComplexDummy::new(
             LogicalScan::new("a".to_string()).0,
-            Value::Serialized(
-                bincode::serialize(&ComplexData {
-                    a: 1,
-                    b: "a".to_string(),
-                })
-                .unwrap()
-                .into_iter()
-                .collect(),
-            ),
+            ComplexData {
+                a: 1,
+                b: "a".to_string(),
+            },
         );
         let pretty = node.dispatch_explain(None);
         println!("{}", get_explain_str(&pretty));
