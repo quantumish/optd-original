@@ -396,20 +396,23 @@ fn apply_filter_pushdown(
 mod tests {
     use std::sync::Arc;
 
+    use optd_core::optimizer::Optimizer;
+
     use crate::{
         plan_nodes::{
             BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogOpExpr, LogOpType,
             LogicalAgg, LogicalFilter, LogicalJoin, LogicalProjection, LogicalScan, LogicalSort,
             OptRelNode, OptRelNodeTyp,
         },
-        testing::new_dummy_optimizer,
+        rules::FilterPushdownRule,
+        testing::new_test_optimizer,
     };
 
     use super::apply_filter_pushdown;
 
     #[test]
     fn push_past_sort() {
-        let dummy_optimizer = new_dummy_optimizer();
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
 
         let scan = LogicalScan::new("customer".into());
         let sort = LogicalSort::new(scan.into_plan_node(), ExprList::new(vec![]));
@@ -421,15 +424,9 @@ mod tests {
         )
         .into_expr();
 
-        let plan = apply_filter_pushdown(
-            &dummy_optimizer,
-            super::FilterPushdownRulePicks {
-                child: Arc::unwrap_or_clone(sort.into_rel_node()),
-                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
-            },
-        );
+        let filter = LogicalFilter::new(sort.into_plan_node(), filter_expr);
 
-        let plan = plan.first().unwrap();
+        let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
         assert!(matches!(plan.typ, OptRelNodeTyp::Sort));
         assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
@@ -438,7 +435,7 @@ mod tests {
     #[test]
     fn filter_merge() {
         // TODO: write advanced proj with more expr that need to be transformed
-        let dummy_optimizer = new_dummy_optimizer();
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
 
         let scan = LogicalScan::new("customer".into());
         let filter_ch_expr = BinOpExpr::new(
@@ -456,15 +453,9 @@ mod tests {
         )
         .into_expr();
 
-        let plan = apply_filter_pushdown(
-            &dummy_optimizer,
-            super::FilterPushdownRulePicks {
-                child: Arc::unwrap_or_clone(filter_ch.into_rel_node()),
-                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
-            },
-        );
+        let filter = LogicalFilter::new(filter_ch.into_plan_node(), filter_expr);
 
-        let plan = plan.first().unwrap();
+        let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
         assert!(matches!(plan.typ, OptRelNodeTyp::Filter));
         let cond_log_op = LogOpExpr::from_rel_node(
@@ -498,7 +489,7 @@ mod tests {
 
     #[test]
     fn push_past_proj_basic() {
-        let dummy_optimizer = new_dummy_optimizer();
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
 
         let scan = LogicalScan::new("customer".into());
         let proj = LogicalProjection::new(scan.into_plan_node(), ExprList::new(vec![]));
@@ -510,23 +501,18 @@ mod tests {
         )
         .into_expr();
 
-        let plan = apply_filter_pushdown(
-            &dummy_optimizer,
-            super::FilterPushdownRulePicks {
-                child: Arc::unwrap_or_clone(proj.into_rel_node()),
-                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
-            },
-        );
+        let filter = LogicalFilter::new(proj.into_plan_node(), filter_expr);
+        let plan = test_optimizer
+            .optimize(filter.into_rel_node().into())
+            .unwrap();
 
-        let plan = plan.first().unwrap();
-
-        assert!(matches!(plan.typ, OptRelNodeTyp::Projection));
+        assert_eq!(plan.typ, OptRelNodeTyp::Projection);
         assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
     }
 
     #[test]
     fn push_past_proj_adv() {
-        let dummy_optimizer = new_dummy_optimizer();
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
 
         let scan = LogicalScan::new("customer".into());
         let proj = LogicalProjection::new(
@@ -559,15 +545,9 @@ mod tests {
             ]),
         );
 
-        let plan = apply_filter_pushdown(
-            &dummy_optimizer,
-            super::FilterPushdownRulePicks {
-                child: Arc::unwrap_or_clone(proj.into_rel_node()),
-                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
-            },
-        );
+        let filter = LogicalFilter::new(proj.into_plan_node(), filter_expr.into_expr());
 
-        let plan = plan.first().unwrap();
+        let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
         assert!(matches!(plan.typ, OptRelNodeTyp::Projection));
         let plan_filter = LogicalFilter::from_rel_node(plan.child(0)).unwrap();
@@ -593,7 +573,7 @@ mod tests {
         // be pushed to the left child, one to the right child, one gets incorporated
         // into the (now inner) join condition, and a constant one remains in the
         // original filter.
-        let dummy_optimizer = new_dummy_optimizer();
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
 
         let scan1 = LogicalScan::new("customer".into());
 
@@ -649,15 +629,9 @@ mod tests {
             ]),
         );
 
-        let plan = apply_filter_pushdown(
-            &dummy_optimizer,
-            super::FilterPushdownRulePicks {
-                child: Arc::unwrap_or_clone(join.into_rel_node()),
-                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
-            },
-        );
+        let filter = LogicalFilter::new(join.into_plan_node(), filter_expr.into_expr());
 
-        let plan = plan.first().unwrap();
+        let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
         // Examine original filter + condition
         let top_level_filter = LogicalFilter::from_rel_node(plan.clone().into()).unwrap();
@@ -728,7 +702,7 @@ mod tests {
         // Test pushing a filter past an aggregation node, where the filter
         // condition has one clause that can be pushed down to the child and
         // one that must remain in the filter.
-        let dummy_optimizer = new_dummy_optimizer();
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
 
         let scan = LogicalScan::new("customer".into());
 
@@ -758,15 +732,10 @@ mod tests {
             ]),
         );
 
-        let plan = apply_filter_pushdown(
-            &dummy_optimizer,
-            super::FilterPushdownRulePicks {
-                child: Arc::unwrap_or_clone(agg.into_rel_node()),
-                cond: Arc::unwrap_or_clone(filter_expr.into_rel_node()),
-            },
-        );
+        let filter = LogicalFilter::new(agg.into_plan_node(), filter_expr.into_expr());
 
-        let plan = plan.first().unwrap();
+        let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
+
         let plan_filter = LogicalFilter::from_rel_node(plan.clone().into()).unwrap();
         assert!(matches!(plan_filter.0.typ(), OptRelNodeTyp::Filter));
         let plan_filter_expr =
