@@ -26,43 +26,17 @@ fn apply_join_commute(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     JoinCommuteRulePicks { left, right, cond }: JoinCommuteRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    // TODO: migrate to new rewrite_column_refs helper
-    fn rewrite_column_refs(expr: Expr, left_size: usize, right_size: usize) -> Expr {
-        let expr = expr.into_rel_node();
-        if let Some(expr) = ColumnRefExpr::from_rel_node(expr.clone()) {
-            let index = expr.index();
-            if index < left_size {
-                return ColumnRefExpr::new(index + right_size).into_expr();
-            } else {
-                return ColumnRefExpr::new(index - left_size).into_expr();
-            }
-        }
-        let children = expr.children.clone();
-        let children = children
-            .into_iter()
-            .map(|x| {
-                rewrite_column_refs(Expr::from_rel_node(x).unwrap(), left_size, right_size)
-                    .into_rel_node()
-            })
-            .collect_vec();
-        Expr::from_rel_node(
-            RelNode {
-                typ: expr.typ.clone(),
-                children,
-                data: expr.data.clone(),
-            }
-            .into(),
-        )
-        .unwrap()
-    }
-
     let left_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(left.clone()), 0);
     let right_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(right.clone()), 0);
-    let cond = rewrite_column_refs(
-        Expr::from_rel_node(cond.into()).unwrap(),
-        left_schema.len(),
-        right_schema.len(),
-    );
+    let cond = Expr::from_rel_node(cond.into())
+        .unwrap()
+        .rewrite_column_refs(&|idx| {
+            if idx < left_schema.len() {
+                idx + right_schema.len()
+            } else {
+                idx - left_schema.len()
+            }
+        });
     let node = LogicalJoin::new(
         PlanNode::from_group(right.into()),
         PlanNode::from_group(left.into()),
@@ -150,7 +124,7 @@ fn apply_join_assoc(
         cond2,
     }: JoinAssocRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    // TODO: migrate to new rewrite_column_refs helper
+    // TODO(bowad): migrate to new rewrite_column_refs helper
     fn rewrite_column_refs(expr: Expr, a_size: usize) -> Option<Expr> {
         let expr = expr.into_rel_node();
         if let Some(expr) = ColumnRefExpr::from_rel_node(expr.clone()) {

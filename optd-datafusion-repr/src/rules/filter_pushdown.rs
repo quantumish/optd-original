@@ -78,7 +78,16 @@ fn categorize_conds_helper(cond: Expr, bottom_level_children: &mut Vec<Expr>) {
     match cond.typ() {
         OptRelNodeTyp::ColumnRef | OptRelNodeTyp::Constant(_) => bottom_level_children.push(cond),
         _ => {
-            for child in &cond.into_rel_node().children {
+            for child in &cond.clone().into_rel_node().children {
+                println!(
+                    "Helper encountered child of node type: {:?} of type {:?}",
+                    cond.typ(),
+                    child.typ
+                );
+                if child.typ == OptRelNodeTyp::List {
+                    // TODO: What should we do when we encounter a List?
+                    continue;
+                }
                 categorize_conds_helper(
                     Expr::from_rel_node(child.clone()).unwrap(),
                     bottom_level_children,
@@ -403,8 +412,6 @@ mod tests {
         rules::FilterPushdownRule,
         testing::new_test_optimizer,
     };
-
-    use super::apply_filter_pushdown;
 
     #[test]
     fn push_past_sort() {

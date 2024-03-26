@@ -297,6 +297,10 @@ impl Expr {
         let children = children
             .into_iter()
             .map(|child| {
+                if child.typ == OptRelNodeTyp::List {
+                    // TODO: What should we do with List?
+                    return child;
+                }
                 Expr::from_rel_node(child.clone())
                     .unwrap()
                     .rewrite_column_refs(rewrite_fn)
