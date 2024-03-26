@@ -8,7 +8,6 @@
 //! At a high level, filter pushdown is responsible for pushing the filter node
 //! further down the query plan whenever it is possible to do so.
 
-use core::panic;
 use std::collections::{HashMap, HashSet};
 use std::vec;
 
@@ -75,8 +74,10 @@ fn determine_join_cond_dep(
 
 /// Do not call directly
 fn categorize_conds_helper(cond: Expr, bottom_level_children: &mut Vec<Expr>) {
+    assert!(cond.typ().is_expression());
     match cond.typ() {
-        OptRelNodeTyp::LogOp(_) | OptRelNodeTyp::BinOp(_) | OptRelNodeTyp::UnOp(_) => {
+        OptRelNodeTyp::ColumnRef | OptRelNodeTyp::Constant(_) => bottom_level_children.push(cond),
+        _ => {
             for child in &cond.into_rel_node().children {
                 categorize_conds_helper(
                     Expr::from_rel_node(child.clone()).unwrap(),
@@ -84,11 +85,6 @@ fn categorize_conds_helper(cond: Expr, bottom_level_children: &mut Vec<Expr>) {
                 );
             }
         }
-        OptRelNodeTyp::ColumnRef | OptRelNodeTyp::Constant(_) => bottom_level_children.push(cond),
-        _ => panic!(
-            "Encountered unhandled expr of type {:?} in categorize_conds_helper",
-            cond.typ()
-        ),
     }
 }
 
