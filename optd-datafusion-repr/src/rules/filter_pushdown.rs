@@ -136,7 +136,6 @@ fn filter_project_transpose(
     let old_proj = LogicalProjection::from_rel_node(child.into()).unwrap();
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
 
-    // TODO: Implement get_property in heuristics optimizer
     let projection_schema_len = optimizer
         .get_property::<SchemaPropertyBuilder>(old_proj.clone().into_rel_node(), 0)
         .len();
@@ -356,7 +355,6 @@ fn apply_filter_pushdown(
     let mut result_from_this_step = match child.typ {
         OptRelNodeTyp::Projection => filter_project_transpose(optimizer, child, cond),
         OptRelNodeTyp::Filter => filter_merge(optimizer, child, cond),
-        // OptRelNodeTyp::Scan => todo!(),   // TODO: Add predicate field to scan node
         OptRelNodeTyp::Join(_) => filter_join_transpose(optimizer, child, cond),
         OptRelNodeTyp::Sort => filter_sort_transpose(optimizer, child, cond),
         OptRelNodeTyp::Agg => filter_agg_transpose(optimizer, child, cond),
@@ -372,7 +370,6 @@ fn apply_filter_pushdown(
                 let child_as_filter = LogicalFilter::from_rel_node(child.clone()).unwrap();
                 let childs_child = child_as_filter.child().into_rel_node().as_ref().clone();
                 let childs_cond = child_as_filter.cond().into_rel_node().as_ref().clone();
-                // @todo: make this iterative?
                 let result = apply_filter_pushdown(
                     optimizer,
                     FilterPushdownRulePicks {
@@ -432,7 +429,6 @@ mod tests {
 
     #[test]
     fn filter_merge() {
-        // TODO: write advanced proj with more expr that need to be transformed
         let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
 
         let scan = LogicalScan::new("customer".into());
