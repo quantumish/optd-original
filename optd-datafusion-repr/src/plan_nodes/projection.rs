@@ -65,39 +65,13 @@ impl ProjectionMapping {
         schema_size: usize,
         projection_schema_size: usize,
     ) -> Expr {
-        // TODO(bowad): rewrite to use rewritecolumnrefs
-        if cond.typ() == OptRelNodeTyp::ColumnRef {
-            let col = ColumnRefExpr::from_rel_node(cond.into_rel_node()).unwrap();
-            let idx = col.index();
-            if idx < projection_schema_size {
-                let col = self.projection_col_refers_to(col.index());
-                return ColumnRefExpr::new(col).into_expr();
+        cond.rewrite_column_refs(&|idx| {
+            Some(if idx < projection_schema_size {
+                self.projection_col_refers_to(idx)
             } else {
-                let col = col.index();
-                return ColumnRefExpr::new(col - projection_schema_size + schema_size).into_expr();
-            }
-        }
-        let expr = cond.into_rel_node();
-        let mut children = Vec::with_capacity(expr.children.len());
-        for child in &expr.children {
-            children.push(
-                self.rewrite_condition(
-                    Expr::from_rel_node(child.clone()).unwrap(),
-                    schema_size,
-                    projection_schema_size,
-                )
-                .into_rel_node(),
-            );
-        }
-
-        Expr::from_rel_node(
-            RelNode {
-                typ: expr.typ.clone(),
-                children,
-                data: expr.data.clone(),
-            }
-            .into(),
-        )
+                idx - projection_schema_size + schema_size
+            })
+        })
         .unwrap()
     }
 }

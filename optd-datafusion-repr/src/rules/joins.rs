@@ -356,7 +356,6 @@ fn apply_projection_pull_up_join(
         LogicalJoin::new(
             PlanNode::from_group(left),
             PlanNode::from_group(right),
-            // TODO: possibly migrate to new rewrite_column_refs helper
             mapping.rewrite_condition(
                 Expr::from_rel_node(Arc::new(cond)).unwrap(),
                 left_schema.len(),
