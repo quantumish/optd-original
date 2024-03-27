@@ -12,7 +12,7 @@ impl Catalog for TpchCatalog {
         match name {
             "customer" => {
                 // Define the schema for the "customer" table
-                
+
                 Schema {
                     fields: vec![
                         Field {
@@ -60,7 +60,7 @@ impl Catalog for TpchCatalog {
             }
             "orders" => {
                 // Define the schema for the "orders" table
-                
+
                 Schema {
                     fields: vec![
                         Field {

@@ -1,5 +1,3 @@
-
-
 use super::expr::ExprList;
 use super::macros::define_plan_node;
 

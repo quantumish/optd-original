@@ -508,9 +508,7 @@ mod tests {
         .into_expr();
 
         let filter = LogicalFilter::new(proj.into_plan_node(), filter_expr);
-        let plan = test_optimizer
-            .optimize(filter.into_rel_node())
-            .unwrap();
+        let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
         assert_eq!(plan.typ, OptRelNodeTyp::Projection);
         assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));

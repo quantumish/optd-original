@@ -18,7 +18,7 @@ pub fn new_test_optimizer(
     rule: Arc<dyn Rule<OptRelNodeTyp, HeuristicsOptimizer<OptRelNodeTyp>>>,
 ) -> HeuristicsOptimizer<OptRelNodeTyp> {
     let dummy_catalog = Arc::new(TpchCatalog);
-    
+
     HeuristicsOptimizer::new_with_rules(
         vec![rule],
         ApplyOrder::TopDown,
