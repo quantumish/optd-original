@@ -16,6 +16,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use arrow_schema::DataType;
+use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
     rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp},
@@ -285,12 +286,20 @@ impl Expr {
 
     /// Recursively rewrite all column references in the expression.using a provided
     /// function that replaces a column index.
-    pub fn rewrite_column_refs(&self, rewrite_fn: &impl Fn(usize) -> usize) -> Self {
+    pub fn rewrite_column_refs(
+        &self,
+        rewrite_fn: &impl Fn(usize) -> Option<usize>,
+    ) -> Option<Self> {
         assert!(self.typ().is_expression());
         if let OptRelNodeTyp::ColumnRef = self.typ() {
             let col_ref = ColumnRefExpr::from_rel_node(self.0.clone()).unwrap();
-            let new_col_ref = ColumnRefExpr::new(rewrite_fn(col_ref.index()));
-            return Self(new_col_ref.into_rel_node());
+            let rewritten = rewrite_fn(col_ref.index());
+            return if let Some(rewritten_idx) = rewritten {
+                let new_col_ref = ColumnRefExpr::new(rewritten_idx);
+                Some(Self(new_col_ref.into_rel_node()))
+            } else {
+                None
+            };
         }
 
         let children = self.0.children.clone();
@@ -299,23 +308,25 @@ impl Expr {
             .map(|child| {
                 if child.typ == OptRelNodeTyp::List {
                     // TODO: What should we do with List?
-                    return child;
+                    return Some(child);
                 }
                 Expr::from_rel_node(child.clone())
                     .unwrap()
                     .rewrite_column_refs(rewrite_fn)
-                    .into_rel_node()
+                    .map(|x| x.into_rel_node())
             })
-            .collect();
-        Expr::from_rel_node(
-            RelNode {
-                typ: self.typ(),
-                children,
-                data: self.0.data.clone(),
-            }
-            .into(),
+            .collect::<Option<Vec<_>>>()?;
+        Some(
+            Expr::from_rel_node(
+                RelNode {
+                    typ: self.0.typ.clone(),
+                    children: children.into_iter().collect_vec(),
+                    data: self.0.data.clone(),
+                }
+                .into(),
+            )
+            .unwrap(),
         )
-        .unwrap()
     }
 }
 

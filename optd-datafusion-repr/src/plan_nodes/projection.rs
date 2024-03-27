@@ -65,6 +65,7 @@ impl ProjectionMapping {
         schema_size: usize,
         projection_schema_size: usize,
     ) -> Expr {
+        // TODO(bowad): rewrite to use rewritecolumnrefs
         if cond.typ() == OptRelNodeTyp::ColumnRef {
             let col = ColumnRefExpr::from_rel_node(cond.into_rel_node()).unwrap();
             let idx = col.index();

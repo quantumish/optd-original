@@ -201,9 +201,16 @@ fn filter_join_transpose(
         let location = determine_join_cond_dep(children, left_schema_size, right_schema_size);
         match location {
             JoinCondDependency::Left => left_conds.push(expr),
-            JoinCondDependency::Right => right_conds.push(expr.rewrite_column_refs(&|idx| {
-                LogicalJoin::map_through_join(idx, left_schema_size, right_schema_size)
-            })),
+            JoinCondDependency::Right => right_conds.push(
+                expr.rewrite_column_refs(&|idx| {
+                    Some(LogicalJoin::map_through_join(
+                        idx,
+                        left_schema_size,
+                        right_schema_size,
+                    ))
+                })
+                .unwrap(),
+            ),
             JoinCondDependency::Both => join_conds.push(expr),
             JoinCondDependency::None => keep_conds.push(expr),
         }
@@ -634,13 +641,8 @@ mod tests {
 
         // Examine original filter + condition
         let top_level_filter = LogicalFilter::from_rel_node(plan.clone().into()).unwrap();
-        let top_level_filter_cond =
-            LogOpExpr::from_rel_node(top_level_filter.cond().into_rel_node()).unwrap();
-        assert!(matches!(top_level_filter_cond.op_type(), LogOpType::And));
-        assert!(matches!(top_level_filter_cond.children().len(), 1));
         let bin_op_0 =
-            BinOpExpr::from_rel_node(top_level_filter_cond.children()[0].clone().into_rel_node())
-                .unwrap();
+            BinOpExpr::from_rel_node(top_level_filter.cond().clone().into_rel_node()).unwrap();
         assert!(matches!(bin_op_0.op_type(), BinOpType::Eq));
         let col_0 =
             ConstantExpr::from_rel_node(bin_op_0.left_child().clone().into_rel_node()).unwrap();
@@ -667,11 +669,7 @@ mod tests {
 
         // Examine left child filter + condition
         let filter_1 = LogicalFilter::from_rel_node(join_node.left().into_rel_node()).unwrap();
-        let filter_1_cond = LogOpExpr::from_rel_node(filter_1.cond().into_rel_node()).unwrap();
-        assert!(matches!(filter_1_cond.children().len(), 1));
-        assert!(matches!(filter_1_cond.op_type(), LogOpType::And));
-        let bin_op_3 =
-            BinOpExpr::from_rel_node(filter_1_cond.children()[0].clone().into_rel_node()).unwrap();
+        let bin_op_3 = BinOpExpr::from_rel_node(filter_1.cond().clone().into_rel_node()).unwrap();
         assert!(matches!(bin_op_3.op_type(), BinOpType::Eq));
         let col_6 =
             ColumnRefExpr::from_rel_node(bin_op_3.left_child().clone().into_rel_node()).unwrap();
@@ -682,11 +680,7 @@ mod tests {
 
         // Examine right child filter + condition
         let filter_2 = LogicalFilter::from_rel_node(join_node.right().into_rel_node()).unwrap();
-        let filter_2_cond = LogOpExpr::from_rel_node(filter_2.cond().into_rel_node()).unwrap();
-        assert!(matches!(filter_2_cond.op_type(), LogOpType::And));
-        assert!(matches!(filter_2_cond.children().len(), 1));
-        let bin_op_4 =
-            BinOpExpr::from_rel_node(filter_2_cond.children()[0].clone().into_rel_node()).unwrap();
+        let bin_op_4 = BinOpExpr::from_rel_node(filter_2.cond().clone().into_rel_node()).unwrap();
         assert!(matches!(bin_op_4.op_type(), BinOpType::Eq));
         let col_8 =
             ColumnRefExpr::from_rel_node(bin_op_4.left_child().clone().into_rel_node()).unwrap();

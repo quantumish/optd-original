@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use itertools::Itertools;
 use optd_core::optimizer::Optimizer;
 use optd_core::rel_node::RelNode;
 use optd_core::rules::{Rule, RuleMatcher};
@@ -31,16 +30,16 @@ fn apply_join_commute(
     let cond = Expr::from_rel_node(cond.into())
         .unwrap()
         .rewrite_column_refs(&|idx| {
-            if idx < left_schema.len() {
+            Some(if idx < left_schema.len() {
                 idx + right_schema.len()
             } else {
                 idx - left_schema.len()
-            }
+            })
         });
     let node = LogicalJoin::new(
         PlanNode::from_group(right.into()),
         PlanNode::from_group(left.into()),
-        cond,
+        cond.unwrap(),
         JoinType::Inner,
     );
     let mut proj_expr = Vec::with_capacity(left_schema.len() + right_schema.len());
@@ -124,44 +123,22 @@ fn apply_join_assoc(
         cond2,
     }: JoinAssocRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    // TODO(bowad): migrate to new rewrite_column_refs helper
-    fn rewrite_column_refs(expr: Expr, a_size: usize) -> Option<Expr> {
-        let expr = expr.into_rel_node();
-        if let Some(expr) = ColumnRefExpr::from_rel_node(expr.clone()) {
-            let index = expr.index();
-            if index < a_size {
-                return None;
-            } else {
-                return Some(ColumnRefExpr::new(index - a_size).into_expr());
-            }
-        }
-        let children = expr.children.clone();
-        let children = children
-            .into_iter()
-            .map(|x| rewrite_column_refs(Expr::from_rel_node(x).unwrap(), a_size))
-            .collect::<Option<Vec<_>>>()?;
-        Some(
-            Expr::from_rel_node(
-                RelNode {
-                    typ: expr.typ.clone(),
-                    children: children
-                        .into_iter()
-                        .map(|x| x.into_rel_node())
-                        .collect_vec(),
-                    data: expr.data.clone(),
-                }
-                .into(),
-            )
-            .unwrap(),
-        )
-    }
     let a_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(a.clone()), 0);
     let _b_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(b.clone()), 0);
     let _c_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(c.clone()), 0);
+
     let cond2 = Expr::from_rel_node(cond2.into()).unwrap();
-    let Some(cond2) = rewrite_column_refs(cond2, a_schema.len()) else {
+
+    let Some(cond2) = cond2.rewrite_column_refs(&|idx| {
+        if idx < a_schema.len() {
+            None
+        } else {
+            Some(idx - a_schema.len())
+        }
+    }) else {
         return vec![];
     };
+
     let node = RelNode {
         typ: OptRelNodeTyp::Join(JoinType::Inner),
         children: vec![

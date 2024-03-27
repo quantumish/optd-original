@@ -5,7 +5,8 @@ use optd_core::{
     rel_node::{RelNode, Value},
 };
 
-/// Dummy cost model that returns a 0 cost in all cases. Intended for testing.
+/// Dummy cost model that returns a 0 cost in all cases.
+/// Intended for testing with the cascades optimizer.
 pub struct DummyCostModel;
 
 impl CostModel<OptRelNodeTyp> for DummyCostModel {
