@@ -60,18 +60,14 @@ fn determine_join_cond_dep(
     let mut left_col = false;
     let mut right_col = false;
     for child in children {
-        match child.typ() {
-            OptRelNodeTyp::ColumnRef => {
-                let col_ref = ColumnRefExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
-                let index = col_ref.index();
-                if index < left_schema_size {
-                    left_col = true;
-                } else if index >= left_schema_size && index < left_schema_size + right_schema_size
-                {
-                    right_col = true;
-                }
+        if child.typ() == OptRelNodeTyp::ColumnRef {
+            let col_ref = ColumnRefExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
+            let index = col_ref.index();
+            if index < left_schema_size {
+                left_col = true;
+            } else if index >= left_schema_size && index < left_schema_size + right_schema_size {
+                right_col = true;
             }
-            _ => {}
         }
     }
     match (left_col, right_col) {
@@ -313,16 +309,12 @@ fn filter_agg_transpose(
     let categorization_fn = |expr: Expr, children: &Vec<Expr>| {
         let mut group_by_cols_only = true;
         for child in children {
-            match child.typ() {
-                OptRelNodeTyp::ColumnRef => {
-                    let col_ref =
-                        ColumnRefExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
-                    if !group_cols.contains(&col_ref.index()) {
-                        group_by_cols_only = false;
-                        break;
-                    }
+            if child.typ() == OptRelNodeTyp::ColumnRef {
+                let col_ref = ColumnRefExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
+                if !group_cols.contains(&col_ref.index()) {
+                    group_by_cols_only = false;
+                    break;
                 }
-                _ => {}
             }
         }
         if group_by_cols_only {
