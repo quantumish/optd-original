@@ -286,6 +286,11 @@ impl Expr {
 
     /// Recursively rewrite all column references in the expression.using a provided
     /// function that replaces a column index.
+    /// The provided function will, given a ColumnRefExpr's index,
+    /// return either Some(usize) or None.
+    /// - If it is Some, the column index can be rewritten with the value.
+    /// - If any of the columns is None, we will return None all the way up
+    /// the call stack, and no expression will be returned.
     pub fn rewrite_column_refs(
         &self,
         rewrite_fn: &impl Fn(usize) -> Option<usize>,
