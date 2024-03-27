@@ -12,7 +12,8 @@ impl Catalog for TpchCatalog {
         match name {
             "customer" => {
                 // Define the schema for the "customer" table
-                let schema = Schema {
+                
+                Schema {
                     fields: vec![
                         Field {
                             name: "custkey".to_string(),
@@ -55,12 +56,12 @@ impl Catalog for TpchCatalog {
                             nullable: false,
                         },
                     ],
-                };
-                schema
+                }
             }
             "orders" => {
                 // Define the schema for the "orders" table
-                let schema = Schema {
+                
+                Schema {
                     fields: vec![
                         Field {
                             name: "orderkey".to_string(),
@@ -108,8 +109,7 @@ impl Catalog for TpchCatalog {
                             nullable: false,
                         },
                     ],
-                };
-                schema
+                }
             }
             // Add more cases for other tables as needed
             _ => {

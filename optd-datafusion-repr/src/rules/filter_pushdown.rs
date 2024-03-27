@@ -465,7 +465,7 @@ mod tests {
 
         assert!(matches!(plan.typ, OptRelNodeTyp::Filter));
         let cond_log_op = LogOpExpr::from_rel_node(
-            LogicalFilter::from_rel_node((plan.clone()).into())
+            LogicalFilter::from_rel_node(plan.clone())
                 .unwrap()
                 .cond()
                 .into_rel_node(),
@@ -509,7 +509,7 @@ mod tests {
 
         let filter = LogicalFilter::new(proj.into_plan_node(), filter_expr);
         let plan = test_optimizer
-            .optimize(filter.into_rel_node().into())
+            .optimize(filter.into_rel_node())
             .unwrap();
 
         assert_eq!(plan.typ, OptRelNodeTyp::Projection);
@@ -640,7 +640,7 @@ mod tests {
         let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
         // Examine original filter + condition
-        let top_level_filter = LogicalFilter::from_rel_node(plan.clone().into()).unwrap();
+        let top_level_filter = LogicalFilter::from_rel_node(plan.clone()).unwrap();
         let bin_op_0 =
             BinOpExpr::from_rel_node(top_level_filter.cond().clone().into_rel_node()).unwrap();
         assert!(matches!(bin_op_0.op_type(), BinOpType::Eq));
@@ -729,7 +729,7 @@ mod tests {
 
         let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
-        let plan_filter = LogicalFilter::from_rel_node(plan.clone().into()).unwrap();
+        let plan_filter = LogicalFilter::from_rel_node(plan.clone()).unwrap();
         assert!(matches!(plan_filter.0.typ(), OptRelNodeTyp::Filter));
         let plan_filter_expr =
             LogOpExpr::from_rel_node(plan_filter.cond().into_rel_node()).unwrap();
