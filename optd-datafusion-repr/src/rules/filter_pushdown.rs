@@ -136,7 +136,7 @@ fn apply_filter_project_transpose(
         .get_property::<SchemaPropertyBuilder>(child.clone().into(), 0)
         .len();
 
-    let child = PlanNode::from_rel_node(child.into()).unwrap();
+    let child = PlanNode::from_group(child.into());
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
 
