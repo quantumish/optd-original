@@ -23,12 +23,16 @@ use properties::{
 };
 use rules::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
-    EliminateJoinRule, EliminateLimitRule, FilterPushdownRule, HashJoinRule, JoinAssocRule,
-    JoinCommuteRule, PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule,
-    SimplifyJoinCondRule,
+    EliminateJoinRule, EliminateLimitRule, HashJoinRule, JoinAssocRule, JoinCommuteRule,
+    PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule,
 };
 
 pub use optd_core::rel_node::Value;
+
+use crate::rules::{
+    FilterAggTransposeRule, FilterCrossJoinTransposeRule, FilterInnerJoinTransposeRule,
+    FilterMergeRule, FilterProjectTransposeRule, FilterSortTransposeRule,
+};
 
 pub mod cost;
 mod explain;
@@ -80,7 +84,12 @@ impl DatafusionOptimizer {
         vec![
             Arc::new(SimplifyFilterRule::new()),
             Arc::new(SimplifyJoinCondRule::new()),
-            Arc::new(FilterPushdownRule::new()),
+            Arc::new(FilterProjectTransposeRule::new()),
+            Arc::new(FilterMergeRule::new()),
+            Arc::new(FilterCrossJoinTransposeRule::new()),
+            Arc::new(FilterInnerJoinTransposeRule::new()),
+            Arc::new(FilterSortTransposeRule::new()),
+            Arc::new(FilterAggTransposeRule::new()),
             Arc::new(EliminateFilterRule::new()),
             Arc::new(EliminateJoinRule::new()),
             Arc::new(EliminateLimitRule::new()),

@@ -338,14 +338,12 @@ fn apply_projection_pull_up_join(
 
     let projection = LogicalProjection::new(PlanNode::from_group(left.clone()), list.clone());
 
-    let Some(mapping) = projection.compute_column_mapping() else {
+    let Some(mapping) = LogicalProjection::compute_column_mapping(&projection.exprs()) else {
         return vec![];
     };
 
     // TODO(chi): support capture projection node.
     let left_schema = optimizer.get_property::<SchemaPropertyBuilder>(left.clone(), 0);
-    let projection_schema =
-        optimizer.get_property::<SchemaPropertyBuilder>(projection.into_rel_node().clone(), 0);
     let right_schema = optimizer.get_property::<SchemaPropertyBuilder>(right.clone(), 0);
     let mut new_projection_exprs = list.to_vec();
     for i in 0..right_schema.len() {
@@ -359,7 +357,6 @@ fn apply_projection_pull_up_join(
             mapping.rewrite_condition(
                 Expr::from_rel_node(Arc::new(cond)).unwrap(),
                 left_schema.len(),
-                projection_schema.len(),
             ),
             JoinType::Inner,
         )

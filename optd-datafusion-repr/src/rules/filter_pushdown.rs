@@ -16,17 +16,11 @@ use optd_core::{optimizer::Optimizer, rel_node::RelNode};
 
 use crate::plan_nodes::{
     ColumnRefExpr, Expr, ExprList, JoinType, LogOpExpr, LogOpType, LogicalAgg, LogicalFilter,
-    LogicalJoin, LogicalProjection, LogicalSort, OptRelNode, OptRelNodeTyp,
+    LogicalJoin, LogicalProjection, LogicalSort, OptRelNode, OptRelNodeTyp, PlanNode,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
 use super::macros::define_rule;
-
-define_rule!(
-    FilterPushdownRule,
-    apply_filter_pushdown,
-    (Filter, [child], [cond])
-);
 
 /// Emits a LogOpExpr AND if the list has more than one element
 /// Otherwise, returns the single element
@@ -124,49 +118,114 @@ fn categorize_conds(mut categorization_fn: impl FnMut(Expr, &Vec<Expr>), cond: E
     }
 }
 
+define_rule!(
+    FilterProjectTransposeRule,
+    apply_filter_project_transpose,
+    (Filter, (Projection, child, [exprs]), [cond])
+);
+
 /// Datafusion only pushes filter past project when the project does not contain
 /// volatile (i.e. non-deterministic) expressions that are present in the filter
 /// Calcite only checks if the projection contains a windowing calculation
 /// We check neither of those things and do it always (which may be wrong)
-fn filter_project_transpose(
+fn apply_filter_project_transpose(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
-    child: RelNode<OptRelNodeTyp>,
-    cond: RelNode<OptRelNodeTyp>,
+    FilterProjectTransposeRulePicks { child, exprs, cond }: FilterProjectTransposeRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    let old_proj = LogicalProjection::from_rel_node(child.into()).unwrap();
-    let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
-
-    // TODO: Implement get_property in heuristics optimizer
-    let projection_schema_len = optimizer
-        .get_property::<SchemaPropertyBuilder>(old_proj.clone().into_rel_node(), 0)
-        .len();
     let child_schema_len = optimizer
-        .get_property::<SchemaPropertyBuilder>(old_proj.clone().into_rel_node(), 0)
+        .get_property::<SchemaPropertyBuilder>(child.clone().into(), 0)
         .len();
 
-    let proj_col_map = old_proj.compute_column_mapping().unwrap();
-    let rewritten_cond = proj_col_map.rewrite_condition(
-        cond_as_expr.clone(),
-        projection_schema_len,
-        child_schema_len,
-    );
+    let child = PlanNode::from_rel_node(child.into()).unwrap();
+    let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
+    let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
 
-    let new_filter_node = LogicalFilter::new(old_proj.child(), rewritten_cond);
-    let new_proj = LogicalProjection::new(new_filter_node.into_plan_node(), old_proj.exprs());
+    let proj_col_map = LogicalProjection::compute_column_mapping(&exprs).unwrap();
+    let rewritten_cond = proj_col_map.rewrite_condition(cond_as_expr.clone(), child_schema_len);
+
+    let new_filter_node = LogicalFilter::new(child, rewritten_cond);
+    let new_proj = LogicalProjection::new(new_filter_node.into_plan_node(), exprs);
     vec![new_proj.into_rel_node().as_ref().clone()]
 }
 
-fn filter_merge(
+define_rule!(
+    FilterMergeRule,
+    apply_filter_merge,
+    (Filter, (Filter, child, [cond1]), [cond])
+);
+
+fn apply_filter_merge(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
-    child: RelNode<OptRelNodeTyp>,
-    cond: RelNode<OptRelNodeTyp>,
+    FilterMergeRulePicks { child, cond1, cond }: FilterMergeRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    let child_filter = LogicalFilter::from_rel_node(child.into()).unwrap();
-    let child_filter_cond = child_filter.cond().clone();
+    let child = PlanNode::from_rel_node(child.into()).unwrap();
     let curr_cond = Expr::from_rel_node(cond.into()).unwrap();
-    let merged_cond = merge_conds(curr_cond, child_filter_cond);
-    let new_filter = LogicalFilter::new(child_filter.child(), merged_cond);
+    let child_cond = Expr::from_rel_node(cond1.into()).unwrap();
+
+    let merged_cond = merge_conds(curr_cond, child_cond);
+
+    let new_filter = LogicalFilter::new(child, merged_cond);
     vec![new_filter.into_rel_node().as_ref().clone()]
+}
+
+// TODO: define_rule! should be able to match on any join type, ideally...
+
+define_rule!(
+    FilterCrossJoinTransposeRule,
+    apply_filter_cross_join_transpose,
+    (
+        Filter,
+        (Join(JoinType::Cross), child_a, child_b, [join_cond]),
+        [cond]
+    )
+);
+
+fn apply_filter_cross_join_transpose(
+    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    FilterCrossJoinTransposeRulePicks {
+        child_a,
+        child_b,
+        join_cond,
+        cond,
+    }: FilterCrossJoinTransposeRulePicks,
+) -> Vec<RelNode<OptRelNodeTyp>> {
+    filter_join_transpose(
+        optimizer,
+        JoinType::Cross,
+        child_a,
+        child_b,
+        join_cond,
+        cond,
+    )
+}
+
+define_rule!(
+    FilterInnerJoinTransposeRule,
+    apply_filter_inner_join_transpose,
+    (
+        Filter,
+        (Join(JoinType::Inner), child_a, child_b, [join_cond]),
+        [cond]
+    )
+);
+
+fn apply_filter_inner_join_transpose(
+    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    FilterInnerJoinTransposeRulePicks {
+        child_a,
+        child_b,
+        join_cond,
+        cond,
+    }: FilterInnerJoinTransposeRulePicks,
+) -> Vec<RelNode<OptRelNodeTyp>> {
+    filter_join_transpose(
+        optimizer,
+        JoinType::Inner,
+        child_a,
+        child_b,
+        join_cond,
+        cond,
+    )
 }
 
 /// Cases:
@@ -175,18 +234,24 @@ fn filter_merge(
 /// - Push into the join condition (involves keys from both children)
 fn filter_join_transpose(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
-    child: RelNode<OptRelNodeTyp>,
-    cond: RelNode<OptRelNodeTyp>,
+    join_typ: JoinType,
+    join_child_a: RelNode<OptRelNodeTyp>,
+    join_child_b: RelNode<OptRelNodeTyp>,
+    join_cond: RelNode<OptRelNodeTyp>,
+    filter_cond: RelNode<OptRelNodeTyp>,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    // TODO: Push existing join conditions down as well
-    let old_join = LogicalJoin::from_rel_node(child.into()).unwrap();
-
     let left_schema_size = optimizer
-        .get_property::<SchemaPropertyBuilder>(old_join.left().into_rel_node(), 0)
+        .get_property::<SchemaPropertyBuilder>(join_child_a.clone().into(), 0)
         .len();
     let right_schema_size = optimizer
-        .get_property::<SchemaPropertyBuilder>(old_join.right().into_rel_node(), 0)
+        .get_property::<SchemaPropertyBuilder>(join_child_b.clone().into(), 0)
         .len();
+
+    let join_child_a = PlanNode::from_rel_node(join_child_a.into()).unwrap();
+    let join_child_b = PlanNode::from_rel_node(join_child_b.into()).unwrap();
+    let join_cond = Expr::from_rel_node(join_cond.into()).unwrap();
+    let filter_cond = Expr::from_rel_node(filter_cond.into()).unwrap();
+    // TODO: Push existing join conditions down as well
 
     let mut left_conds = vec![];
     let mut right_conds = vec![];
@@ -211,27 +276,25 @@ fn filter_join_transpose(
             JoinCondDependency::None => keep_conds.push(expr),
         }
     };
-    categorize_conds(categorization_fn, Expr::from_rel_node(cond.into()).unwrap());
+    categorize_conds(categorization_fn, filter_cond);
 
     let new_left = if !left_conds.is_empty() {
-        let new_filter_node =
-            LogicalFilter::new(old_join.left(), and_expr_list_to_expr(left_conds));
+        let new_filter_node = LogicalFilter::new(join_child_a, and_expr_list_to_expr(left_conds));
         new_filter_node.into_plan_node()
     } else {
-        old_join.left()
+        join_child_a
     };
 
     let new_right = if !right_conds.is_empty() {
-        let new_filter_node =
-            LogicalFilter::new(old_join.right(), and_expr_list_to_expr(right_conds));
+        let new_filter_node = LogicalFilter::new(join_child_b, and_expr_list_to_expr(right_conds));
         new_filter_node.into_plan_node()
     } else {
-        old_join.right()
+        join_child_b
     };
 
-    let new_join = match old_join.join_type() {
+    let new_join = match join_typ {
         JoinType::Inner => {
-            let old_cond = old_join.cond();
+            let old_cond = join_cond;
             let new_conds = merge_conds(and_expr_list_to_expr(join_conds), old_cond);
             LogicalJoin::new(new_left, new_right, new_conds, JoinType::Inner)
         }
@@ -244,12 +307,12 @@ fn filter_join_transpose(
                     JoinType::Inner,
                 )
             } else {
-                LogicalJoin::new(new_left, new_right, old_join.cond(), JoinType::Cross)
+                LogicalJoin::new(new_left, new_right, join_cond, JoinType::Cross)
             }
         }
         _ => {
             // We don't support modifying the join condition for other join types yet
-            LogicalJoin::new(new_left, new_right, old_join.cond(), old_join.join_type())
+            LogicalJoin::new(new_left, new_right, join_cond, join_typ)
         }
     };
 
@@ -264,33 +327,52 @@ fn filter_join_transpose(
     vec![new_filter]
 }
 
+define_rule!(
+    FilterSortTransposeRule,
+    apply_filter_sort_transpose,
+    (Filter, (Sort, child, [exprs]), [cond])
+);
+
 /// Filter and sort should always be commutable.
-fn filter_sort_transpose(
+fn apply_filter_sort_transpose(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
-    child: RelNode<OptRelNodeTyp>,
-    cond: RelNode<OptRelNodeTyp>,
+    FilterSortTransposeRulePicks { child, exprs, cond }: FilterSortTransposeRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    let old_sort = LogicalSort::from_rel_node(child.into()).unwrap();
+    let child = PlanNode::from_rel_node(child.into()).unwrap();
+    let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
+
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
-    let new_filter_node = LogicalFilter::new(old_sort.child(), cond_as_expr);
+    let new_filter_node = LogicalFilter::new(child, cond_as_expr);
     // Exprs should be the same, no projections have occurred here.
-    let new_sort = LogicalSort::new(new_filter_node.into_plan_node(), old_sort.exprs());
+    let new_sort = LogicalSort::new(new_filter_node.into_plan_node(), exprs);
     vec![new_sort.into_rel_node().as_ref().clone()]
 }
 
+define_rule!(
+    FilterAggTransposeRule,
+    apply_filter_agg_transpose,
+    (Filter, (Agg, child, [exprs], [groups]), [cond])
+);
+
 /// Filter is commutable past aggregations when the filter condition only
 /// involves the group by columns.
-fn filter_agg_transpose(
+fn apply_filter_agg_transpose(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
-    child: RelNode<OptRelNodeTyp>,
-    cond: RelNode<OptRelNodeTyp>,
+    FilterAggTransposeRulePicks {
+        child,
+        exprs,
+        groups,
+        cond,
+    }: FilterAggTransposeRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    let old_agg = LogicalAgg::from_rel_node(child.into()).unwrap();
-    let group_exprs = old_agg.groups();
+    let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
+    let groups = ExprList::from_rel_node(groups.into()).unwrap();
+    let child = PlanNode::from_rel_node(child.into()).unwrap();
 
     // Get top-level group-by columns. Does not cover cases where group-by exprs
     // are more complex than a top-level column reference.
-    let group_cols = group_exprs
+    let group_cols = groups
+        .clone()
         .into_rel_node()
         .children
         .iter()
@@ -327,15 +409,15 @@ fn filter_agg_transpose(
 
     let new_child = if !push_conds.is_empty() {
         LogicalFilter::new(
-            old_agg.child(),
+            child,
             LogOpExpr::new(LogOpType::And, ExprList::new(push_conds)).into_expr(),
         )
         .into_plan_node()
     } else {
-        old_agg.child().into_plan_node()
+        child
     };
 
-    let new_agg = LogicalAgg::new(new_child, old_agg.exprs(), old_agg.groups());
+    let new_agg = LogicalAgg::new(new_child, exprs, groups);
 
     let new_filter = LogicalFilter::new(
         new_agg.into_plan_node(),
@@ -346,50 +428,6 @@ fn filter_agg_transpose(
     .clone();
 
     vec![new_filter]
-}
-
-fn apply_filter_pushdown(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
-    FilterPushdownRulePicks { child, cond }: FilterPushdownRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
-    // Push filter down one node
-    let mut result_from_this_step = match child.typ {
-        OptRelNodeTyp::Projection => filter_project_transpose(optimizer, child, cond),
-        OptRelNodeTyp::Filter => filter_merge(optimizer, child, cond),
-        // OptRelNodeTyp::Scan => todo!(),   // TODO: Add predicate field to scan node
-        OptRelNodeTyp::Join(_) => filter_join_transpose(optimizer, child, cond),
-        OptRelNodeTyp::Sort => filter_sort_transpose(optimizer, child, cond),
-        OptRelNodeTyp::Agg => filter_agg_transpose(optimizer, child, cond),
-        _ => vec![],
-    };
-
-    // Apply rule recursively
-    if let Some(new_node) = result_from_this_step.first_mut() {
-        // For all the children in our result,
-        for child in new_node.children.iter_mut() {
-            if child.typ == OptRelNodeTyp::Filter {
-                // If this node is a filter, apply the rule again to this node!
-                let child_as_filter = LogicalFilter::from_rel_node(child.clone()).unwrap();
-                let childs_child = child_as_filter.child().into_rel_node().as_ref().clone();
-                let childs_cond = child_as_filter.cond().into_rel_node().as_ref().clone();
-                // @todo: make this iterative?
-                let result = apply_filter_pushdown(
-                    optimizer,
-                    FilterPushdownRulePicks {
-                        child: childs_child,
-                        cond: childs_cond,
-                    },
-                );
-                // If we got a result, that is the replacement for this child
-                if let Some(&new_child) = result.first().as_ref() {
-                    *child = new_child.to_owned().into();
-                }
-            }
-            // Otherwise, if there was no result from rule application or this is not a filter, do not modify the child
-        }
-    }
-
-    result_from_this_step
 }
 
 #[cfg(test)]
@@ -404,13 +442,16 @@ mod tests {
             LogicalAgg, LogicalFilter, LogicalJoin, LogicalProjection, LogicalScan, LogicalSort,
             OptRelNode, OptRelNodeTyp,
         },
-        rules::FilterPushdownRule,
+        rules::{
+            FilterAggTransposeRule, FilterInnerJoinTransposeRule, FilterMergeRule,
+            FilterProjectTransposeRule, FilterSortTransposeRule,
+        },
         testing::new_test_optimizer,
     };
 
     #[test]
     fn push_past_sort() {
-        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterSortTransposeRule::new()));
 
         let scan = LogicalScan::new("customer".into());
         let sort = LogicalSort::new(scan.into_plan_node(), ExprList::new(vec![]));
@@ -433,7 +474,7 @@ mod tests {
     #[test]
     fn filter_merge() {
         // TODO: write advanced proj with more expr that need to be transformed
-        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterMergeRule::new()));
 
         let scan = LogicalScan::new("customer".into());
         let filter_ch_expr = BinOpExpr::new(
@@ -487,7 +528,7 @@ mod tests {
 
     #[test]
     fn push_past_proj_basic() {
-        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterProjectTransposeRule::new()));
 
         let scan = LogicalScan::new("customer".into());
         let proj = LogicalProjection::new(scan.into_plan_node(), ExprList::new(vec![]));
@@ -508,7 +549,7 @@ mod tests {
 
     #[test]
     fn push_past_proj_adv() {
-        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterProjectTransposeRule::new()));
 
         let scan = LogicalScan::new("customer".into());
         let proj = LogicalProjection::new(
@@ -567,9 +608,9 @@ mod tests {
     fn push_past_join_conjunction() {
         // Test pushing a complex filter past a join, where one clause can
         // be pushed to the left child, one to the right child, one gets incorporated
-        // into the (now inner) join condition, and a constant one remains in the
+        // into the join condition, and a constant one remains in the
         // original filter.
-        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterInnerJoinTransposeRule::new()));
 
         let scan1 = LogicalScan::new("customer".into());
 
@@ -685,7 +726,7 @@ mod tests {
         // Test pushing a filter past an aggregation node, where the filter
         // condition has one clause that can be pushed down to the child and
         // one that must remain in the filter.
-        let mut test_optimizer = new_test_optimizer(Arc::new(FilterPushdownRule::new()));
+        let mut test_optimizer = new_test_optimizer(Arc::new(FilterAggTransposeRule::new()));
 
         let scan = LogicalScan::new("customer".into());
 

@@ -57,17 +57,13 @@ impl ProjectionMapping {
 
     /// Recursively rewrites all ColumnRefs in an Expr to what the projection
     /// node is rewriting. E.g. if Projection is A -> B, B will be rewritten as A
-    pub fn rewrite_condition(
-        &self,
-        cond: Expr,
-        schema_size: usize,
-        projection_schema_size: usize,
-    ) -> Expr {
+    pub fn rewrite_condition(&self, cond: Expr, child_schema_len: usize) -> Expr {
+        let proj_schema_size = self.forward.len();
         cond.rewrite_column_refs(&|idx| {
-            Some(if idx < projection_schema_size {
+            Some(if idx < proj_schema_size {
                 self.projection_col_refers_to(idx)
             } else {
-                idx - projection_schema_size + schema_size
+                idx - proj_schema_size + child_schema_len
             })
         })
         .unwrap()
@@ -75,9 +71,9 @@ impl ProjectionMapping {
 }
 
 impl LogicalProjection {
-    pub fn compute_column_mapping(&self) -> Option<ProjectionMapping> {
+    pub fn compute_column_mapping(exprs: &ExprList) -> Option<ProjectionMapping> {
         let mut mapping = vec![];
-        for expr in self.exprs().to_vec() {
+        for expr in exprs.to_vec() {
             let col_expr = ColumnRefExpr::from_rel_node(expr.into_rel_node())?;
             mapping.push(col_expr.index());
         }

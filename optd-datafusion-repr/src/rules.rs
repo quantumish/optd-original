@@ -13,7 +13,10 @@ pub use eliminate_duplicated_expr::{
 };
 pub use eliminate_limit::EliminateLimitRule;
 pub use filter::{EliminateFilterRule, SimplifyFilterRule, SimplifyJoinCondRule};
-pub use filter_pushdown::FilterPushdownRule;
+pub use filter_pushdown::{
+    FilterAggTransposeRule, FilterCrossJoinTransposeRule, FilterInnerJoinTransposeRule,
+    FilterMergeRule, FilterProjectTransposeRule, FilterSortTransposeRule,
+};
 pub use joins::{
     EliminateJoinRule, HashJoinRule, JoinAssocRule, JoinCommuteRule, ProjectionPullUpJoin,
 };
