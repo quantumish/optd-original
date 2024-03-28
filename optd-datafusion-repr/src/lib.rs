@@ -84,12 +84,6 @@ impl DatafusionOptimizer {
         vec![
             Arc::new(SimplifyFilterRule::new()),
             Arc::new(SimplifyJoinCondRule::new()),
-            Arc::new(FilterProjectTransposeRule::new()),
-            Arc::new(FilterMergeRule::new()),
-            Arc::new(FilterCrossJoinTransposeRule::new()),
-            Arc::new(FilterInnerJoinTransposeRule::new()),
-            Arc::new(FilterSortTransposeRule::new()),
-            Arc::new(FilterAggTransposeRule::new()),
             Arc::new(EliminateFilterRule::new()),
             Arc::new(EliminateJoinRule::new()),
             Arc::new(EliminateLimitRule::new()),
@@ -105,6 +99,23 @@ impl DatafusionOptimizer {
         for rule in rules {
             rule_wrappers.push(RuleWrapper::new_cascades(rule));
         }
+        // add all filter pushdown rules as heuristic rules
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterProjectTransposeRule::new(),
+        )));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(FilterMergeRule::new())));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterCrossJoinTransposeRule::new(),
+        )));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterInnerJoinTransposeRule::new(),
+        )));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterSortTransposeRule::new(),
+        )));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterAggTransposeRule::new(),
+        )));
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(HashJoinRule::new()))); // 17
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(JoinCommuteRule::new()))); // 18
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(JoinAssocRule::new())));
