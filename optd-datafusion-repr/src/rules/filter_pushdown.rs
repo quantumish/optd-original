@@ -158,7 +158,7 @@ fn apply_filter_merge(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
     FilterMergeRulePicks { child, cond1, cond }: FilterMergeRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    let child = PlanNode::from_rel_node(child.into()).unwrap();
+    let child = PlanNode::from_group(child.into());
     let curr_cond = Expr::from_rel_node(cond.into()).unwrap();
     let child_cond = Expr::from_rel_node(cond1.into()).unwrap();
 
@@ -247,8 +247,8 @@ fn filter_join_transpose(
         .get_property::<SchemaPropertyBuilder>(join_child_b.clone().into(), 0)
         .len();
 
-    let join_child_a = PlanNode::from_rel_node(join_child_a.into()).unwrap();
-    let join_child_b = PlanNode::from_rel_node(join_child_b.into()).unwrap();
+    let join_child_a = PlanNode::from_group(join_child_a.into());
+    let join_child_b = PlanNode::from_group(join_child_b.into());
     let join_cond = Expr::from_rel_node(join_cond.into()).unwrap();
     let filter_cond = Expr::from_rel_node(filter_cond.into()).unwrap();
     // TODO: Push existing join conditions down as well
@@ -338,7 +338,7 @@ fn apply_filter_sort_transpose(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
     FilterSortTransposeRulePicks { child, exprs, cond }: FilterSortTransposeRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-    let child = PlanNode::from_rel_node(child.into()).unwrap();
+    let child = PlanNode::from_group(child.into());
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
 
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
@@ -367,7 +367,7 @@ fn apply_filter_agg_transpose(
 ) -> Vec<RelNode<OptRelNodeTyp>> {
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
     let groups = ExprList::from_rel_node(groups.into()).unwrap();
-    let child = PlanNode::from_rel_node(child.into()).unwrap();
+    let child = PlanNode::from_group(child.into());
 
     // Get top-level group-by columns. Does not cover cases where group-by exprs
     // are more complex than a top-level column reference.
