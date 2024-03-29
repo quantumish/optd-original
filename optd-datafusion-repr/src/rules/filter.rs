@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use super::macros::define_rule;
 use crate::plan_nodes::{
-    ConstantExpr, ConstantType, Expr, ExprList, LogOpExpr, LogOpType, LogicalEmptyRelation,
-    OptRelNode, OptRelNodeTyp,
+    ConstantExpr, ConstantType, Expr, ExprList, JoinType, LogOpExpr, LogOpType,
+    LogicalEmptyRelation, LogicalJoin, OptRelNode, OptRelNodeTyp, PlanNode,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 use crate::OptRelNodeRef;
@@ -111,6 +111,38 @@ fn apply_simplify_filter(
                     data: None,
                 };
                 return vec![filter_node];
+            }
+            vec![]
+        }
+        _ => {
+            vec![]
+        }
+    }
+}
+
+// Same as SimplifyFilterRule, but for innerJoin conditions
+define_rule!(
+    SimplifyJoinCondRule,
+    apply_simplify_join_cond,
+    (Join(JoinType::Inner), left, right, [cond])
+);
+
+fn apply_simplify_join_cond(
+    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    SimplifyJoinCondRulePicks { left, right, cond }: SimplifyJoinCondRulePicks,
+) -> Vec<RelNode<OptRelNodeTyp>> {
+    match cond.typ {
+        OptRelNodeTyp::LogOp(_) => {
+            let mut changed = false;
+            let new_log_expr = simplify_log_expr(Arc::new(cond), &mut changed);
+            if changed {
+                let join_node = LogicalJoin::new(
+                    PlanNode::from_group(left.into()),
+                    PlanNode::from_group(right.into()),
+                    Expr::from_rel_node(new_log_expr).unwrap(),
+                    JoinType::Inner,
+                );
+                return vec![join_node.into_rel_node().as_ref().clone()];
             }
             vec![]
         }

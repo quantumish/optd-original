@@ -16,6 +16,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use arrow_schema::DataType;
+use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
     rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp},
@@ -208,6 +209,17 @@ pub trait OptRelNode: 'static + Clone {
     }
 }
 
+/// Plan nodes that are defined through `define_plan_node` macro with data
+/// field should implement this trait.
+///
+/// We require plan nodes to explicitly implement this instead of using `Debug`,
+/// because for complex data type (struct), derived debug printing
+/// displays struct name which should be hidden from the user. It also wraps
+/// the fields in braces, unlike the rest of the fields as children.
+pub trait ExplainData<T>: OptRelNode {
+    fn explain_data(data: &T) -> Vec<(&'static str, Pretty<'static>)>;
+}
+
 #[derive(Clone, Debug)]
 pub struct PlanNode(pub(crate) OptRelNodeRef);
 
@@ -270,6 +282,56 @@ impl Expr {
 
     pub fn child(&self, idx: usize) -> OptRelNodeRef {
         self.0.child(idx)
+    }
+
+    /// Recursively rewrite all column references in the expression.using a provided
+    /// function that replaces a column index.
+    /// The provided function will, given a ColumnRefExpr's index,
+    /// return either Some(usize) or None.
+    /// - If it is Some, the column index can be rewritten with the value.
+    /// - If any of the columns is None, we will return None all the way up
+    /// the call stack, and no expression will be returned.
+    pub fn rewrite_column_refs(
+        &self,
+        rewrite_fn: &impl Fn(usize) -> Option<usize>,
+    ) -> Option<Self> {
+        assert!(self.typ().is_expression());
+        if let OptRelNodeTyp::ColumnRef = self.typ() {
+            let col_ref = ColumnRefExpr::from_rel_node(self.0.clone()).unwrap();
+            let rewritten = rewrite_fn(col_ref.index());
+            return if let Some(rewritten_idx) = rewritten {
+                let new_col_ref = ColumnRefExpr::new(rewritten_idx);
+                Some(Self(new_col_ref.into_rel_node()))
+            } else {
+                None
+            };
+        }
+
+        let children = self.0.children.clone();
+        let children = children
+            .into_iter()
+            .map(|child| {
+                if child.typ == OptRelNodeTyp::List {
+                    // TODO: What should we do with List?
+                    return Some(child);
+                }
+                Expr::from_rel_node(child.clone())
+                    .unwrap()
+                    .rewrite_column_refs(rewrite_fn)
+                    .map(|x| x.into_rel_node())
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(
+            Expr::from_rel_node(
+                RelNode {
+                    typ: self.0.typ.clone(),
+                    children: children.into_iter().collect_vec(),
+                    data: self.0.data.clone(),
+                }
+                .into(),
+            )
+            .unwrap(),
+        )
     }
 }
 

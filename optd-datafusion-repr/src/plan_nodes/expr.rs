@@ -5,7 +5,7 @@ use itertools::Itertools;
 use pretty_xmlish::Pretty;
 use serde::{Deserialize, Serialize};
 
-use optd_core::rel_node::{RelNode, RelNodeMetaMap, Value};
+use optd_core::rel_node::{RelNode, RelNodeMetaMap, SerializableOrderedF64, Value};
 
 use super::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
 
@@ -172,7 +172,10 @@ impl ConstantExpr {
     }
 
     pub fn float64(value: f64) -> Self {
-        Self::new_with_type(Value::Float(value.into()), ConstantType::Float64)
+        Self::new_with_type(
+            Value::Float(SerializableOrderedF64(value.into())),
+            ConstantType::Float64,
+        )
     }
 
     pub fn date(value: i64) -> Self {
@@ -180,7 +183,10 @@ impl ConstantExpr {
     }
 
     pub fn decimal(value: f64) -> Self {
-        Self::new_with_type(Value::Float(value.into()), ConstantType::Decimal)
+        Self::new_with_type(
+            Value::Float(SerializableOrderedF64(value.into())),
+            ConstantType::Decimal,
+        )
     }
 
     /// Gets the constant value.
@@ -600,6 +606,29 @@ impl LogOpExpr {
             }
             .into(),
         ))
+    }
+
+    /// flatten_nested_logical is a helper function to flatten nested logical operators with same op type
+    /// eg. (a AND (b AND c)) => ExprList([a, b, c])
+    ///    (a OR (b OR c)) => ExprList([a, b, c])
+    /// It assume the children of the input expr_list are already flattened
+    ///  and can only be used in bottom up manner
+    pub fn new_flattened_nested_logical(op: LogOpType, expr_list: ExprList) -> Self {
+        // Since we assume that we are building the children bottom up,
+        // there is no need to call flatten_nested_logical recursively
+        let mut new_expr_list = Vec::new();
+        for child in expr_list.to_vec() {
+            if let OptRelNodeTyp::LogOp(child_op) = child.typ() {
+                if child_op == op {
+                    let child_log_op_expr =
+                        LogOpExpr::from_rel_node(child.into_rel_node()).unwrap();
+                    new_expr_list.extend(child_log_op_expr.children().to_vec());
+                    continue;
+                }
+            }
+            new_expr_list.push(child.clone());
+        }
+        LogOpExpr::new(op, ExprList::new(new_expr_list))
     }
 
     pub fn children(&self) -> Vec<Expr> {
