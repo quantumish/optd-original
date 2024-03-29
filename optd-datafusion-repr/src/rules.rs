@@ -9,7 +9,9 @@ mod macros;
 mod physical;
 
 // pub use filter_join::FilterJoinPullUpRule;
-pub use projection_pushdown::ProjectMergeRule;
+pub use projection_pushdown::{
+    ProjectMergeRule, ProjectFilterTransposeRule
+};
 pub use eliminate_duplicated_expr::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule,
 };

@@ -25,7 +25,7 @@ use rules::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
     EliminateJoinRule, EliminateLimitRule, HashJoinRule, JoinAssocRule, JoinCommuteRule,
     PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule, 
-    ProjectMergeRule,
+    ProjectMergeRule, ProjectFilterTransposeRule,
 };
 
 pub use optd_core::rel_node::Value;
@@ -102,6 +102,9 @@ impl DatafusionOptimizer {
         }
         rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
             ProjectMergeRule::new(),
+        )));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            ProjectFilterTransposeRule::new(),
         )));
         // add all filter pushdown rules as heuristic rules
         rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
