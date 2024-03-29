@@ -100,6 +100,9 @@ impl DatafusionOptimizer {
         for rule in rules {
             rule_wrappers.push(RuleWrapper::new_cascades(rule));
         }
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            ProjectRemove::new(),
+        )));
         // add all filter pushdown rules as heuristic rules
         rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
             FilterProjectTransposeRule::new(),

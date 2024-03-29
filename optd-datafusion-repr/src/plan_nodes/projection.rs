@@ -68,6 +68,19 @@ impl ProjectionMapping {
         })
         .unwrap()
     }
+
+    /// Rewrites all ColumnRefs in an ExprList to what the projection
+    /// node is rewriting. E.g. if Projection is A -> B, B will be 
+    /// rewritten as A
+    pub fn rewrite_projection(&self, exprs: &ExprList) -> ExprList {
+        let mut new_projection_exprs = Vec::new();
+        let exprs = exprs.to_vec();
+        for i in &self.forward {
+            let col: Expr = exprs[*i].clone();
+            new_projection_exprs.push(col);
+        };
+        ExprList::new(new_projection_exprs)
+    }
 }
 
 impl LogicalProjection {
