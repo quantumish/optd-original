@@ -9,7 +9,7 @@ mod macros;
 mod physical;
 
 // pub use filter_join::FilterJoinPullUpRule;
-pub use project_remove::ProjectRemove;
+pub use project_remove::ProjectMergeRule;
 pub use eliminate_duplicated_expr::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule,
 };
