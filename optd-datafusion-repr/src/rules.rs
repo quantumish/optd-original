@@ -1,4 +1,5 @@
 // mod filter_join;
+mod project_remove;
 mod eliminate_duplicated_expr;
 mod eliminate_limit;
 mod filter;
@@ -7,6 +8,9 @@ mod macros;
 mod physical;
 
 // pub use filter_join::FilterJoinPullUpRule;
+pub use project_remove::{ 
+    ProjectRemove, ProjectScanPushDown,
+};
 pub use eliminate_duplicated_expr::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule,
 };

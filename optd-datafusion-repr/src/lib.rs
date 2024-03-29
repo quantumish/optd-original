@@ -18,7 +18,8 @@ use properties::{
 use rules::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
     EliminateJoinRule, EliminateLimitRule, HashJoinRule, JoinAssocRule, JoinCommuteRule,
-    PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule,
+    PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule, ProjectRemove,
+    ProjectScanPushDown,
 };
 
 pub use optd_core::rel_node::Value;
@@ -60,6 +61,8 @@ impl DatafusionOptimizer {
             RuleWrapper::new_heuristic(Arc::new(EliminateFilterRule::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateJoinRule::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateLimitRule::new())),
+            RuleWrapper::new_heuristic(Arc::new(ProjectRemove::new())),
+            RuleWrapper::new_heuristic(Arc::new(ProjectScanPushDown::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateDuplicatedSortExprRule::new())),
             RuleWrapper::new_heuristic(Arc::new(EliminateDuplicatedAggExprRule::new())),
         ];
