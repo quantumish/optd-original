@@ -93,7 +93,7 @@ fn apply_projection_filter_transpose(
     
     // have column ref expressions of cond cols
     // bottom-most projection will have proj cols + filter cols as a set
-    let top_proj_exprs = mapping.rewrite_projection(&exprs);
+    let top_proj_exprs = mapping.reverse_rewrite_projection(&exprs);
     let top_proj_node = LogicalProjection::new(new_filter_node.into_plan_node(), top_proj_exprs);
     vec![top_proj_node.into_rel_node().as_ref().clone()]
 }
