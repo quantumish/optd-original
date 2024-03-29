@@ -90,7 +90,7 @@ fn apply_projection_filter_pushdown(
 }
 
 
-// test case for project remove
+// test cases for project merge
 // create table t1 (v1 int, v2 int);
 // explain select v1,v2 from (select v1,v2 from t1);
 
