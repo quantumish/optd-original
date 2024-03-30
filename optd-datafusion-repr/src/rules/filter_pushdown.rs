@@ -46,6 +46,9 @@ enum JoinCondDependency {
     None,
 }
 
+/// Given a list of expressions (presumably a flattened tree), determine
+/// if the expression is dependent on the left child, the right child, both,
+/// or neither, by analyzing which columnrefs are used in the expressions.
 fn determine_join_cond_dep(
     children: &Vec<Expr>,
     left_schema_size: usize,
@@ -410,7 +413,8 @@ fn apply_filter_agg_transpose(
     let new_child = if !push_conds.is_empty() {
         LogicalFilter::new(
             child,
-            LogOpExpr::new(LogOpType::And, ExprList::new(push_conds)).into_expr(),
+            LogOpExpr::new_flattened_nested_logical(LogOpType::And, ExprList::new(push_conds))
+                .into_expr(),
         )
         .into_plan_node()
     } else {
@@ -419,13 +423,18 @@ fn apply_filter_agg_transpose(
 
     let new_agg = LogicalAgg::new(new_child, exprs, groups);
 
-    let new_filter = LogicalFilter::new(
-        new_agg.into_plan_node(),
-        LogOpExpr::new(LogOpType::And, ExprList::new(keep_conds)).into_expr(),
-    )
-    .into_rel_node()
-    .as_ref()
-    .clone();
+    let new_filter = if !keep_conds.is_empty() {
+        LogicalFilter::new(
+            new_agg.into_plan_node(),
+            LogOpExpr::new_flattened_nested_logical(LogOpType::And, ExprList::new(keep_conds))
+                .into_expr(),
+        )
+        .into_rel_node()
+        .as_ref()
+        .clone()
+    } else {
+        new_agg.into_rel_node().as_ref().clone()
+    };
 
     vec![new_filter]
 }

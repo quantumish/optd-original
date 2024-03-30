@@ -23,16 +23,13 @@ use properties::{
 };
 use rules::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
-    EliminateJoinRule, EliminateLimitRule, HashJoinRule, JoinAssocRule, JoinCommuteRule,
-    PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule,
+    EliminateJoinRule, EliminateLimitRule, FilterAggTransposeRule, FilterCrossJoinTransposeRule,
+    FilterInnerJoinTransposeRule, FilterMergeRule, FilterProjectTransposeRule,
+    FilterSortTransposeRule, HashJoinRule, JoinAssocRule, JoinCommuteRule, PhysicalConversionRule,
+    ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule,
 };
 
 pub use optd_core::rel_node::Value;
-
-use crate::rules::{
-    FilterAggTransposeRule, FilterCrossJoinTransposeRule, FilterInnerJoinTransposeRule,
-    FilterMergeRule, FilterProjectTransposeRule, FilterSortTransposeRule,
-};
 
 pub mod cost;
 mod explain;

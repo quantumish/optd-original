@@ -27,6 +27,18 @@ define_plan_node!(
     ]
 );
 
+/// This struct holds the mapping from original columns to projected columns.
+///
+/// # Example
+/// With the following plan:
+///  | Filter (#0 < 5)
+///  |
+///  |-| Projection [#2, #3]
+///    |- Scan [#0, #1, #2, #3]
+///
+/// The computed projection mapping is:
+/// #2 -> #0
+/// #3 -> #1
 pub struct ProjectionMapping {
     forward: Vec<usize>,
     _backward: Vec<Option<usize>>,
@@ -55,8 +67,13 @@ impl ProjectionMapping {
         self._backward[col]
     }
 
-    /// Recursively rewrites all ColumnRefs in an Expr to what the projection
-    /// node is rewriting. E.g. if Projection is A -> B, B will be rewritten as A
+    /// Recursively rewrites all ColumnRefs in an Expr to *undo* the projection
+    /// condition. You might want to do this if you are pushing something
+    /// through a projection, or pulling a projection up.
+    ///
+    /// # Example
+    /// If we have a projection node, mapping column A to column B (A -> B)
+    /// All B's in `cond` will be rewritten as A.
     pub fn rewrite_condition(&self, cond: Expr, child_schema_len: usize) -> Expr {
         let proj_schema_size = self.forward.len();
         cond.rewrite_column_refs(&|idx| {
