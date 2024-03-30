@@ -25,22 +25,25 @@ pub struct OptimizeInputsTask {
     expr_id: ExprId,
     continue_from: Option<ContinueTask>,
     pruning: bool,
+    required_physical_props: Vec<Box<dyn PhysicalPropertyRequired>>,
 }
 
 impl OptimizeInputsTask {
-    pub fn new(expr_id: ExprId, pruning: bool) -> Self {
+    pub fn new(expr_id: ExprId, pruning: bool, required_physical_props: Vec<Box<dyn PhysicalPropertyRequired>>) -> Self {
         Self {
             expr_id,
             continue_from: None,
             pruning,
+            required_physical_props,
         }
     }
 
-    fn continue_from(&self, cont: ContinueTask, pruning: bool) -> Self {
+    fn continue_from(&self, cont: ContinueTask, pruning: bool, required_physical_props: Vec<Box<dyn PhysicalPropertyRequired>>) -> Self {
         Self {
             expr_id: self.expr_id,
             continue_from: Some(cont),
             pruning,
+            required_physical_props,
         }
     }
 

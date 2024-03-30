@@ -53,7 +53,8 @@ pub struct GroupInfo {
 
 pub(crate) struct Group {
     pub(crate) group_exprs: HashSet<ExprId>,
-    pub(crate) info: GroupInfo,
+    // TODO: PhysicalRequiredHash are the hash value of a group of required physical properties
+    pub(crate) infos: HashMap<PhysicalRequiredHash, GroupInfo>,
     pub(crate) properties: Arc<[Box<dyn Any + Send + Sync + 'static>]>,
 }
 

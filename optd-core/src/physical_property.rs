@@ -1,5 +1,5 @@
 use crate::rel_node::{RelNodeTyp, Value, RelNodeRef};
-use std::{any::Any, fmt::Debug};
+use std::{any::Any, fmt::Debug, hash::Hash};
 
 pub trait PhysicalPropertyBuilderAny<T: RelNodeTyp>: 'static + Send + Sync {
     fn derive_any(
@@ -17,7 +17,7 @@ pub trait PhysicalPropertyBuilderAny<T: RelNodeTyp>: 'static + Send + Sync {
 pub trait PhysicalPropertyBuilder<T: RelNodeTyp>: 'static + Send + Sync + Sized {
     // Prop is the same for both derived and required property
     // eg. for sort, one can define type Prop = struct { sort_keys: Vec<SortKey>, orders: Vec<Order> }
-    type Prop: 'static + Send + Sync + Sized + Clone + Debug;
+    type Prop: 'static + Send + Sync + Sized + Clone + Debug + Hash;
 
     // derive gets the physical property for current node given its children derived properties and current data
     // for simple properties like sort, we can deduct current property. eg. A(a.x ordered) union B(b.x ordered) -> current node x is ordered
