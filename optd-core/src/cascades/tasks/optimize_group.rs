@@ -41,8 +41,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
         for &expr in &exprs {
             let typ = optimizer.get_expr_memoed(expr).typ.clone();
             if typ.is_logical() {
-                // TODO: whether optimize expr needs required physical props?
-                tasks.push(Box::new(OptimizeExpressionTask::new(expr, false)) as Box<dyn Task<T>>);
+                tasks.push(Box::new(OptimizeExpressionTask::new(expr, false, self.required_physical_props)) as Box<dyn Task<T>>);
             }
         }
         for &expr in &exprs {

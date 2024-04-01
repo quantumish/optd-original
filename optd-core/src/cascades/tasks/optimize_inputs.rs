@@ -129,7 +129,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
             if let Some(task) = t.as_any().downcast_ref::<Self>() {
                 // skip optimize_inputs to avoid dead-loop: consider join commute being fired twice that produces
                 // two projections, therefore having groups like projection1 -> projection2 -> join = projection1.
-                task.expr_id == self.expr_id
+                task.expr_id == self.expr_id && MakeRequiredPhysicalPropsHash(task.required_physical_props) == MakeRequiredPhysicalPropsHash(self.required_physical_props)
             } else {
                 false
             }

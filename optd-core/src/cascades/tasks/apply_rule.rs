@@ -21,14 +21,16 @@ pub struct ApplyRuleTask {
     rule_id: RuleId,
     expr_id: ExprId,
     exploring: bool,
+    required_physical_props: Vec<Box<dyn PhysicalPropertyRequired>>,
 }
 
 impl ApplyRuleTask {
-    pub fn new(rule_id: RuleId, expr_id: ExprId, exploring: bool) -> Self {
+    pub fn new(rule_id: RuleId, expr_id: ExprId, exploring: bool, required_physical_props: Vec<Box<dyn PhysicalPropertyRequired>>) -> Self {
         Self {
             rule_id,
             expr_id,
             exploring,
+            required_physical_props,
         }
     }
 }
@@ -235,7 +237,7 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
 
                     // rules registed as heuristics are always logical, exploring its children
                     tasks.push(
-                        Box::new(OptimizeExpressionTask::new(self.expr_id, self.exploring))
+                        Box::new(OptimizeExpressionTask::new(self.expr_id, self.exploring, self.required_physical_props))
                             as Box<dyn Task<T>>,
                     );
                 }
@@ -254,12 +256,12 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
                 trace!(event = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id, new_expr_id = %expr_id);
                 if expr_typ.is_logical() {
                     tasks.push(
-                        Box::new(OptimizeExpressionTask::new(expr_id, self.exploring))
+                        Box::new(OptimizeExpressionTask::new(expr_id, self.exploring, self.required_physical_props))
                             as Box<dyn Task<T>>,
                     );
                 } else {
                     tasks
-                        .push(Box::new(OptimizeInputsTask::new(expr_id, true)) as Box<dyn Task<T>>);
+                        .push(Box::new(OptimizeInputsTask::new(expr_id, true, self.required_physical_props)) as Box<dyn Task<T>>);
                 }
             }
         }

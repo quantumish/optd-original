@@ -15,11 +15,12 @@ use super::Task;
 pub struct OptimizeExpressionTask {
     expr_id: ExprId,
     exploring: bool,
+    required_physical_props: Vec<Box<dyn PhysicalPropertyRequired>>,
 }
 
 impl OptimizeExpressionTask {
-    pub fn new(expr_id: ExprId, exploring: bool) -> Self {
-        Self { expr_id, exploring }
+    pub fn new(expr_id: ExprId, exploring: bool, required_physical_props: Vec<Box<dyn PhysicalPropertyRequired>>) -> Self {
+        Self { expr_id, exploring, required_physical_props }
     }
 }
 
@@ -59,11 +60,11 @@ impl<T: RelNodeTyp> Task<T> for OptimizeExpressionTask {
             }
             if top_matches(rule.matcher(), expr.typ.clone(), expr.data.clone()) {
                 tasks.push(
-                    Box::new(ApplyRuleTask::new(rule_id, self.expr_id, self.exploring))
+                    Box::new(ApplyRuleTask::new(rule_id, self.expr_id, self.exploring, self.required_physical_props))
                         as Box<dyn Task<T>>,
                 );
                 for &input_group_id in &expr.children {
-                    tasks.push(Box::new(ExploreGroupTask::new(input_group_id)) as Box<dyn Task<T>>);
+                    tasks.push(Box::new(ExploreGroupTask::new(input_group_id, self.required_physical_props)) as Box<dyn Task<T>>);
                 }
             }
         }
