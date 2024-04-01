@@ -28,16 +28,21 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
     }
 
     fn execute(&self, optimizer: &mut CascadesOptimizer<T>) -> Result<Vec<Box<dyn Task<T>>>> {
+        println!("executing task: {}", self.group_id);
         trace!(event = "task_begin", task = "optimize_group", group_id = %self.group_id);
         let group_info = optimizer.get_group_info(self.group_id);
         if group_info.winner.is_some() {
+            println!("done: {} (found winner in group info)", self.group_id);
             trace!(event = "task_finish", task = "optimize_group");
             return Ok(vec![]);
         }
         let exprs = optimizer.get_all_exprs_in_group(self.group_id);
+        println!("exprs for group_id={}: {:?}", self.group_id, exprs);
         let mut tasks = vec![];
         let exprs_cnt = exprs.len();
         for &expr in &exprs {
+            let real_expr = optimizer.get_expr_memoed(expr);
+            println!("expr_id = {:?}, expr = {:?}", expr, real_expr);
             let typ = optimizer.get_expr_memoed(expr).typ.clone();
             if typ.is_logical() {
                 tasks.push(Box::new(OptimizeExpressionTask::new(expr, false)) as Box<dyn Task<T>>);
@@ -49,6 +54,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
                 tasks.push(Box::new(OptimizeInputsTask::new(expr, true)) as Box<dyn Task<T>>);
             }
         }
+        println!("finish task: {}", self.group_id);
         trace!(event = "task_finish", task = "optimize_group", group_id = %self.group_id, exprs_cnt = exprs_cnt);
         Ok(tasks)
     }

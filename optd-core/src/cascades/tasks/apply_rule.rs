@@ -190,7 +190,8 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
 
         let rule_wrapper = optimizer.rules()[self.rule_id].clone();
         let rule = rule_wrapper.rule();
-
+        
+        // print!("event=task_begin, task=apply_rule, expr_id={}, rule_id={}, rule={}, optimize_type={}\n", self.expr_id, self.rule_id, rule.name(), rule_wrapper.optimize_type());
         trace!(event = "task_begin", task = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id, rule = %rule.name(), optimize_type=%rule_wrapper.optimize_type());
         let group_id = optimizer.get_group_id(self.expr_id);
         let mut tasks = vec![];
@@ -216,8 +217,10 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
                 );
 
                 if let Some(group_id_2) = typ.extract_group() {
+                    println!("reaching 220");
                     // If this is a group, merge the groups!
                     optimizer.merge_group(group_id, group_id_2);
+
                     // mark the old expr as a dead end
                     (0..optimizer.rules().len())
                         .for_each(|i| optimizer.mark_rule_fired(self.expr_id, i));
@@ -265,6 +268,7 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
         }
         optimizer.mark_rule_fired(self.expr_id, self.rule_id);
 
+        // print!("event=task_end, task=apply_rule, expr_id={}, rule_id={}\n", self.expr_id, self.rule_id);
         trace!(event = "task_end", task = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id);
         Ok(tasks)
     }

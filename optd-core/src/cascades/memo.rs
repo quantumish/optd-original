@@ -285,8 +285,11 @@ impl<T: RelNodeTyp> Memo<T> {
             };
 
             // if the new expr already in the memo table, merge the group and remove old expr
-            if let Some(&expr_id) = self.expr_node_to_expr_id.get(&memo_node) {
-                let group_id = self.get_group_id_of_expr_id(expr_id);
+            if let Some(&new_expr_id) = self.expr_node_to_expr_id.get(&memo_node) {
+                if new_expr_id == expr_id {
+                    unreachable!("It cannot be exactly the same!");
+                }
+                let group_id = self.get_group_id_of_expr_id(new_expr_id);
                 let group_id = self.get_reduced_group_id(group_id);
                 self.merge_group_inner(replace_group_id, group_id);
 

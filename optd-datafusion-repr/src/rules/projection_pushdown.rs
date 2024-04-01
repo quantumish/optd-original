@@ -132,6 +132,8 @@ fn apply_projection_merge(
     };
 
     let res_exprs = mapping.rewrite_projection(&exprs2);
+    // println!("projection merge child {:?}", &child);
+    // println!("projection merge res {:?}", &res_exprs);
 
     let node: LogicalProjection = LogicalProjection::new(
         child,

@@ -97,6 +97,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 vec![node]
             }
             OptRelNodeTyp::Projection => {
+                println!("convert proj -> physical proj");
                 let node = RelNode {
                     typ: OptRelNodeTyp::PhysicalProjection,
                     children,

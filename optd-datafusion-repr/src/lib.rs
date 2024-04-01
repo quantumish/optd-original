@@ -25,7 +25,7 @@ use rules::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
     EliminateJoinRule, EliminateLimitRule, HashJoinRule, JoinAssocRule, JoinCommuteRule,
     PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule, 
-    ProjectMergeRule, ProjectFilterTransposeRule,
+    ProjectMergeRule,
 };
 
 pub use optd_core::rel_node::Value;
@@ -100,12 +100,12 @@ impl DatafusionOptimizer {
         for rule in rules {
             rule_wrappers.push(RuleWrapper::new_cascades(rule));
         }
-        rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
             ProjectMergeRule::new(),
         )));
-        rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
-            ProjectFilterTransposeRule::new(),
-        )));
+        // rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
+        //     ProjectFilterTransposeRule::new(),
+        // )));
         // add all filter pushdown rules as heuristic rules
         rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
             FilterProjectTransposeRule::new(),
@@ -233,11 +233,12 @@ impl DatafusionOptimizer {
         }
 
         let group_id = self.cascades_optimizer.step_optimize_rel(root_rel)?;
-
         let mut meta = Some(HashMap::new());
+        println!("begin optimize_rel: {group_id}");
         let optimized_rel = self
             .cascades_optimizer
             .step_get_optimize_rel(group_id, &mut meta)?;
+        println!("end optimize_rel: {group_id}");
 
         Ok((group_id, optimized_rel, meta.unwrap()))
     }

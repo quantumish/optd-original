@@ -122,6 +122,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
     }
 
     fn execute(&self, optimizer: &mut CascadesOptimizer<T>) -> Result<Vec<Box<dyn Task<T>>>> {
+        eprint!("reached\n");
         if optimizer.tasks.iter().any(|t| {
             if let Some(task) = t.as_any().downcast_ref::<Self>() {
                 // skip optimize_inputs to avoid dead-loop: consider join commute being fired twice that produces
@@ -165,6 +166,9 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
                 .0[0],
                 optimizer.ctx.upper_bound,
             ) {
+                if group_id == GroupId(35) {
+                    println!("task_finish");
+                }
                 trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
                 return Ok(vec![]);
             }
@@ -191,6 +195,9 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
                             .0[0],
                             optimizer.ctx.upper_bound,
                         ) {
+                            if group_id == GroupId(35) {
+                                println!("task_finish");
+                            }            
                             trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
                             return Ok(vec![]);
                         }
@@ -198,6 +205,9 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
                 }
                 if !has_full_winner {
                     if !return_from_optimize_group {
+                        if group_id == GroupId(35) {
+                            println!("task_yield");
+                        }   
                         trace!(event = "task_yield", task = "optimize_inputs", expr_id = %self.expr_id, group_idx = %group_idx);
                         return Ok(vec![
                             Box::new(self.continue_from(
@@ -222,6 +232,9 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
                                         }),
                                     },
                                 );
+                                if group_id == GroupId(35) {
+                                    println!("task_finish");
+                                }   
                                 trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
                                 return Ok(vec![]);
                             }
@@ -235,10 +248,16 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
                                 }),
                             },
                         );
+                        if group_id == GroupId(35) {
+                            println!("task_finish");
+                        }   
                         trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
                         return Ok(vec![]);
                     }
                 }
+                if group_id == GroupId(35) {
+                    println!("task_yield");
+                }   
                 trace!(event = "task_yield", task = "optimize_inputs", expr_id = %self.expr_id, group_idx = %group_idx);
                 Ok(vec![Box::new(self.continue_from(
                     ContinueTask {
@@ -262,11 +281,18 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
                     ),
                     optimizer,
                 );
+                if group_id == GroupId(35) {
+                    println!("task_finish (update winner)");
+                }   
+                // print!("event=task_finish (update winner), task=optimize_inputs, expr_id={}\n", self.expr_id);
                 trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
                 Ok(vec![])
             }
         } else {
             let input_cost = self.first_invoke(children_group_ids, optimizer);
+            if group_id == GroupId(35) {
+                println!("task_yield");
+            }   
             trace!(event = "task_yield", task = "optimize_inputs", expr_id = %self.expr_id);
             Ok(vec![Box::new(self.continue_from(
                 ContinueTask {

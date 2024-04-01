@@ -205,7 +205,9 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     /// Optimize a `RelNode`.
     pub fn step_optimize_rel(&mut self, root_rel: RelNodeRef<T>) -> Result<GroupId> {
         let (group_id, _) = self.add_group_expr(root_rel, None);
+        println!("begin fire_optimize_tasks: {}", group_id);
         self.fire_optimize_tasks(group_id)?;
+        println!("passed fire_optimized_tasks: {}", group_id);
         Ok(group_id)
     }
 
@@ -297,6 +299,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
                 .and_modify(|fired_rules| fired_rules.clear());
             return;
         }
+        println!("marking anything as a deadend");
         // new expr merged with old expr, we mark old expr as a dead end
         self.fired_rules.entry(expr_id).and_modify(|fired_rules| {
             for i in 0..self.rules.len() {

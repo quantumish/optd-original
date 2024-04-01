@@ -10,7 +10,7 @@ mod physical;
 
 // pub use filter_join::FilterJoinPullUpRule;
 pub use projection_pushdown::{
-    ProjectMergeRule, ProjectFilterTransposeRule
+    ProjectMergeRule, 
 };
 pub use eliminate_duplicated_expr::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule,
