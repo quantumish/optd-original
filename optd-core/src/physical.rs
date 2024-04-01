@@ -14,31 +14,10 @@
 // is to find the lowest cost expression that provides those properties while
 // still remaining logically equivalent.
 struct Required {
-	// Presentation specifies the naming, membership (including duplicates),
-	// and order of result columns. If Presentation is not defined, then no
-	// particular column presentation is required or provided.
-	Presentation Presentation
-
 	// Ordering specifies the sort order of result rows. Rows can be sorted by
 	// one or more columns, each of which can be sorted in either ascending or
 	// descending order. If Ordering is not defined, then no particular ordering
 	// is required or provided.
 	Ordering props.OrderingChoice
 
-	// LimitHint specifies a "soft limit" to the number of result rows that may
-	// be required of the expression. If requested, an expression will still need
-	// to return all result rows, but it can be optimized based on the assumption
-	// that only the hinted number of rows will be needed.
-	// A LimitHint of 0 indicates "no limit". The LimitHint is an intermediate
-	// float64 representation, and can be converted to an integer number of rows
-	// using LimitHintInt64.
-	LimitHint float64
-
-	// Distribution specifies the physical distribution of result rows. This is
-	// defined as the set of regions that may contain result rows. If
-	// Distribution is not defined, then no particular distribution is required.
-	// Currently, the only operator in a plan tree that has a required
-	// distribution is the root, since data must always be returned to the gateway
-	// region.
-	Distribution Distribution
 }
