@@ -27,6 +27,18 @@ define_plan_node!(
     ]
 );
 
+/// This struct holds the mapping from original columns to projected columns.
+///
+/// # Example
+/// With the following plan:
+///  | Filter (#0 < 5)
+///  |
+///  |-| Projection [#2, #3]
+///    |- Scan [#0, #1, #2, #3]
+///
+/// The computed projection mapping is:
+/// #2 -> #0
+/// #3 -> #1
 #[derive(Clone, Debug)]
 pub struct ProjectionMapping {
     forward: Vec<usize>,
@@ -56,8 +68,13 @@ impl ProjectionMapping {
         self._backward[col]
     }
 
-    /// Recursively rewrites all ColumnRefs in an Expr to what the projection
-    /// node is rewriting. E.g. if Projection is A -> B, B will be rewritten as A
+    /// Recursively rewrites all ColumnRefs in an Expr to *undo* the projection
+    /// condition. You might want to do this if you are pushing something
+    /// through a projection, or pulling a projection up.
+    ///
+    /// # Example
+    /// If we have a projection node, mapping column A to column B (A -> B)
+    /// All B's in `cond` will be rewritten as A.
     pub fn rewrite_condition(&self, cond: Expr, child_schema_len: usize) -> Expr {
         let proj_schema_size = self.forward.len();
         cond.rewrite_column_refs(&|idx| {
@@ -100,9 +117,12 @@ impl ProjectionMapping {
         Some(ExprList::new(new_projection_exprs))
     }
 
-    /// Reverse rewrites all ColumnRefs in an ExprList to what the projection
-    /// node is rewriting. E.g. if Projection is A -> B, B will be 
-    /// rewritten as A
+    /// rewrites the input exprs based on the mapped col refs
+    /// intended use: 
+    /// Projection { exprs: [#1, #0] }
+    ///     Projection { exprs: [#0, #2] }
+    /// remove bottom projection by converting nodes to:
+    /// Projection { exprs: [#2, #0] }
     pub fn reverse_rewrite_projection(&self, exprs: &ExprList) -> ExprList {
         let mut new_projection_exprs = Vec::new();
         let exprs = exprs.to_vec();

@@ -64,18 +64,18 @@ define_plan_node!(
 );
 
 impl LogicalJoin {
-    /// Takes in left/right schema sizes, and maps an index to be as if it were
-    /// pushed down to the left or right side of a join accordingly.
+    /// Takes in left/right schema sizes, and maps a column index to be as if it
+    /// were pushed down to the left or right side of a join accordingly.
     pub fn map_through_join(
-        index: usize,
+        col_idx: usize,
         left_schema_size: usize,
         right_schema_size: usize,
     ) -> usize {
-        assert!(index < left_schema_size + right_schema_size);
-        if index < left_schema_size {
-            index
+        assert!(col_idx < left_schema_size + right_schema_size);
+        if col_idx < left_schema_size {
+            col_idx
         } else {
-            index - left_schema_size
+            col_idx - left_schema_size
         }
     }
 }
