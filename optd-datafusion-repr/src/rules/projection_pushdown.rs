@@ -78,11 +78,8 @@ fn apply_projection_filter_transpose(
         return vec![];
     };
 
-    let child_schema_len = _optimizer
-        .get_property::<SchemaPropertyBuilder>(child.clone().into(), 0)
-        .len();
     let child = PlanNode::from_group(child.into());
-    let new_filter_cond: Expr = mapping.rewrite_condition(cond_as_expr.clone(), child_schema_len);
+    let new_filter_cond: Expr = mapping.reverse_rewrite_condition(cond_as_expr.clone());
     let bottom_proj_node = LogicalProjection::new(child, bottom_proj_exprs);
     let new_filter_node = LogicalFilter::new(bottom_proj_node.into_plan_node(), new_filter_cond);
 
@@ -131,7 +128,14 @@ fn apply_projection_merge(
         return vec![];
     };
 
-    let res_exprs = mapping.rewrite_projection(&exprs2);
+    let Some(res_exprs) = mapping.rewrite_projection(&exprs2) else {
+        let node: LogicalProjection = LogicalProjection::new(
+            child,
+            exprs1,
+        );
+        println!("reached something that should never happen!!!!");
+        return vec![node.into_rel_node().as_ref().clone()];
+    };
 
     let node: LogicalProjection = LogicalProjection::new(
         child,

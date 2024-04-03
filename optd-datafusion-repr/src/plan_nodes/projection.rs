@@ -27,6 +27,7 @@ define_plan_node!(
     ]
 );
 
+#[derive(Clone, Debug)]
 pub struct ProjectionMapping {
     forward: Vec<usize>,
     _backward: Vec<Option<usize>>,
@@ -69,17 +70,34 @@ impl ProjectionMapping {
         .unwrap()
     }
 
+    /// Recursively rewrites all ColumnRefs in an Expr to what the projection
+    /// node is rewriting. E.g. if Projection is A -> B, B will be rewritten as A
+    pub fn reverse_rewrite_condition(&self, cond: Expr) -> Expr {
+        let proj_schema_size = self._backward.len();
+        cond.rewrite_column_refs(&|idx| {
+            Some(if idx < proj_schema_size {
+                self._original_col_maps_to(idx).unwrap()
+            } else {
+                panic!("exprs do not map to projection");
+            })
+        })
+        .unwrap()
+    }
+
     /// Rewrites all ColumnRefs in an ExprList to what the projection
     /// node is rewriting. E.g. if Projection is A -> B, B will be 
     /// rewritten as A
-    pub fn rewrite_projection(&self, exprs: &ExprList) -> ExprList {
+    pub fn rewrite_projection(&self, exprs: &ExprList) -> Option<ExprList> {
+        if exprs.len() == 0 {
+            return None;
+        }
         let mut new_projection_exprs = Vec::new();
         let exprs = exprs.to_vec();
         for i in &self.forward {
             let col: Expr = exprs[*i].clone();
             new_projection_exprs.push(col);
         };
-        ExprList::new(new_projection_exprs)
+        Some(ExprList::new(new_projection_exprs))
     }
 
     /// Reverse rewrites all ColumnRefs in an ExprList to what the projection
