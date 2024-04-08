@@ -292,18 +292,16 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         let replaced = self.memo.replace_group_expr(expr_id, group_id, expr);
         if replaced {
             // the old expr is replaced, so we clear the fired rules for old expr
-            self.fired_rules
-                .entry(expr_id)
-                .or_default().clear();
+            self.fired_rules.entry(expr_id).or_default().clear();
             return;
         }
-        
+
         // We can mark the expr as a deadend
         // However, even some of the exprs cannot be the winner for the group
         // We still need the physical form of those expr to start the optimizeInput task
         // So we don't mark the impl rules as fired
         for i in 0..self.rules.len() {
-            if !self.rules[i].rule().is_impl_rule(){
+            if !self.rules[i].rule().is_impl_rule() {
                 self.fired_rules.entry(expr_id).or_default().insert(i);
             }
         }

@@ -233,8 +233,10 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
 
                     trace!(event = "apply_rule replace", expr_id = %self.expr_id, rule_id = %self.rule_id);
 
-                    tasks.push(Box::new(OptimizeExpressionTask::new(self.expr_id, self.exploring))
-                        as Box<dyn Task<T>>);
+                    tasks.push(
+                        Box::new(OptimizeExpressionTask::new(self.expr_id, self.exploring))
+                            as Box<dyn Task<T>>,
+                    );
                 }
                 continue;
             }
