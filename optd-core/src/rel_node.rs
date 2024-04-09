@@ -11,7 +11,7 @@ use std::{
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{cascades::GroupId, cost::Cost};
+use crate::{cascades::GroupId, cascades::SubGroupId, cost::Cost};
 
 pub type RelNodeRef<T> = Arc<RelNode<T>>;
 
@@ -22,7 +22,11 @@ pub trait RelNodeTyp:
 
     fn group_typ(group_id: GroupId) -> Self;
 
+    fn sub_group_typ(group_id: GroupId, sub_group_id: SubGroupId) -> Self;
+
     fn extract_group(&self) -> Option<GroupId>;
+
+    fn extract_sub_group(&self) -> Option<SubGroupId>;
 
     fn list_typ() -> Self;
 }

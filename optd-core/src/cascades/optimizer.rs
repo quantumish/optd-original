@@ -63,6 +63,9 @@ pub struct RelNodeContext {
 pub struct GroupId(pub(super) usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
+pub struct SubGroupId(pub(super) usize);
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
 pub struct ExprId(pub usize);
 
 impl Display for GroupId {

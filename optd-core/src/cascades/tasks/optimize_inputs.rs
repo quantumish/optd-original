@@ -3,7 +3,7 @@ use tracing::trace;
 
 use crate::{
     cascades::{
-        memo::{GroupInfo, Winner},
+        memo::{SubGroupInfo, Winner},
         optimizer::ExprId,
         tasks::OptimizeGroupTask,
         CascadesOptimizer, GroupId, RelNodeContext,
@@ -25,14 +25,18 @@ pub struct OptimizeInputsTask {
     expr_id: ExprId,
     continue_from: Option<ContinueTask>,
     pruning: bool,
+    required_physical_props: Arc<dyn RequiredPhysicalProps>,
+    required_children_props: Option<Vec<Arc<dyn RequiredPhysicalProps>>>
 }
 
 impl OptimizeInputsTask {
-    pub fn new(expr_id: ExprId, pruning: bool) -> Self {
+    pub fn new(expr_id: ExprId, pruning: bool, required_physical_props: Arc<dyn RequiredPhysicalProps>) -> Self {
         Self {
             expr_id,
             continue_from: None,
             pruning,
+            required_physical_props,
+            required_children_props: None
         }
     }
 
@@ -41,6 +45,8 @@ impl OptimizeInputsTask {
             expr_id: self.expr_id,
             continue_from: Some(cont),
             pruning,
+            required_physical_props: self.required_physical_props.clone(),
+            required_children_props: self.required_children_props.clone()
         }
     }
 
@@ -52,9 +58,10 @@ impl OptimizeInputsTask {
     ) -> Vec<Cost> {
         let zero_cost = optimizer.cost().zero();
         let mut input_cost = Vec::with_capacity(children.len());
-        for &child in children.iter() {
-            let group = optimizer.get_group_info(child);
-            if let Some(ref winner) = group.winner {
+        for (&child, &prop) in children.iter().zip(self.required_children_props.unwrap().iter()) {
+            let group = optimizer.get_sub_group_info(child, prop);
+            if group.is_some() && group.winner.is_some() {
+                let winner = group.winner.unwrap();
                 if !winner.impossible {
                     // the full winner case
                     input_cost.push(winner.cost.clone());
@@ -91,10 +98,12 @@ impl OptimizeInputsTask {
         cost_so_far: &Cost,
         optimizer: &mut CascadesOptimizer<T>,
     ) {
-        let group_id = optimizer.get_group_id(self.expr_id);
-        let group_info = optimizer.get_group_info(group_id);
+        let expr_id = optimizer.update_expr_children_sub_group_id(self.expr_id, self.required_children_props.clone());
+        let group_id = optimizer.get_group_id(expr_id);
+        let sub_group_info = optimizer.get_sub_group_info(group_id, self.required_physical_props);
         let mut update_cost = false;
-        if let Some(ref winner) = group_info.winner {
+        if sub_group_info.is_some() && sub_group_info.winner.is_some() {
+            let winner = sub_group_info.winner.unwrap();
             if winner.impossible || &winner.cost > cost_so_far {
                 update_cost = true;
             }
@@ -102,14 +111,16 @@ impl OptimizeInputsTask {
             update_cost = true;
         }
         if update_cost {
-            optimizer.update_group_info(
+            optimizer.update_sub_group_info(
                 group_id,
-                GroupInfo {
+                Some(expr_id),
+                SubGroupInfo {
                     winner: Some(Winner {
                         impossible: false,
-                        expr_id: self.expr_id,
+                        expr_id,
                         cost: cost_so_far.clone(),
                     }),
+                    physical_props: self.required_physical_props.clone(),
                 },
             );
         }
@@ -126,7 +137,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
             if let Some(task) = t.as_any().downcast_ref::<Self>() {
                 // skip optimize_inputs to avoid dead-loop: consider join commute being fired twice that produces
                 // two projections, therefore having groups like projection1 -> projection2 -> join = projection1.
-                task.expr_id == self.expr_id
+                task.expr_id == self.expr_id && task.required_physical_props == self.required_physical_props
             } else {
                 false
             }
@@ -171,9 +182,11 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
             if next_group_idx < children_group_ids.len() {
                 let group_id = children_group_ids[next_group_idx];
                 let group_idx = next_group_idx;
-                let group_info = optimizer.get_group_info(group_id);
+                let required_child_physical_props = self.required_children_props[group_idx].clone();
+                let sub_group_info = optimizer.get_sub_group_info(group_id, required_child_physical_props);
                 let mut has_full_winner = false;
-                if let Some(ref winner) = group_info.winner {
+                if sub_group_info.is_some() && sub_group_info.winner.is_some() {
+                    let winner = sub_group_info.winner.unwrap();
                     if !winner.impossible {
                         input_cost[group_idx] = winner.cost.clone();
                         has_full_winner = true;
@@ -208,31 +221,36 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
                                 },
                                 self.pruning,
                             )) as Box<dyn Task<T>>,
-                            Box::new(OptimizeGroupTask::new(group_id)) as Box<dyn Task<T>>,
+                            Box::new(OptimizeGroupTask::new(group_id, required_child_physical_props)) as Box<dyn Task<T>>,
                         ]);
                     } else {
-                        if let Some(ref winner) = group_info.winner {
+                        if sub_group_info.is_some() && sub_group_info.winner.is_some() {
+                            let winner = sub_group_info.winner.unwrap();
                             if winner.impossible {
-                                optimizer.update_group_info(
+                                optimizer.update_sub_group_info(
                                     group_id,
-                                    GroupInfo {
+                                    None, // No need to add this expr to the subgroup, as this expr cannot provide required physical props
+                                    SubGroupInfo {
                                         winner: Some(Winner {
                                             impossible: true,
                                             ..Default::default()
                                         }),
+                                        physical_props: required_child_physical_props,
                                     },
                                 );
                                 trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
                                 return Ok(vec![]);
                             }
                         }
-                        optimizer.update_group_info(
+                        optimizer.update_sub_group_info(
                             group_id,
-                            GroupInfo {
+                            None,
+                            SubGroupInfo {
                                 winner: Some(Winner {
                                     impossible: true,
                                     ..Default::default()
                                 }),
+                                physical_props: required_child_physical_props,
                             },
                         );
                         trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
@@ -266,6 +284,21 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
                 Ok(vec![])
             }
         } else {
+            // three situations we can provide the required physical properties:
+            // 1. if current expr can provide the required physical properties like sort merge join can provide ordering
+            // 2. if current expr can pass the required physical properties to its children, like select, project can pass ordering to children
+            // 3. no required_children_props constraints, like any ordering
+            // One situation we can't provide the required physical properties:
+            // 1. current expr cannot provide nor pass the required physical properties to its children, like hash join 
+            if !self.required_physical_props.can_provide(){
+                trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
+                return Ok(vec![]);
+            }
+            // we leave the passing rules of required physical properties completely to the user
+            // 1. if current expr can provide the required physical props, like sort merge join, the required physical props for children should be Any
+            // 2. if current expr cannot provide, the required physical props should be assigned to children
+            self.required_children_props = Some(self.required_physical_props.build_children_properties(expr.typ.clone(), expr.data.clone(), children_group_ids.len()));
+
             let input_cost = self.first_invoke(children_group_ids, optimizer);
             trace!(event = "task_yield", task = "optimize_inputs", expr_id = %self.expr_id);
             Ok(vec![Box::new(self.continue_from(

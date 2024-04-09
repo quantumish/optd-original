@@ -1,7 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
-    fmt::Display,
-    sync::Arc,
+    collections::{hash_map::Entry, HashMap, HashSet}, fmt::Display, sync::Arc
 };
 
 use anyhow::{bail, Result};
@@ -14,7 +12,7 @@ use crate::{
     rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp, Value},
 };
 
-use super::optimizer::{ExprId, GroupId};
+use super::optimizer::{ExprId, GroupId, SubGroupId};
 
 pub type RelMemoNodeRef<T> = Arc<RelMemoNode<T>>;
 
@@ -22,7 +20,7 @@ pub type RelMemoNodeRef<T> = Arc<RelMemoNode<T>>;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RelMemoNode<T: RelNodeTyp> {
     pub typ: T,
-    pub children: Vec<GroupId>,
+    pub children: Vec<(GroupId,SubGroupId)>,
     pub data: Option<Value>,
 }
 
@@ -47,14 +45,63 @@ pub struct Winner {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct GroupInfo {
+pub struct SubGroupInfo {
     pub winner: Option<Winner>,
+    pub physical_props: Arc<dyn RequiredPhysicalProps>
+}
+
+pub(crate) struct SubGroup {
+    pub(crate) sub_group_info: SubGroupInfo,
+    pub(crate) sub_group_exprs: HashSet<ExprId>,
 }
 
 pub(crate) struct Group {
-    pub(crate) group_exprs: HashSet<ExprId>,
-    pub(crate) info: GroupInfo,
+    /// sub_groups are for special requiredPhysicalProps
+    ///     all exprs within one sub group are logically equivalent and provide same physical props
+    ///     one expr can be in multiple sub groups
+    ///     the first sub_group in the group is the default sub group containing all exprs in the group
+    ///     eg: a group of join exprs, there are two subgroups, 0 is for all exprs, others are for special requirement
+    ///     sub_groups 0: <PhysicalProps:Any, SortMergeJoinExpr, HashJoinExpr, NLJoinExpr>
+    ///     sub_groups 1: <PhysicalProps:Sort(a), SortMergeJoinExpr>
+    pub(crate) sub_groups: Vec<SubGroup>,
+    pub(crate) sub_group_physical_prop_map: HashMap<RequiredPhysicalProps, SubGroupId>,
     pub(crate) properties: Arc<[Box<dyn Any + Send + Sync + 'static>]>,
+}
+
+impl Group{
+    pub fn new(defaul_physical_props: RequiredPhysicalProps) -> Self {
+        let mut group = Group {
+            sub_groups: Vec::new(),
+            sub_group_physical_prop_map: HashMap::new(),
+            properties: Vec::new(),
+        };
+        let mut default_sub_group = SubGroup {
+            sub_group_info: SubGroupInfo{
+                winner: None,
+                physical_props: defaul_physical_props.clone()
+            },
+            sub_group_exprs: HashSet::new(),
+        };
+        group.sub_groups.push(default_sub_group);
+        group.sub_group_physical_prop_map.insert(defaul_physical_props, SubGroupId(0));
+        group
+    }
+
+    pub fn insert_expr_to_default_sub_group(&mut self, expr_id: ExprId){
+        self.sub_groups[0].sub_group_exprs.insert(expr_id);
+    }
+
+    pub fn group_exprs(&self) -> &HashSet<ExprId> {
+        &(self.sub_groups[0].sub_group_exprs)
+    }
+
+    pub fn group_exprs_mut(&mut self) -> &mut HashSet<ExprId> {
+        self.sub_groups[0].sub_group_exprs.as_mut()
+    }
+
+    pub fn default_sub_group(&self) -> &SubGroup {
+        &self.sub_groups[0]
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
@@ -79,11 +126,13 @@ pub struct Memo<T: RelNodeTyp> {
     groups: HashMap<ReducedGroupId, Group>,
     group_expr_counter: usize,
     merged_groups: HashMap<GroupId, GroupId>,
+    required_root_props: Arc<dyn RequiredPhysicalProps>,
+    physical_props: Arc<dyn PhysicalProps>,
     property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>,
 }
 
 impl<T: RelNodeTyp> Memo<T> {
-    pub fn new(property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>) -> Self {
+    pub fn new(property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>, required_root_props: Arc<dyn RequiredPhysicalProps>, physical_props: Arc<dyn PhysicalProps>) -> Self {
         Self {
             expr_id_to_group_id: HashMap::new(),
             expr_id_to_expr_node: HashMap::new(),
@@ -91,6 +140,8 @@ impl<T: RelNodeTyp> Memo<T> {
             groups: HashMap::new(),
             group_expr_counter: 0,
             merged_groups: HashMap::new(),
+            required_root_props,
+            physical_props,
             property_builders,
         }
     }
@@ -237,15 +288,12 @@ impl<T: RelNodeTyp> Memo<T> {
     ) {
         if let Entry::Occupied(mut entry) = self.groups.entry(group_id) {
             let group = entry.get_mut();
-            group.group_exprs.insert(expr_id);
+            group.insert_expr_to_default_sub_group(expr_id);
             return;
         }
-        let mut group = Group {
-            group_exprs: HashSet::new(),
-            info: GroupInfo::default(),
-            properties: self.infer_properties(memo_node).into(),
-        };
-        group.group_exprs.insert(expr_id);
+        let mut group = Group::new(self.physical_props.Any());
+        group.properties = self.infer_properties(memo_node).into();
+        group.insert_expr_to_default_sub_group(expr_id);
         self.groups.insert(group_id, group);
     }
 
@@ -262,7 +310,7 @@ impl<T: RelNodeTyp> Memo<T> {
 
         if let Entry::Occupied(mut entry) = self.groups.entry(replace_group_id) {
             let group = entry.get_mut();
-            if !group.group_exprs.contains(&expr_id) {
+            if !group.group_exprs().contains(&expr_id) {
                 unreachable!("expr not found in group in replace_group_expr");
             }
 
@@ -384,7 +432,7 @@ impl<T: RelNodeTyp> Memo<T> {
         let group_id = self.get_reduced_group_id(group_id);
         let group = self.groups.get(&group_id).expect("group not found");
         group
-            .group_exprs
+            .group_exprs()
             .iter()
             .filter(|x| !physical_only || !self.get_expr_memoed(**x).typ.is_logical())
             .map(|&expr_id| {
@@ -456,7 +504,7 @@ impl<T: RelNodeTyp> Memo<T> {
     pub fn get_all_exprs_in_group(&self, group_id: GroupId) -> Vec<ExprId> {
         let group_id = self.get_reduced_group_id(group_id);
         let group = self.groups.get(&group_id).expect("group not found");
-        let mut exprs = group.group_exprs.iter().copied().collect_vec();
+        let mut exprs = group.group_exprs().iter().copied().collect_vec();
         exprs.sort();
         exprs
     }
@@ -472,12 +520,54 @@ impl<T: RelNodeTyp> Memo<T> {
         ids
     }
 
-    pub fn get_group_info(&self, group_id: GroupId) -> GroupInfo {
+    pub fn get_sub_group_info(&self, group_id: GroupId,
+        required_physical_props: &dyn RequiredPhysicalProps) -> Option<SubGroupInfo> {
+        let group = self.groups.get(&self.get_reduced_group_id(group_id)).unwrap();
+        let sub_group_id = group.sub_group_physical_prop_map.get(required_physical_props);
+        if let Some(sub_group_id) = sub_group_id {
+            group.sub_groups[*sub_group_id].sub_group_info.clone()
+        }
+        None
+    }
+
+    pub fn update_expr_children_sub_group_id(&self, expr_id: ExprId, children_props: Vec<Arc<dyn RequiredPhysicalProps>>) -> ExprId{
+        let memo_node = self.get_expr_memoed(expr_id);
+        let children = memo_node.children.iter().zip(children_props.iter()).map(|(child, prop)| {
+            let group_id = child.0;
+            let group = self.groups.get(&self.get_reduced_group_id(group_id)).unwrap();
+            let sub_group_id = group.sub_group_physical_prop_map.get(prop).unwrap();
+            (group_id, *sub_group_id)
+        }).collect();
+
+        if children == memo_node.children {
+            // if there's no required props for children node, sub_group_id remain unchanged (as 0)
+            return expr_id;
+        }
+
+        let memo_node = RelMemoNode {
+            typ: memo_node.typ.clone(),
+            children,
+            data: memo_node.data.clone(),
+        };
+        assert!(!self.expr_node_to_expr_id.contains_key(&memo_node));
+
+        let new_expr_id = self.next_expr_id();
+        let group_id = self.get_group_id_of_expr_id(expr_id);
+        
+        self.expr_id_to_expr_node.insert(new_expr_id, memo_node.clone().into());
+        self.expr_id_to_group_id.insert(new_expr_id, group_id);
+        self.expr_node_to_expr_id.insert(memo_node.clone(), new_expr_id);
+        self.get_group(group_id).insert_expr_to_default_sub_group(new_expr_id);
+        new_expr_id
+    }
+
+    pub fn get_group_info(&self, group_id: GroupId) -> SubGroupInfo {
         self.groups
             .get(&self.get_reduced_group_id(group_id))
             .as_ref()
             .unwrap()
-            .info
+            .default_sub_group()
+            .sub_group_info
             .clone()
     }
 
@@ -488,7 +578,44 @@ impl<T: RelNodeTyp> Memo<T> {
             .unwrap()
     }
 
-    pub fn update_group_info(&mut self, group_id: GroupId, group_info: GroupInfo) {
+    pub fn update_sub_group_info(
+        &mut self,
+        group_id: GroupId,
+        expr_id: Option<ExprId>,
+        sub_group_info: SubGroupInfo,
+    ) {
+        if let Some(ref winner) = sub_group_info.winner {
+            if !winner.impossible {
+                assert!(
+                    winner.cost.0[0] != 0.0,
+                    "{}",
+                    self.get_expr_memoed(winner.expr_id)
+                );
+            }
+        }
+        let group = self.groups.get_mut(&self.get_reduced_group_id(group_id)).unwrap();
+        if group.sub_group_physical_prop_map.contains(sub_group_info.physical_props) {
+            let sub_group_id = group.sub_group_physical_prop_map.get(&sub_group_info.physical_props).unwrap();
+            group.sub_groups[*sub_group_id].sub_group_info = sub_group_info;
+            if let Some(expr_id) = expr_id {
+                group.sub_groups[*sub_group_id].sub_group_exprs.insert(expr_id);
+            }
+            return;
+        }
+        let sub_group_id = group.sub_groups.len();
+        let mut exprs = HashSet::new();
+        if let Some(expr_id) = expr_id {
+            exprs.insert(expr_id);
+        }
+        group.sub_groups.push(SubGroup {
+            sub_group_info,
+            sub_group_exprs: exprs,
+        });
+        group.sub_group_physical_prop_map
+            .insert(sub_group_info.physical_props.clone(), SubGroupId(sub_group_id));
+    }
+
+    pub fn update_group_info(&mut self, group_id: GroupId, group_info: SubGroupInfo) {
         if let Some(ref winner) = group_info.winner {
             if !winner.impossible {
                 assert!(
@@ -499,7 +626,7 @@ impl<T: RelNodeTyp> Memo<T> {
             }
         }
         let grp = self.groups.get_mut(&self.get_reduced_group_id(group_id));
-        grp.unwrap().info = group_info;
+        grp.unwrap().sub_groups[0].sub_group_info = group_info;
     }
 
     pub fn get_best_group_binding(

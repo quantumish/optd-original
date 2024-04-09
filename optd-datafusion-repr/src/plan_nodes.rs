@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use arrow_schema::DataType;
 use optd_core::{
-    cascades::{CascadesOptimizer, GroupId},
+    cascades::{CascadesOptimizer, GroupId, SubGroupId},
     rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp},
 };
 
@@ -43,7 +43,7 @@ use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 ///   - The define_plan_node!() macro defines what the children of each join node are
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OptRelNodeTyp {
-    Placeholder(GroupId),
+    Placeholder(GroupId, SubGroupId),
     List,
     // Plan nodes
     // Developers: update `is_plan_node` function after adding new elements
@@ -148,7 +148,11 @@ impl RelNodeTyp for OptRelNodeTyp {
     }
 
     fn group_typ(group_id: GroupId) -> Self {
-        Self::Placeholder(group_id)
+        Self::Placeholder(group_id, 0)
+    }
+
+    fn sub_group_typ(group_id: GroupId, sub_group_id: SubGroupId) -> Self {
+        Self::Placeholder(group_id, sub_group_id)
     }
 
     fn list_typ() -> Self {
@@ -156,8 +160,16 @@ impl RelNodeTyp for OptRelNodeTyp {
     }
 
     fn extract_group(&self) -> Option<GroupId> {
-        if let Self::Placeholder(group_id) = self {
+        if let Self::Placeholder(group_id, _) = self {
             Some(*group_id)
+        } else {
+            None
+        }
+    }
+
+    fn extract_sub_group(&self) -> Option<SubGroupId> {
+        if let Self::Placeholder(_, sub_group_id) = self {
+            Some(*sub_group_id)
         } else {
             None
         }
