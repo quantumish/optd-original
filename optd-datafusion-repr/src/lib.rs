@@ -4,8 +4,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use cost::{
-    adaptive_cost::DataFusionAdaptiveCostModel, base_cost::DataFusionBaseTableStats,
-    AdaptiveCostModel, BaseTableStats, RuntimeAdaptionStorage, DEFAULT_DECAY,
+    adaptive_cost::DataFusionAdaptiveCostModel, AdaptiveCostModel, DataFusionBaseTableStats,
+    RuntimeAdaptionStorage, DEFAULT_DECAY,
 };
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId, OptimizerProperties},
@@ -23,8 +23,10 @@ use properties::{
 };
 use rules::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
-    EliminateJoinRule, EliminateLimitRule, HashJoinRule, JoinAssocRule, JoinCommuteRule,
-    PhysicalConversionRule, ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule,
+    EliminateJoinRule, EliminateLimitRule, FilterAggTransposeRule, FilterCrossJoinTransposeRule,
+    FilterInnerJoinTransposeRule, FilterMergeRule, FilterProjectTransposeRule,
+    FilterSortTransposeRule, HashJoinRule, JoinAssocRule, JoinCommuteRule, PhysicalConversionRule,
+    ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule,
 };
 
 pub use optd_core::rel_node::Value;
@@ -34,6 +36,8 @@ mod explain;
 pub mod plan_nodes;
 pub mod properties;
 pub mod rules;
+#[cfg(test)]
+mod testing;
 
 pub struct DatafusionOptimizer {
     hueristic_optimizer: HeuristicsOptimizer<OptRelNodeTyp>,
@@ -92,6 +96,23 @@ impl DatafusionOptimizer {
         for rule in rules {
             rule_wrappers.push(RuleWrapper::new_cascades(rule));
         }
+        // add all filter pushdown rules as heuristic rules
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterProjectTransposeRule::new(),
+        )));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(FilterMergeRule::new())));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterCrossJoinTransposeRule::new(),
+        )));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterInnerJoinTransposeRule::new(),
+        )));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterSortTransposeRule::new(),
+        )));
+        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
+            FilterAggTransposeRule::new(),
+        )));
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(HashJoinRule::new()))); // 17
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(JoinCommuteRule::new()))); // 18
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(JoinAssocRule::new())));
@@ -161,7 +182,8 @@ impl DatafusionOptimizer {
             RuleWrapper::new_heuristic(Arc::new(EliminateFilterRule::new())),
         );
 
-        let cost_model = DataFusionAdaptiveCostModel::new(1000, BaseTableStats::default()); // very large decay
+        let cost_model =
+            DataFusionAdaptiveCostModel::new(1000, DataFusionBaseTableStats::default()); // very large decay
         let runtime_statistics = cost_model.get_runtime_map();
         let optimizer = CascadesOptimizer::new(
             rule_wrappers,
