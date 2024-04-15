@@ -320,6 +320,31 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         self.memo.merge_group(group_a, group_b);
     }
 
+    pub(super) fn get_sub_group_info(
+        &self,
+        group_id: GroupId,
+        physical_props: Arc<dyn PhysicalProps<T>>,
+    ) -> Option<SubGroupInfo<T>> {
+        self.memo.get_sub_group_info(group_id, physical_props)
+    }
+
+    pub(super) fn update_sub_group_info(
+        &mut self,
+        group_id: GroupId,
+        expr_id: Option<ExprId>,
+        sub_group_info: SubGroupInfo<T>,
+    ) {
+        self.memo.update_sub_group_info(group_id, expr_id, sub_group_info)
+    }
+
+    pub(super) fn update_expr_children_sub_group_id(
+        &mut self,
+        expr_id: ExprId,
+        required_props: Vec<Arc<dyn PhysicalProps<T>>>,
+    ) -> ExprId {
+        self.memo.update_expr_children_sub_group_id(expr_id, required_props)
+    }
+
     /// Get the properties of a Cascades group
     /// P is the type of the property you expect
     /// idx is the idx of the property you want. The order of properties is defined

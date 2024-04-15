@@ -104,8 +104,8 @@ impl<T: RelNodeTyp> OptimizeInputsTask<T> {
         let group_id = optimizer.get_group_id(expr_id);
         let sub_group_info = optimizer.get_sub_group_info(group_id, self.required_physical_props);
         let mut update_cost = false;
-        if sub_group_info.is_some() && sub_group_info.winner.is_some() {
-            let winner = sub_group_info.winner.unwrap();
+        if sub_group_info.is_some() && sub_group_info.unwrap().winner.is_some() {
+            let winner = sub_group_info.unwrap().winner.unwrap();
             if winner.impossible || &winner.cost > cost_so_far {
                 update_cost = true;
             }
