@@ -4,32 +4,33 @@ use std::sync::Arc;
 
 use crate::{
     cascades::{
-        optimizer::{GroupId, SubGroupId, ExprId},
+        optimizer::{GroupId, ExprId},
         memo::{SubGroupInfo, Winner},
         tasks::{optimize_expression::OptimizeExpressionTask, OptimizeInputsTask},
         CascadesOptimizer,
     },
+    physical_prop::PhysicalProps,
     cost::Cost,
     rel_node::RelNodeTyp,
 };
 
 use super::Task;
 
-pub struct OptimizeGroupTask {
+pub struct OptimizeGroupTask<T: RelNodeTyp> {
     group_id: GroupId,
     return_from_optimize_group_without_required_physical_props: bool,
-    required_physical_props: Arc<dyn RequiredPhysicalProps>
+    required_physical_props: Arc<dyn PhysicalProps<T>>
 }
 
-impl OptimizeGroupTask {
-    pub fn new(group_id: GroupId, required_physical_props: Arc<dyn RequiredPhysicalProps>) -> Self {
+impl<T:RelNodeTyp> OptimizeGroupTask<T> {
+    pub fn new(group_id: GroupId, required_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
         Self { group_id, return_from_optimize_group_without_required_physical_props:false, required_physical_props }
     }
     pub fn continue_from_optimize_group(&self) -> Self{
         Self { group_id: self.group_id, return_from_optimize_group_without_required_physical_props: true, required_physical_props: self.required_physical_props }
     }
 
-    fn update_winner<T: RelNodeTyp>(
+    fn update_winner(
         &self,
         expr_id: ExprId,
         cost_so_far: &Cost,
@@ -62,7 +63,7 @@ impl OptimizeGroupTask {
     }
 }
 
-impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
+impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask<T> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -83,7 +84,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
             let expr_id = group_info.winner.unwrap().expr_id;
             let expr = optimizer.get_expr_memoed(expr_id);
             //TODO: we need to get the children properties 
-            let new_expr= self.required_physical_props.enforce(expr.typ.clone(), expr.data.clone());
+            let new_expr= self.required_physical_props.enforce(expr);
             let expr_id = optimizer.add_group_expr(Some(self.group_id), new_expr);
             let cost_so_far = optimizer.get_expr_memoed(expr_id).cost; // new expr id cost
             optimizer.add_sub_group_expr(self.group_id, new_expr, self.required_physical_props);

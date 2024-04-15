@@ -13,22 +13,25 @@ use crate::{
     },
     rel_node::{RelNode, RelNodeTyp},
     rules::{OptimizeType, RuleMatcher},
+    physical_prop::PhysicalProps,
 };
 
 use super::Task;
 
-pub struct ApplyRuleTask {
+pub struct ApplyRuleTask<T:RelNodeTyp> {
     rule_id: RuleId,
     expr_id: ExprId,
     exploring: bool,
+    required_physical_props: Arc<dyn PhysicalProps<T>>,
 }
 
-impl ApplyRuleTask {
-    pub fn new(rule_id: RuleId, expr_id: ExprId, exploring: bool) -> Self {
+impl<T:RelNodeTyp> ApplyRuleTask<T> {
+    pub fn new(rule_id: RuleId, expr_id: ExprId, exploring: bool, required_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
         Self {
             rule_id,
             expr_id,
             exploring,
+            required_physical_props,
         }
     }
 }
@@ -173,7 +176,7 @@ fn match_and_pick<T: RelNodeTyp>(
     }
 }
 
-impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
+impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -236,7 +239,7 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
                     // the expr returned by heuristic rule is a brand new one
                     // so there's no optimizeExpressionTask for it in the original task list
                     // we should set exploring as false to both envoke tranform rule and impl rule for it
-                    tasks.push(Box::new(OptimizeExpressionTask::new(self.expr_id, false))
+                    tasks.push(Box::new(OptimizeExpressionTask::new(self.expr_id, false, self.required_physical_props.clone()))
                         as Box<dyn Task<T>>);
                 }
                 continue;
@@ -254,12 +257,12 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask {
                 trace!(event = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id, new_expr_id = %expr_id);
                 if expr_typ.is_logical() {
                     tasks.push(
-                        Box::new(OptimizeExpressionTask::new(expr_id, self.exploring))
+                        Box::new(OptimizeExpressionTask::new(expr_id, self.exploring, self.required_physical_props.clone()))
                             as Box<dyn Task<T>>,
                     );
                 } else {
                     tasks
-                        .push(Box::new(OptimizeInputsTask::new(expr_id, true)) as Box<dyn Task<T>>);
+                        .push(Box::new(OptimizeInputsTask::new(expr_id, true, self.required_physical_props.clone())) as Box<dyn Task<T>>);
                 }
             }
         }

@@ -7,3 +7,4 @@ pub mod optimizer;
 pub mod property;
 pub mod rel_node;
 pub mod rules;
+pub mod physical_prop;

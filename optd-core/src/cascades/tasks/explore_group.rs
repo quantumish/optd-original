@@ -1,5 +1,6 @@
 use anyhow::Result;
 use tracing::trace;
+use std::sync::Arc;
 
 use crate::{
     cascades::{
@@ -7,21 +8,23 @@ use crate::{
         tasks::OptimizeExpressionTask,
     },
     rel_node::RelNodeTyp,
+    physical_prop::PhysicalProps,
 };
 
 use super::Task;
 
-pub struct ExploreGroupTask {
+pub struct ExploreGroupTask<T: RelNodeTyp> {
     group_id: GroupId,
+    required_physical_props: Arc<dyn PhysicalProps<T>>,
 }
 
-impl ExploreGroupTask {
-    pub fn new(group_id: GroupId) -> Self {
-        Self { group_id }
+impl<T:RelNodeTyp> ExploreGroupTask<T> {
+    pub fn new(group_id: GroupId, required_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
+        Self { group_id, required_physical_props }
     }
 }
 
-impl<T: RelNodeTyp> Task<T> for ExploreGroupTask {
+impl<T: RelNodeTyp> Task<T> for ExploreGroupTask<T> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -38,7 +41,7 @@ impl<T: RelNodeTyp> Task<T> for ExploreGroupTask {
         for expr in exprs {
             let typ = optimizer.get_expr_memoed(expr).typ.clone();
             if typ.is_logical() {
-                tasks.push(Box::new(OptimizeExpressionTask::new(expr, true)) as Box<dyn Task<T>>);
+                tasks.push(Box::new(OptimizeExpressionTask::new(expr, true, self.required_physical_props.clone())) as Box<dyn Task<T>>);
             }
         }
         optimizer.mark_group_explored(self.group_id);

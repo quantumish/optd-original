@@ -8,6 +8,7 @@ use std::any::Any;
 
 use crate::{
     cost::Cost,
+    physical_prop::PhysicalProps,
     property::PropertyBuilderAny,
     rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp, Value},
 };
@@ -45,17 +46,17 @@ pub struct Winner {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct SubGroupInfo {
+pub struct SubGroupInfo<T: RelNodeTyp> {
     pub winner: Option<Winner>,
-    pub physical_props: Arc<dyn RequiredPhysicalProps>
+    pub physical_props: Arc<dyn PhysicalProps<T>>
 }
 
-pub(crate) struct SubGroup {
-    pub(crate) sub_group_info: SubGroupInfo,
+pub(crate) struct SubGroup<T: RelNodeTyp> {
+    pub(crate) sub_group_info: SubGroupInfo<T>,
     pub(crate) sub_group_exprs: HashSet<ExprId>,
 }
 
-pub(crate) struct Group {
+pub(crate) struct Group<T: RelNodeTyp> {
     /// sub_groups are for special requiredPhysicalProps
     ///     all exprs within one sub group are logically equivalent and provide same physical props
     ///     one expr can be in multiple sub groups
@@ -63,22 +64,22 @@ pub(crate) struct Group {
     ///     eg: a group of join exprs, there are two subgroups, 0 is for all exprs, others are for special requirement
     ///     sub_groups 0: <PhysicalProps:Any, SortMergeJoinExpr, HashJoinExpr, NLJoinExpr>
     ///     sub_groups 1: <PhysicalProps:Sort(a), SortMergeJoinExpr>
-    pub(crate) sub_groups: Vec<SubGroup>,
-    pub(crate) sub_group_physical_prop_map: HashMap<RequiredPhysicalProps, SubGroupId>,
+    pub(crate) sub_groups: Vec<SubGroup<T>>,
+    pub(crate) sub_group_physical_prop_map: HashMap<Arc<dyn PhysicalProps<T>>, SubGroupId>,
     pub(crate) properties: Arc<[Box<dyn Any + Send + Sync + 'static>]>,
 }
 
-impl Group{
-    pub fn new(defaul_physical_props: RequiredPhysicalProps) -> Self {
-        let mut group = Group {
+impl<T: RelNodeTyp> Group<T>{
+    pub fn new(defaul_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
+        let mut group = Group::<T> {
             sub_groups: Vec::new(),
             sub_group_physical_prop_map: HashMap::new(),
             properties: Vec::new(),
         };
-        let mut default_sub_group = SubGroup {
+        let mut default_sub_group = SubGroup::<T> {
             sub_group_info: SubGroupInfo{
                 winner: None,
-                physical_props: defaul_physical_props.clone()
+                physical_props: defaul_physical_props.any(),
             },
             sub_group_exprs: HashSet::new(),
         };
@@ -99,7 +100,7 @@ impl Group{
         self.sub_groups[0].sub_group_exprs.as_mut()
     }
 
-    pub fn default_sub_group(&self) -> &SubGroup {
+    pub fn default_sub_group(&self) -> &SubGroup<T> {
         &self.sub_groups[0]
     }
 }
@@ -123,16 +124,15 @@ pub struct Memo<T: RelNodeTyp> {
     expr_id_to_group_id: HashMap<ExprId, GroupId>,
     expr_id_to_expr_node: HashMap<ExprId, RelMemoNodeRef<T>>,
     expr_node_to_expr_id: HashMap<RelMemoNode<T>, ExprId>,
-    groups: HashMap<ReducedGroupId, Group>,
+    groups: HashMap<ReducedGroupId, Group<T>>,
     group_expr_counter: usize,
     merged_groups: HashMap<GroupId, GroupId>,
-    required_root_props: Arc<dyn RequiredPhysicalProps>,
-    physical_props: Arc<dyn PhysicalProps>,
+    required_root_props: Arc<dyn PhysicalProps<T>>,
     property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>,
 }
 
 impl<T: RelNodeTyp> Memo<T> {
-    pub fn new(property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>, required_root_props: Arc<dyn RequiredPhysicalProps>, physical_props: Arc<dyn PhysicalProps>) -> Self {
+    pub fn new(property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>, required_root_props: Arc<dyn PhysicalProps<T>>) -> Self {
         Self {
             expr_id_to_group_id: HashMap::new(),
             expr_id_to_expr_node: HashMap::new(),
@@ -141,7 +141,6 @@ impl<T: RelNodeTyp> Memo<T> {
             group_expr_counter: 0,
             merged_groups: HashMap::new(),
             required_root_props,
-            physical_props,
             property_builders,
         }
     }
@@ -291,7 +290,7 @@ impl<T: RelNodeTyp> Memo<T> {
             group.insert_expr_to_default_sub_group(expr_id);
             return;
         }
-        let mut group = Group::new(self.physical_props.Any());
+        let mut group = Group::new(self.required_root_props.Any());
         group.properties = self.infer_properties(memo_node).into();
         group.insert_expr_to_default_sub_group(expr_id);
         self.groups.insert(group_id, group);
@@ -521,7 +520,7 @@ impl<T: RelNodeTyp> Memo<T> {
     }
 
     pub fn get_sub_group_info(&self, group_id: GroupId,
-        required_physical_props: &dyn RequiredPhysicalProps) -> Option<SubGroupInfo> {
+        required_physical_props: Arc<dyn PhysicalProps<T>>) -> Option<SubGroupInfo<T>> {
         let group = self.groups.get(&self.get_reduced_group_id(group_id)).unwrap();
         let sub_group_id = group.sub_group_physical_prop_map.get(required_physical_props);
         if let Some(sub_group_id) = sub_group_id {
@@ -530,7 +529,7 @@ impl<T: RelNodeTyp> Memo<T> {
         None
     }
 
-    pub fn update_expr_children_sub_group_id(&self, expr_id: ExprId, children_props: Vec<Arc<dyn RequiredPhysicalProps>>) -> ExprId{
+    pub fn update_expr_children_sub_group_id(&self, expr_id: ExprId, children_props: Vec<Arc<dyn PhysicalProps<T>>>) -> ExprId{
         let memo_node = self.get_expr_memoed(expr_id);
         let children = memo_node.children.iter().zip(children_props.iter()).map(|(child, prop)| {
             let group_id = child.0;
@@ -561,7 +560,7 @@ impl<T: RelNodeTyp> Memo<T> {
         new_expr_id
     }
 
-    pub fn get_group_info(&self, group_id: GroupId) -> SubGroupInfo {
+    pub fn get_group_info(&self, group_id: GroupId) -> SubGroupInfo<T> {
         self.groups
             .get(&self.get_reduced_group_id(group_id))
             .as_ref()
@@ -571,7 +570,7 @@ impl<T: RelNodeTyp> Memo<T> {
             .clone()
     }
 
-    pub(crate) fn get_group(&self, group_id: GroupId) -> &Group {
+    pub(crate) fn get_group(&self, group_id: GroupId) -> &Group<T> {
         self.groups
             .get(&self.get_reduced_group_id(group_id))
             .as_ref()
@@ -582,7 +581,7 @@ impl<T: RelNodeTyp> Memo<T> {
         &mut self,
         group_id: GroupId,
         expr_id: Option<ExprId>,
-        sub_group_info: SubGroupInfo,
+        sub_group_info: SubGroupInfo<T>,
     ) {
         if let Some(ref winner) = sub_group_info.winner {
             if !winner.impossible {
@@ -615,7 +614,7 @@ impl<T: RelNodeTyp> Memo<T> {
             .insert(sub_group_info.physical_props.clone(), SubGroupId(sub_group_id));
     }
 
-    pub fn update_group_info(&mut self, group_id: GroupId, group_info: SubGroupInfo) {
+    pub fn update_group_info(&mut self, group_id: GroupId, group_info: SubGroupInfo<T>) {
         if let Some(ref winner) = group_info.winner {
             if !winner.impossible {
                 assert!(

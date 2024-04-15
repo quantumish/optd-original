@@ -7,15 +7,11 @@ use std::{
 use anyhow::Result;
 
 use crate::{
-    cost::CostModel,
-    optimizer::Optimizer,
-    property::{PropertyBuilder, PropertyBuilderAny},
-    rel_node::{RelNodeMetaMap, RelNodeRef, RelNodeTyp},
-    rules::RuleWrapper,
+    cost::CostModel, optimizer::Optimizer, physical_prop::PhysicalProps, property::{PropertyBuilder, PropertyBuilderAny}, rel_node::{RelNodeMetaMap, RelNodeRef, RelNodeTyp}, rules::RuleWrapper
 };
 
 use super::{
-    memo::{GroupInfo, RelMemoNodeRef},
+    memo::{SubGroupInfo, RelMemoNodeRef},
     tasks::OptimizeGroupTask,
     Memo, Task,
 };
@@ -46,6 +42,7 @@ pub struct CascadesOptimizer<T: RelNodeTyp> {
     disabled_rules: HashSet<usize>,
     cost: Arc<dyn CostModel<T>>,
     property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>,
+    root_physical_properties: Arc<dyn PhysicalProps<T>>,
     pub ctx: OptimizerContext,
     pub prop: OptimizerProperties,
 }
@@ -85,19 +82,21 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         rules: Vec<Arc<RuleWrapper<T, Self>>>,
         cost: Box<dyn CostModel<T>>,
         property_builders: Vec<Box<dyn PropertyBuilderAny<T>>>,
+        root_physical_properties: Arc<dyn PhysicalProps<T>>
     ) -> Self {
-        Self::new_with_prop(rules, cost, property_builders, Default::default())
+        Self::new_with_prop(rules, cost, property_builders, root_physical_properties, Default::default())
     }
 
     pub fn new_with_prop(
         rules: Vec<Arc<RuleWrapper<T, Self>>>,
         cost: Box<dyn CostModel<T>>,
         property_builders: Vec<Box<dyn PropertyBuilderAny<T>>>,
+        root_physical_properties: Arc<dyn PhysicalProps<T>>,
         prop: OptimizerProperties,
     ) -> Self {
         let tasks = VecDeque::new();
         let property_builders: Arc<[_]> = property_builders.into();
-        let memo = Memo::new(property_builders.clone());
+        let memo = Memo::new(property_builders.clone(), root_physical_properties.clone());
         Self {
             memo,
             tasks,
@@ -107,6 +106,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
             cost: cost.into(),
             ctx: OptimizerContext::default(),
             property_builders,
+            root_physical_properties,
             prop,
             disabled_rules: HashSet::new(),
         }
@@ -195,7 +195,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
 
     /// Clear the memo table and all optimizer states.
     pub fn step_clear(&mut self) {
-        self.memo = Memo::new(self.property_builders.clone());
+        self.memo = Memo::new(self.property_builders.clone(), self.root_physical_properties.clone());
         self.fired_rules.clear();
         self.explored_group.clear();
     }
@@ -208,7 +208,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     /// Optimize a `RelNode`.
     pub fn step_optimize_rel(&mut self, root_rel: RelNodeRef<T>) -> Result<GroupId> {
         let (group_id, _) = self.add_group_expr(root_rel, None);
-        self.fire_optimize_tasks(group_id)?;
+        self.fire_optimize_tasks(group_id, self.root_physical_properties.clone())?;
         Ok(group_id)
     }
 
@@ -221,9 +221,9 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         self.memo.get_best_group_binding(group_id, meta)
     }
 
-    fn fire_optimize_tasks(&mut self, group_id: GroupId) -> Result<()> {
+    fn fire_optimize_tasks(&mut self, group_id: GroupId, root_physical_properties: Arc<dyn PhysicalProps<T>>) -> Result<()> {
         self.tasks
-            .push_back(Box::new(OptimizeGroupTask::new(group_id)));
+            .push_back(Box::new(OptimizeGroupTask::new(group_id, root_physical_properties.clone())));
         // get the task from the stack
         self.ctx.budget_used = false;
         let plan_space_begin = self.memo.compute_plan_space();
@@ -258,7 +258,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
 
     fn optimize_inner(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
         let (group_id, _) = self.add_group_expr(root_rel, None);
-        self.fire_optimize_tasks(group_id)?;
+        self.fire_optimize_tasks(group_id, self.root_physical_properties.clone())?;
         self.memo.get_best_group_binding(group_id, &mut None)
     }
 
@@ -308,11 +308,11 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         });
     }
 
-    pub(super) fn get_group_info(&self, group_id: GroupId) -> GroupInfo {
+    pub(super) fn get_group_info(&self, group_id: GroupId) -> SubGroupInfo<T> {
         self.memo.get_group_info(group_id)
     }
 
-    pub(super) fn update_group_info(&mut self, group_id: GroupId, group_info: GroupInfo) {
+    pub(super) fn update_group_info(&mut self, group_id: GroupId, group_info: SubGroupInfo<T>) {
         self.memo.update_group_info(group_id, group_info)
     }
 

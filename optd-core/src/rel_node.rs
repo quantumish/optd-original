@@ -11,7 +11,7 @@ use std::{
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{cascades::GroupId, cascades::SubGroupId, cost::Cost};
+use crate::{cascades::{GroupId, SubGroupId}, cost::Cost};
 
 pub type RelNodeRef<T> = Arc<RelNode<T>>;
 

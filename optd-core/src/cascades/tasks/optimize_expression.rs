@@ -1,5 +1,7 @@
 use anyhow::Result;
 use tracing::trace;
+use std::sync::Arc;
+
 
 use crate::{
     cascades::{
@@ -8,18 +10,20 @@ use crate::{
     },
     rel_node::{RelNodeTyp, Value},
     rules::RuleMatcher,
+    physical_prop::PhysicalProps
 };
 
 use super::Task;
 
-pub struct OptimizeExpressionTask {
+pub struct OptimizeExpressionTask<T: RelNodeTyp> {
     expr_id: ExprId,
     exploring: bool,
+    required_physical_props: Arc<dyn PhysicalProps<T>>,
 }
 
-impl OptimizeExpressionTask {
-    pub fn new(expr_id: ExprId, exploring: bool) -> Self {
-        Self { expr_id, exploring }
+impl<T:RelNodeTyp> OptimizeExpressionTask<T> {
+    pub fn new(expr_id: ExprId, exploring: bool, required_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
+        Self { expr_id, exploring, required_physical_props }
     }
 }
 
@@ -35,7 +39,7 @@ fn top_matches<T: RelNodeTyp>(
     }
 }
 
-impl<T: RelNodeTyp> Task<T> for OptimizeExpressionTask {
+impl<T: RelNodeTyp> Task<T> for OptimizeExpressionTask<T> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -59,11 +63,13 @@ impl<T: RelNodeTyp> Task<T> for OptimizeExpressionTask {
             }
             if top_matches(rule.matcher(), expr.typ.clone(), expr.data.clone()) {
                 tasks.push(
-                    Box::new(ApplyRuleTask::new(rule_id, self.expr_id, self.exploring))
+                    Box::new(ApplyRuleTask::new(rule_id, self.expr_id, self.exploring, self.required_physical_props.clone()))
                         as Box<dyn Task<T>>,
                 );
                 for &input_group_id in &expr.children {
-                    tasks.push(Box::new(ExploreGroupTask::new(input_group_id)) as Box<dyn Task<T>>);
+                    // Explore the whole group instead of the specigic SubGroup the expr children points to
+                    // As explore task is for logical transformations
+                    tasks.push(Box::new(ExploreGroupTask::new(input_group_id.0, self.required_physical_props.clone())) as Box<dyn Task<T>>);
                 }
             }
         }

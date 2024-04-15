@@ -1,5 +1,6 @@
 use anyhow::Result;
 use tracing::trace;
+use std::sync::Arc;
 
 use crate::{
     cascades::{
@@ -10,6 +11,7 @@ use crate::{
     },
     cost::Cost,
     rel_node::RelNodeTyp,
+    physical_prop::PhysicalProps,
 };
 
 use super::Task;
@@ -21,16 +23,16 @@ struct ContinueTask {
     return_from_optimize_group: bool,
 }
 
-pub struct OptimizeInputsTask {
+pub struct OptimizeInputsTask<T: RelNodeTyp> {
     expr_id: ExprId,
     continue_from: Option<ContinueTask>,
     pruning: bool,
-    required_physical_props: Arc<dyn RequiredPhysicalProps>,
-    required_children_props: Option<Vec<Arc<dyn RequiredPhysicalProps>>>
+    required_physical_props: Arc<dyn PhysicalProps<T>>,
+    required_children_props: Option<Vec<Arc<dyn PhysicalProps<T>>>>
 }
 
-impl OptimizeInputsTask {
-    pub fn new(expr_id: ExprId, pruning: bool, required_physical_props: Arc<dyn RequiredPhysicalProps>) -> Self {
+impl<T: RelNodeTyp> OptimizeInputsTask<T> {
+    pub fn new(expr_id: ExprId, pruning: bool, required_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
         Self {
             expr_id,
             continue_from: None,
@@ -51,7 +53,7 @@ impl OptimizeInputsTask {
     }
 
     /// first invoke of this task, compute the cost of children
-    fn first_invoke<T: RelNodeTyp>(
+    fn first_invoke(
         &self,
         children: &[GroupId],
         optimizer: &mut CascadesOptimizer<T>,
@@ -93,7 +95,7 @@ impl OptimizeInputsTask {
         false
     }
 
-    fn update_winner<T: RelNodeTyp>(
+    fn update_winner(
         &self,
         cost_so_far: &Cost,
         optimizer: &mut CascadesOptimizer<T>,
@@ -127,7 +129,7 @@ impl OptimizeInputsTask {
     }
 }
 
-impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
+impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask<T> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -290,7 +292,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
             // 3. no required_children_props constraints, like any ordering
             // One situation we can't provide the required physical properties:
             // 1. current expr cannot provide nor pass the required physical properties to its children, like hash join 
-            if !self.required_physical_props.can_provide(){
+            if !self.required_physical_props.can_provide(expr.typ, expr.data){
                 trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
                 return Ok(vec![]);
             }
