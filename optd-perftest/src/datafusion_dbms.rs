@@ -7,6 +7,7 @@ use std::{
 use crate::{
     benchmark::Benchmark,
     cardtest::CardtestRunnerDBMSHelper,
+    job::{JobConfig, JobKit},
     tpch::{TpchConfig, TpchKit},
 };
 use async_trait::async_trait;
@@ -27,14 +28,14 @@ use datafusion_optd_cli::helper::unescape_input;
 use lazy_static::lazy_static;
 use optd_datafusion_bridge::{DatafusionCatalog, OptdQueryPlanner};
 use optd_datafusion_repr::{
-    cost::{base_cost::DataFusionBaseTableStats, BaseTableStats, PerTableStats},
+    cost::{DataFusionBaseTableStats, DataFusionPerTableStats},
     DatafusionOptimizer,
 };
 use regex::Regex;
 
 pub struct DatafusionDBMS {
     workspace_dpath: PathBuf,
-    use_cached_stats: bool,
+    rebuild_cached_stats: bool,
     ctx: SessionContext,
 }
 
@@ -50,12 +51,19 @@ impl CardtestRunnerDBMSHelper for DatafusionDBMS {
     ) -> anyhow::Result<Vec<usize>> {
         let base_table_stats = self.get_benchmark_stats(benchmark).await?;
         self.clear_state(Some(base_table_stats)).await?;
-        // Create the tables. This must be done after clear_state because that clears everything
-        let tpch_kit = TpchKit::build(&self.workspace_dpath)?;
-        self.create_tpch_tables(&tpch_kit).await?;
+
         match benchmark {
-            Benchmark::Test => unimplemented!(),
-            Benchmark::Tpch(tpch_config) => self.eval_tpch_estcards(tpch_config).await,
+            Benchmark::Tpch(tpch_config) => {
+                // Create the tables. This must be done after clear_state because that clears everything
+                let tpch_kit = TpchKit::build(&self.workspace_dpath)?;
+                self.create_tpch_tables(&tpch_kit).await?;
+                self.eval_tpch_estcards(tpch_config).await
+            }
+            Benchmark::Job(job_config) => {
+                let job_kit = JobKit::build(&self.workspace_dpath)?;
+                self.create_job_tables(&job_kit).await?;
+                self.eval_job_estcards(job_config).await
+            }
         }
     }
 }
@@ -63,16 +71,16 @@ impl CardtestRunnerDBMSHelper for DatafusionDBMS {
 impl DatafusionDBMS {
     pub async fn new<P: AsRef<Path>>(
         workspace_dpath: P,
-        use_cached_stats: bool,
+        rebuild_cached_stats: bool,
     ) -> anyhow::Result<Self> {
         Ok(DatafusionDBMS {
             workspace_dpath: workspace_dpath.as_ref().to_path_buf(),
-            use_cached_stats,
+            rebuild_cached_stats,
             ctx: Self::new_session_ctx(None).await?,
         })
     }
 
-    /// Reset [`SessionContext`] to a clean state. But initializa the optimizer
+    /// Reset [`SessionContext`] to a clean state. But initialize the optimizer
     /// with pre-generated statistics.
     ///
     /// A more ideal way to generate statistics would be to use the `ANALYZE`
@@ -144,7 +152,28 @@ impl DatafusionDBMS {
         tpch_kit.gen_queries(tpch_config)?;
 
         let mut estcards = vec![];
-        for (_, sql_fpath) in tpch_kit.get_sql_fpath_ordered_iter(tpch_config)? {
+        for (query_id, sql_fpath) in tpch_kit.get_sql_fpath_ordered_iter(tpch_config)? {
+            println!(
+                "about to evaluate datafusion's estcard for TPC-H Q{}",
+                query_id
+            );
+            let sql = fs::read_to_string(sql_fpath)?;
+            let estcard = self.eval_query_estcard(&sql).await?;
+            estcards.push(estcard);
+        }
+
+        Ok(estcards)
+    }
+
+    async fn eval_job_estcards(&self, job_config: &JobConfig) -> anyhow::Result<Vec<usize>> {
+        let job_kit = JobKit::build(&self.workspace_dpath)?;
+
+        let mut estcards = vec![];
+        for (query_id, sql_fpath) in job_kit.get_sql_fpath_ordered_iter(job_config)? {
+            println!(
+                "about to evaluate datafusion's estcard for TPC-H Q{}",
+                query_id
+            );
             let sql = fs::read_to_string(sql_fpath)?;
             let estcard = self.eval_query_estcard(&sql).await?;
             estcards.push(estcard);
@@ -209,18 +238,17 @@ impl DatafusionDBMS {
             .workspace_dpath
             .join("datafusion_stats_caches")
             .join(format!("{}.json", benchmark_fname));
-        if self.use_cached_stats && stats_cache_fpath.exists() {
+        if !self.rebuild_cached_stats && stats_cache_fpath.exists() {
             let file = File::open(&stats_cache_fpath)?;
             Ok(serde_json::from_reader(file)?)
         } else {
             let base_table_stats = match benchmark {
                 Benchmark::Tpch(tpch_config) => self.get_tpch_stats(tpch_config).await?,
-                _ => unimplemented!(),
+                Benchmark::Job(job_config) => self.get_job_stats(job_config).await?,
             };
 
-            // regardless of whether self.use_cached_stats is true or false, we want to update the cache
-            // this way, even if we choose not to read from the cache, the cache still always has the
-            // most up to date version of the stats
+            // When self.rebuild_cached_optd_stats is true, we *don't read* from the cache but we
+            //   still *do write* to the cache.
             fs::create_dir_all(stats_cache_fpath.parent().unwrap())?;
             let file = File::create(&stats_cache_fpath)?;
             serde_json::to_writer(file, &base_table_stats)?;
@@ -231,6 +259,19 @@ impl DatafusionDBMS {
 
     async fn create_tpch_tables(&mut self, tpch_kit: &TpchKit) -> anyhow::Result<()> {
         let ddls = fs::read_to_string(&tpch_kit.schema_fpath)?;
+        let ddls = ddls
+            .split(';')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
+        for ddl in ddls {
+            Self::execute(&self.ctx, ddl).await?;
+        }
+        Ok(())
+    }
+
+    async fn create_job_tables(&mut self, job_kit: &JobKit) -> anyhow::Result<()> {
+        let ddls = fs::read_to_string(&job_kit.schema_fpath)?;
         let ddls = ddls
             .split(';')
             .map(|s| s.trim())
@@ -312,29 +353,84 @@ impl DatafusionDBMS {
         for ddl in ddls {
             Self::execute(&ctx, ddl).await?;
         }
-        let mut base_table_stats = BaseTableStats::default();
+
+        // Build the DataFusionBaseTableStats object.
+        let mut base_table_stats = DataFusionBaseTableStats::default();
         for tbl_fpath in tpch_kit.get_tbl_fpath_iter(tpch_config).unwrap() {
-            let tbl_name = tbl_fpath.file_stem().unwrap().to_str().unwrap();
+            let tbl_name = TpchKit::get_tbl_name_from_tbl_fpath(&tbl_fpath);
             let schema = ctx
                 .catalog("datafusion")
                 .unwrap()
                 .schema("public")
                 .unwrap()
-                .table(tbl_name)
+                .table(&tbl_name)
                 .await
                 .unwrap()
                 .schema();
-            // Load the .tbl file into record batches using arrow.
-            let tbl_file = fs::File::open(&tbl_fpath)?;
-            let csv_reader = ReaderBuilder::new(schema.clone())
-                .has_header(false)
-                .with_delimiter(b'|')
-                .build(tbl_file)
-                .unwrap();
-            let batch_iter = RecordBatchIterator::new(csv_reader, schema);
+
             base_table_stats.insert(
                 tbl_name.to_string(),
-                PerTableStats::from_record_batches(batch_iter)?,
+                DataFusionPerTableStats::from_record_batches(|| {
+                    let tbl_file = fs::File::open(&tbl_fpath)?;
+                    let csv_reader1 = ReaderBuilder::new(schema.clone())
+                        .has_header(false)
+                        .with_delimiter(b'|')
+                        .build(tbl_file)
+                        .unwrap();
+                    Ok(RecordBatchIterator::new(csv_reader1, schema.clone()))
+                })?,
+            );
+        }
+
+        Ok(base_table_stats)
+    }
+
+    async fn get_job_stats(
+        &mut self,
+        job_config: &JobConfig,
+    ) -> anyhow::Result<DataFusionBaseTableStats> {
+        // Generate the tables
+        let job_kit = JobKit::build(&self.workspace_dpath)?;
+        job_kit.download_tables(job_config)?;
+
+        // To get the schema of each table.
+        let ctx = Self::new_session_ctx(None).await?;
+        let ddls = fs::read_to_string(&job_kit.schema_fpath)?;
+        let ddls = ddls
+            .split(';')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
+        for ddl in ddls {
+            Self::execute(&ctx, ddl).await?;
+        }
+
+        // Build the DataFusionBaseTableStats object.
+        let mut base_table_stats = DataFusionBaseTableStats::default();
+        for tbl_fpath in job_kit.get_tbl_fpath_iter().unwrap() {
+            let tbl_name = JobKit::get_tbl_name_from_tbl_fpath(&tbl_fpath);
+            let schema = ctx
+                .catalog("datafusion")
+                .unwrap()
+                .schema("public")
+                .unwrap()
+                .table(&tbl_name)
+                .await
+                .unwrap()
+                .schema();
+
+            base_table_stats.insert(
+                tbl_name.to_string(),
+                DataFusionPerTableStats::from_record_batches_job(|| {
+                    let tbl_file = fs::File::open(&tbl_fpath)?;
+                    let csv_reader1 = ReaderBuilder::new(schema.clone())
+                        .has_header(false)
+                        .with_delimiter(b',')
+                        .with_escape(b'\\')
+                        .build(tbl_file)
+                        .unwrap();
+                    Ok(RecordBatchIterator::new(csv_reader1, schema.clone()))
+                })?,
             );
         }
 
