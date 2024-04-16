@@ -17,8 +17,7 @@ fn merge_exprs(first: ExprList, second: ExprList) -> ExprList {
 
 // pushes projections through filters
 // adds a projection node after a filter node 
-// only keeping necessary columns (proj node exprs + filter col exprs))
-// TODO
+// only keeping necessary columns (proj node exprs + filter col exprs)
 define_rule!(
     ProjectFilterTransposeRule,
     apply_projection_filter_transpose,

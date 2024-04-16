@@ -14,8 +14,5 @@ fn apply_projection_agg_pushdown(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
     ProjectAggregatePushDownPicks { child, agg_exprs, agg_groups, exprs }: ProjectAggregatePushDownPicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
-
-
-
     vec![]
 }

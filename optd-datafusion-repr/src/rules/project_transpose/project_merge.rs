@@ -9,13 +9,6 @@ use crate::plan_nodes::{
 use crate::rules::macros::define_rule;
 
 use super::project_transpose_common::ProjectionMapping;
-// test cases for project merge
-// create table t1 (v1 int, v2 int);
-// explain select v1,v2 from (select v1,v2 from t1);
-
-// create table t3 (v1 int, v2 int, v3 int);
-// explain select v2,v3 from (select v1,v3,v2 from t3);
-// explain select v1,v2,v3 from (select v1,v3,v2 from t3);
 
 // Proj (Proj A) -> Proj A
 // merges/removes projections
@@ -44,8 +37,6 @@ fn apply_projection_merge(
     let Some(res_exprs) = mapping.rewrite_projection(&exprs2, true) else {
         return vec![];
     };
-
-    // println!("res_exprs: {:?}\n exprs1: {:?}\n child: {:?}\n exprs2: {:?}\n", res_exprs, exprs1, child, exprs2);
 
     let node: LogicalProjection = LogicalProjection::new(
         child,
