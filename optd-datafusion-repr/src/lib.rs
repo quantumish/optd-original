@@ -88,6 +88,7 @@ impl DatafusionOptimizer {
             Arc::new(EliminateDuplicatedSortExprRule::new()),
             Arc::new(EliminateDuplicatedAggExprRule::new()),
             Arc::new(ProjectMergeRule::new()),
+            Arc::new(FilterMergeRule::new()),
         ]
     }
 
@@ -98,9 +99,7 @@ impl DatafusionOptimizer {
         for rule in rules {
             rule_wrappers.push(RuleWrapper::new_cascades(rule));
         }
-        // rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
-        //     ProjectMergeRule::new(),
-        // )));
+        // project transpose rules
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
             ProjectFilterTransposeRule::new(),
         )));
@@ -108,7 +107,6 @@ impl DatafusionOptimizer {
         rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
             FilterProjectTransposeRule::new(),
         )));
-        rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(FilterMergeRule::new())));
         rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
             FilterCrossJoinTransposeRule::new(),
         )));

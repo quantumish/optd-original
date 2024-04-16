@@ -42,13 +42,15 @@ fn apply_projection_merge(
     };
 
     let Some(res_exprs) = mapping.rewrite_projection(&exprs2, true) else {
-        println!("reached something that should never happen!!!!");
         return vec![];
     };
+
+    // println!("res_exprs: {:?}\n exprs1: {:?}\n child: {:?}\n exprs2: {:?}\n", res_exprs, exprs1, child, exprs2);
 
     let node: LogicalProjection = LogicalProjection::new(
         child,
         res_exprs,
     );
+
     vec![node.into_rel_node().as_ref().clone()]
 }
