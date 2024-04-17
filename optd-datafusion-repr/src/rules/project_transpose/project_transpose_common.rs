@@ -103,12 +103,9 @@ impl ProjectionMapping {
         }
         let mut new_projection_exprs = Vec::new();
         if is_top_mapped {
-            if exprs.len() > self.forward.len() {
-                return None;
-            }
             let exprs = exprs.to_vec();
-            for i in &self.forward {
-                let col_idx = self.projection_col_maps_to(*i).unwrap();
+            for i in 0..self.forward.len() {
+                let col_idx = self.projection_col_maps_to(i).unwrap();
                 new_projection_exprs.push(exprs[col_idx].clone());
             };
         } else {
