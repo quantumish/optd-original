@@ -11,9 +11,8 @@ mod project_transpose;
 // pub use filter_join::FilterJoinPullUpRule;
 pub use project_transpose::{
     project_merge::ProjectMergeRule, 
-    project_filter_transpose::ProjectFilterTransposeRule,
+    project_filter_transpose::{ProjectFilterTransposeRule, FilterProjectTransposeRule},
     project_join_transpose::ProjectionPullUpJoin,
-    filter_project_transpose::FilterProjectTransposeRule,
 };
 pub use eliminate_duplicated_expr::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule,
