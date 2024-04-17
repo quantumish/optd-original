@@ -29,7 +29,7 @@ impl ProjectionMapping {
             let col_idx = col_expr.index();
             forward.push(col_idx);
             if col_idx >= backward.len() {
-                backward.resize(col_idx+1, None);
+                backward.resize(col_idx + 1, None);
             }
             backward[col_idx] = Some(i);
         }
@@ -44,9 +44,9 @@ impl ProjectionMapping {
         self.backward.get(col_idx).copied().flatten()
     }
 
-    /// Remaps all column refs in the join condition based on a 
+    /// Remaps all column refs in the join condition based on a
     /// removed bottom projection node
-    /// 
+    ///
     /// removed node:
     /// Join { cond: #0=#5 }
     ///      Projection { exprs: [#1, #0, #3, #5, #4] } --> has mapping
@@ -60,18 +60,19 @@ impl ProjectionMapping {
             } else {
                 Some(col_idx - schema_size + child_schema_len)
             }
-        }).unwrap()
-    }   
+        })
+        .unwrap()
+    }
 
-    /// Remaps all column refs in the filter condition based on an added or 
+    /// Remaps all column refs in the filter condition based on an added or
     /// removed bottom projection node
-    /// 
+    ///
     /// added node:
     /// Filter { cond: #1=0 and #4=1 }
     /// ---->
     /// Filter { cond: #0=0 and #5=1 }
     ///      Projection { exprs: [#1, #0, #3, #5, #4] } --> has mapping
-    /// 
+    ///
     /// removed node:
     /// Filter { cond: #0=0 and #5=1 }
     ///      Projection { exprs: [#1, #0, #3, #5, #4] } --> has mapping
@@ -84,21 +85,22 @@ impl ProjectionMapping {
             } else {
                 self.projection_col_maps_to(col_idx)
             }
-        }).unwrap()
+        })
+        .unwrap()
     }
 
-    /// If the top projection node is mapped, rewrites the bottom projection's 
-    /// exprs based on the top projection's mapped col refs. 
-    /// 
+    /// If the top projection node is mapped, rewrites the bottom projection's
+    /// exprs based on the top projection's mapped col refs.
+    ///
     /// If the bottom projection node is mapped, rewrites the top projection's
     /// exprs based on the bottom projection's mapped col refs.
-    /// 
+    ///
     /// Projection { exprs: [#1, #0] }
     ///     Projection { exprs: [#0, #2] }
     /// ---->
     /// Projection { exprs: [#2, #0] }
     pub fn rewrite_projection(&self, exprs: &ExprList, is_top_mapped: bool) -> Option<ExprList> {
-        if exprs.len() == 0 {
+        if exprs.is_empty() {
             return None;
         }
         let mut new_projection_exprs = Vec::new();
@@ -107,14 +109,14 @@ impl ProjectionMapping {
             for i in 0..self.forward.len() {
                 let col_idx = self.projection_col_maps_to(i).unwrap();
                 new_projection_exprs.push(exprs[col_idx].clone());
-            };
+            }
         } else {
             for i in exprs.to_vec() {
                 let col_ref = ColumnRefExpr::from_rel_node(i.into_rel_node()).unwrap();
                 let col_idx = self.original_col_maps_to(col_ref.index()).unwrap();
                 let col: Expr = ColumnRefExpr::new(col_idx).into_expr();
                 new_projection_exprs.push(col);
-            };    
+            }
         }
         Some(ExprList::new(new_projection_exprs))
     }

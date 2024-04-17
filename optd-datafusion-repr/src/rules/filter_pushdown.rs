@@ -421,8 +421,8 @@ mod tests {
     use crate::{
         plan_nodes::{
             BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogOpExpr, LogOpType,
-            LogicalAgg, LogicalFilter, LogicalJoin, LogicalScan, LogicalSort,
-            OptRelNode, OptRelNodeTyp,
+            LogicalAgg, LogicalFilter, LogicalJoin, LogicalScan, LogicalSort, OptRelNode,
+            OptRelNodeTyp,
         },
         rules::{
             FilterAggTransposeRule, FilterInnerJoinTransposeRule, FilterMergeRule,

@@ -26,8 +26,8 @@ use rules::{
     EliminateJoinRule, EliminateLimitRule, FilterAggTransposeRule, FilterCrossJoinTransposeRule,
     FilterInnerJoinTransposeRule, FilterMergeRule, FilterProjectTransposeRule,
     FilterSortTransposeRule, HashJoinRule, JoinAssocRule, JoinCommuteRule, PhysicalConversionRule,
-    ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule, 
-    ProjectMergeRule, ProjectFilterTransposeRule,
+    ProjectFilterTransposeRule, ProjectMergeRule, ProjectionPullUpJoin, SimplifyFilterRule,
+    SimplifyJoinCondRule,
 };
 
 pub use optd_core::rel_node::Value;

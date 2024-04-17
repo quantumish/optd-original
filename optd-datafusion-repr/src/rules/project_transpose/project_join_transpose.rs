@@ -1,20 +1,20 @@
-use crate::Rule;
 use crate::HashMap;
+use crate::Rule;
 
 use optd_core::rules::RuleMatcher;
 use std::sync::Arc;
 use std::vec;
 
+use crate::rules::macros::define_rule;
 use optd_core::optimizer::Optimizer;
 use optd_core::rel_node::RelNode;
-use crate::rules::macros::define_rule;
 
+use super::project_transpose_common::ProjectionMapping;
 use crate::plan_nodes::{
-    ColumnRefExpr, Expr, ExprList, JoinType, LogicalJoin, LogicalProjection, 
-    OptRelNode, OptRelNodeTyp, PlanNode,
+    ColumnRefExpr, Expr, ExprList, JoinType, LogicalJoin, LogicalProjection, OptRelNode,
+    OptRelNodeTyp, PlanNode,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
-use super::project_transpose_common::ProjectionMapping;
 
 // (Proj A) join B -> (Proj (A join B))
 define_rule!(
