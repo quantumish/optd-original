@@ -13,35 +13,37 @@ use crate::{
     },
     rel_node::{RelNode, RelNodeTyp},
     rules::{OptimizeType, RuleMatcher},
-    physical_prop::PhysicalProps,
+    physical_prop::PhysicalPropsBuilder,
 };
 
 use super::Task;
 
-pub struct ApplyRuleTask<T:RelNodeTyp> {
+pub struct ApplyRuleTask<T:RelNodeTyp, P:PhysicalPropsBuilder<T>> {
     rule_id: RuleId,
     expr_id: ExprId,
     exploring: bool,
-    required_physical_props: Arc<dyn PhysicalProps<T>>,
+    physical_props_builder: Arc<P>,
+    required_physical_props: P::PhysicalProps,
 }
 
-impl<T:RelNodeTyp> ApplyRuleTask<T> {
-    pub fn new(rule_id: RuleId, expr_id: ExprId, exploring: bool, required_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
+impl<T:RelNodeTyp, P: PhysicalPropsBuilder<T>> ApplyRuleTask<T, P> {
+    pub fn new(rule_id: RuleId, expr_id: ExprId, exploring: bool, physical_props_builder: Arc<P>, required_physical_props: P::PhysicalProps) -> Self {
         Self {
             rule_id,
             expr_id,
             exploring,
+            physical_props_builder,
             required_physical_props,
         }
     }
 }
 
-fn match_node<T: RelNodeTyp>(
+fn match_node<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
     typ: &T,
     children: &[RuleMatcher<T>],
     pick_to: Option<usize>,
     node: RelMemoNodeRef<T>,
-    optimizer: &CascadesOptimizer<T>,
+    optimizer: &CascadesOptimizer<T, P>,
 ) -> Vec<HashMap<usize, RelNode<T>>> {
     if let RuleMatcher::PickMany { .. } | RuleMatcher::IgnoreMany = children.last().unwrap() {
     } else {
@@ -128,19 +130,19 @@ fn match_node<T: RelNodeTyp>(
     picks
 }
 
-fn match_and_pick_expr<T: RelNodeTyp>(
+fn match_and_pick_expr<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
     matcher: &RuleMatcher<T>,
     expr_id: ExprId,
-    optimizer: &CascadesOptimizer<T>,
+    optimizer: &CascadesOptimizer<T, P>,
 ) -> Vec<HashMap<usize, RelNode<T>>> {
     let node = optimizer.get_expr_memoed(expr_id);
     match_and_pick(matcher, node, optimizer)
 }
 
-fn match_and_pick_group<T: RelNodeTyp>(
+fn match_and_pick_group<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
     matcher: &RuleMatcher<T>,
     group_id: GroupId,
-    optimizer: &CascadesOptimizer<T>,
+    optimizer: &CascadesOptimizer<T, P>,
 ) -> Vec<HashMap<usize, RelNode<T>>> {
     let mut matches = vec![];
     for expr_id in optimizer.get_all_exprs_in_group(group_id) {
@@ -150,10 +152,10 @@ fn match_and_pick_group<T: RelNodeTyp>(
     matches
 }
 
-fn match_and_pick<T: RelNodeTyp>(
+fn match_and_pick<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
     matcher: &RuleMatcher<T>,
     node: RelMemoNodeRef<T>,
-    optimizer: &CascadesOptimizer<T>,
+    optimizer: &CascadesOptimizer<T, P>,
 ) -> Vec<HashMap<usize, RelNode<T>>> {
     match matcher {
         RuleMatcher::MatchAndPickNode {
@@ -176,12 +178,12 @@ fn match_and_pick<T: RelNodeTyp>(
     }
 }
 
-impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
+impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Task<T> for ApplyRuleTask<T, P> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn execute(&self, optimizer: &mut CascadesOptimizer<T>) -> Result<Vec<Box<dyn Task<T>>>> {
+    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T>>>> {
         if optimizer.is_rule_fired(self.expr_id, self.rule_id) {
             return Ok(vec![]);
         }
@@ -239,7 +241,7 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
                     // the expr returned by heuristic rule is a brand new one
                     // so there's no optimizeExpressionTask for it in the original task list
                     // we should set exploring as false to both envoke tranform rule and impl rule for it
-                    tasks.push(Box::new(OptimizeExpressionTask::new(self.expr_id, false, self.required_physical_props.clone()))
+                    tasks.push(Box::new(OptimizeExpressionTask::new(self.expr_id, false,  self.physical_props_builder.clone(), self.required_physical_props.clone()))
                         as Box<dyn Task<T>>);
                 }
                 continue;
@@ -257,12 +259,12 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
                 trace!(event = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id, new_expr_id = %expr_id);
                 if expr_typ.is_logical() {
                     tasks.push(
-                        Box::new(OptimizeExpressionTask::new(expr_id, self.exploring, self.required_physical_props.clone()))
+                        Box::new(OptimizeExpressionTask::new(expr_id, self.exploring, self.physical_props_builder.clone(), self.required_physical_props.clone()))
                             as Box<dyn Task<T>>,
                     );
                 } else {
                     tasks
-                        .push(Box::new(OptimizeInputsTask::new(expr_id, true, self.required_physical_props.clone())) as Box<dyn Task<T>>);
+                        .push(Box::new(OptimizeInputsTask::new(expr_id, true, self.physical_props_builder.clone(), self.required_physical_props.clone())) as Box<dyn Task<T>>);
                 }
             }
         }

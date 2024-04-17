@@ -8,28 +8,29 @@ use crate::{
         tasks::OptimizeExpressionTask,
     },
     rel_node::RelNodeTyp,
-    physical_prop::PhysicalProps,
+    physical_prop::PhysicalPropsBuilder,
 };
 
 use super::Task;
 
-pub struct ExploreGroupTask<T: RelNodeTyp> {
+pub struct ExploreGroupTask<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> {
     group_id: GroupId,
-    required_physical_props: Arc<dyn PhysicalProps<T>>,
+    physical_props_builder: Arc<P>,
+    required_physical_props: P::PhysicalProps,
 }
 
-impl<T:RelNodeTyp> ExploreGroupTask<T> {
-    pub fn new(group_id: GroupId, required_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
-        Self { group_id, required_physical_props }
+impl<T:RelNodeTyp, P:PhysicalPropsBuilder<T>> ExploreGroupTask<T, P> {
+    pub fn new(group_id: GroupId, physical_props_builder: Arc<P>, required_physical_props: P::PhysicalProps) -> Self {
+        Self { group_id, physical_props_builder, required_physical_props }
     }
 }
 
-impl<T: RelNodeTyp> Task<T> for ExploreGroupTask<T> {
+impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for ExploreGroupTask<T,P> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn execute(&self, optimizer: &mut CascadesOptimizer<T>) -> Result<Vec<Box<dyn Task<T>>>> {
+    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T>>>> {
         trace!(event = "task_begin", task = "explore_group", group_id = %self.group_id);
         let mut tasks = vec![];
         if optimizer.is_group_explored(self.group_id) {
@@ -41,7 +42,7 @@ impl<T: RelNodeTyp> Task<T> for ExploreGroupTask<T> {
         for expr in exprs {
             let typ = optimizer.get_expr_memoed(expr).typ.clone();
             if typ.is_logical() {
-                tasks.push(Box::new(OptimizeExpressionTask::new(expr, true, self.required_physical_props.clone())) as Box<dyn Task<T>>);
+                tasks.push(Box::new(OptimizeExpressionTask::new(expr, true, self.physical_props_builder.clone(), self.required_physical_props.clone())) as Box<dyn Task<T>>);
             }
         }
         optimizer.mark_group_explored(self.group_id);

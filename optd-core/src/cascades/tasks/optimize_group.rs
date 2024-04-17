@@ -9,34 +9,40 @@ use crate::{
         tasks::{optimize_expression::OptimizeExpressionTask, OptimizeInputsTask},
         CascadesOptimizer,
     },
-    physical_prop::PhysicalProps,
+    physical_prop::PhysicalPropsBuilder,
     cost::Cost,
     rel_node::RelNodeTyp,
 };
 
 use super::Task;
 
-pub struct OptimizeGroupTask<T: RelNodeTyp> {
+pub struct OptimizeGroupTask<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> {
     group_id: GroupId,
     return_from_optimize_group_without_required_physical_props: bool,
-    required_physical_props: Arc<dyn PhysicalProps<T>>
+    physical_props_builder: Arc<P>,
+    required_physical_props: P::PhysicalProps,
 }
 
-impl<T:RelNodeTyp> OptimizeGroupTask<T> {
-    pub fn new(group_id: GroupId, required_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
-        Self { group_id, return_from_optimize_group_without_required_physical_props:false, required_physical_props }
+impl<T:RelNodeTyp, P: PhysicalPropsBuilder<T>> OptimizeGroupTask<T, P> {
+    pub fn new(group_id: GroupId, physical_props_builder: Arc<P>, required_physical_props: P::PhysicalProps) -> Self {
+        Self { group_id, return_from_optimize_group_without_required_physical_props:false, physical_props_builder, required_physical_props }
     }
     pub fn continue_from_optimize_group(&self) -> Self{
-        Self { group_id: self.group_id, return_from_optimize_group_without_required_physical_props: true, required_physical_props: self.required_physical_props }
+        Self { 
+            group_id: self.group_id,
+            return_from_optimize_group_without_required_physical_props: true,
+            physical_props_builder: self.physical_props_builder.clone(), 
+            required_physical_props: self.required_physical_props.clone()
+        }
     }
 
     fn update_winner(
         &self,
         expr_id: ExprId,
         cost_so_far: &Cost,
-        optimizer: &mut CascadesOptimizer<T>,
+        optimizer: &mut CascadesOptimizer<T,P>,
     ) {
-        let sub_group_info = optimizer.get_sub_group_info(self.group_id, self.required_physical_props).unwrap();
+        let sub_group_info = optimizer.get_sub_group_info(self.group_id, self.required_physical_props.clone()).unwrap();
     
         let mut update_cost = false;
         if let Some(ref winner) = sub_group_info.winner {
@@ -56,19 +62,19 @@ impl<T:RelNodeTyp> OptimizeGroupTask<T> {
                         expr_id: expr_id,
                         cost: cost_so_far.clone(),
                     }),
-                    physical_props: self.required_physical_props.clone(),
                 },
+                self.required_physical_props.clone()
             );
         }
     }
 }
 
-impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask<T> {
+impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for OptimizeGroupTask<T, P> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn execute(&self, optimizer: &mut CascadesOptimizer<T>) -> Result<Vec<Box<dyn Task<T>>>> {
+    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T>>>> {
         trace!(event = "task_begin", task = "optimize_group", group_id = %self.group_id);
 
         let group_info = optimizer.get_sub_group_info(self.group_id, self.required_physical_props);
@@ -83,11 +89,10 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask<T> {
             assert!(group_info.winner.is_some() && !group_info.winner.unwrap().impossible, "after optimizeGroup without required physical props, the group must have a winner");
             let expr_id = group_info.winner.unwrap().expr_id;
             let expr = optimizer.get_expr_memoed(expr_id);
-            //TODO: we need to get the children properties 
-            let new_expr= self.required_physical_props.enforce(expr);
-            let expr_id = optimizer.add_group_expr(Some(self.group_id), new_expr);
+            let new_expr= self.physical_props_builder.enforce(expr, self.required_physical_props);
+            let expr_id = optimizer.add_sub_group_expr(self.group_id, new_expr, self.required_physical_props);
+            // TODO: compute cost
             let cost_so_far = optimizer.get_expr_memoed(expr_id).cost; // new expr id cost
-            optimizer.add_sub_group_expr(self.group_id, new_expr, self.required_physical_props);
             self.update_winner(expr_id, cost_so_far, optimizer); // update the winner for the sub group
             trace!(event = "task_finish", task = "optimize_group");
             return Ok(vec![]);
@@ -98,7 +103,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask<T> {
             // first push the return task
             tasks.push(self.continue_from_optimize_group() as Box<dyn Task<T>>);
             // try optimize group without required physical props and using enforcer to enforce them
-            tasks.push(Box::new(OptimizeGroupTask::new(self.group_id, self.required_physical_props.Any())) as Box<dyn Task<T>>);
+            tasks.push(Box::new(OptimizeGroupTask::new(self.group_id,  self.physical_props_builder.clone(), self.required_physical_props.Any())) as Box<dyn Task<T>>);
         }
 
         let exprs = optimizer.get_all_exprs_in_group(self.group_id);
@@ -106,13 +111,13 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask<T> {
         for &expr in &exprs {
             let typ = optimizer.get_expr_memoed(expr).typ.clone();
             if typ.is_logical() {
-                tasks.push(Box::new(OptimizeExpressionTask::new(expr, false, self.required_physical_props.Any())) as Box<dyn Task<T>>);
+                tasks.push(Box::new(OptimizeExpressionTask::new(expr, false, self.physical_props_builder.clone(), self.required_physical_props.Any())) as Box<dyn Task<T>>);
             }
         }
         for &expr in &exprs {
             let typ = optimizer.get_expr_memoed(expr).typ.clone();
             if !typ.is_logical() {
-                tasks.push(Box::new(OptimizeInputsTask::new(expr, true, self.required_physical_props)) as Box<dyn Task<T>>);
+                tasks.push(Box::new(OptimizeInputsTask::new(expr, true, self.physical_props_builder.clone(), self.required_physical_props)) as Box<dyn Task<T>>);
             }
         }
         trace!(event = "task_finish", task = "optimize_group", group_id = %self.group_id, exprs_cnt = exprs_cnt);

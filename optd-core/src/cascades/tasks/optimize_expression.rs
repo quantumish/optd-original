@@ -10,20 +10,21 @@ use crate::{
     },
     rel_node::{RelNodeTyp, Value},
     rules::RuleMatcher,
-    physical_prop::PhysicalProps
+    physical_prop::PhysicalPropsBuilder
 };
 
 use super::Task;
 
-pub struct OptimizeExpressionTask<T: RelNodeTyp> {
+pub struct OptimizeExpressionTask<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> {
     expr_id: ExprId,
     exploring: bool,
-    required_physical_props: Arc<dyn PhysicalProps<T>>,
+    physical_props_builder: Arc<P>,
+    required_physical_props: P::PhysicalProps,
 }
 
-impl<T:RelNodeTyp> OptimizeExpressionTask<T> {
-    pub fn new(expr_id: ExprId, exploring: bool, required_physical_props: Arc<dyn PhysicalProps<T>>) -> Self {
-        Self { expr_id, exploring, required_physical_props }
+impl<T:RelNodeTyp, P:PhysicalPropsBuilder<T>> OptimizeExpressionTask<T, P> {
+    pub fn new(expr_id: ExprId, exploring: bool, physical_props_builder: Arc<P>, required_physical_props: P::PhysicalProps) -> Self {
+        Self { expr_id, exploring, physical_props_builder, required_physical_props }
     }
 }
 
@@ -39,12 +40,12 @@ fn top_matches<T: RelNodeTyp>(
     }
 }
 
-impl<T: RelNodeTyp> Task<T> for OptimizeExpressionTask<T> {
+impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Task<T> for OptimizeExpressionTask<T, P> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn execute(&self, optimizer: &mut CascadesOptimizer<T>) -> Result<Vec<Box<dyn Task<T>>>> {
+    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T>>>> {
         let expr = optimizer.get_expr_memoed(self.expr_id);
         trace!(event = "task_begin", task = "optimize_expr", expr_id = %self.expr_id, expr = %expr);
         let mut tasks = vec![];
@@ -63,13 +64,13 @@ impl<T: RelNodeTyp> Task<T> for OptimizeExpressionTask<T> {
             }
             if top_matches(rule.matcher(), expr.typ.clone(), expr.data.clone()) {
                 tasks.push(
-                    Box::new(ApplyRuleTask::new(rule_id, self.expr_id, self.exploring, self.required_physical_props.clone()))
+                    Box::new(ApplyRuleTask::new(rule_id, self.expr_id, self.exploring, self.physical_props_builder.clone(), self.required_physical_props.clone()))
                         as Box<dyn Task<T>>,
                 );
                 for &input_group_id in &expr.children {
                     // Explore the whole group instead of the specigic SubGroup the expr children points to
                     // As explore task is for logical transformations
-                    tasks.push(Box::new(ExploreGroupTask::new(input_group_id.0, self.required_physical_props.clone())) as Box<dyn Task<T>>);
+                    tasks.push(Box::new(ExploreGroupTask::new(input_group_id.0, self.physical_props_builder.clone(), self.required_physical_props.clone())) as Box<dyn Task<T>>);
                 }
             }
         }

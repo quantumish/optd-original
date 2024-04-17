@@ -7,7 +7,9 @@ use std::{
 use anyhow::Result;
 
 use crate::{
-    cost::CostModel, optimizer::Optimizer, physical_prop::PhysicalProps, property::{PropertyBuilder, PropertyBuilderAny}, rel_node::{RelNodeMetaMap, RelNodeRef, RelNodeTyp}, rules::RuleWrapper
+    cost::CostModel, optimizer::Optimizer, 
+    physical_prop::PhysicalPropsBuilder,
+     property::{PropertyBuilder, PropertyBuilderAny}, rel_node::{RelNodeMetaMap, RelNodeRef, RelNodeTyp}, rules::RuleWrapper
 };
 
 use super::{
@@ -33,8 +35,8 @@ pub struct OptimizerProperties {
     pub partial_explore_space: Option<usize>,
 }
 
-pub struct CascadesOptimizer<T: RelNodeTyp> {
-    memo: Memo<T>,
+pub struct CascadesOptimizer<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> {
+    memo: Memo<T, P>,
     pub(super) tasks: VecDeque<Box<dyn Task<T>>>,
     explored_group: HashSet<GroupId>,
     fired_rules: HashMap<ExprId, HashSet<RuleId>>,
@@ -42,7 +44,8 @@ pub struct CascadesOptimizer<T: RelNodeTyp> {
     disabled_rules: HashSet<usize>,
     cost: Arc<dyn CostModel<T>>,
     property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>,
-    root_physical_properties: Arc<dyn PhysicalProps<T>>,
+    required_root_props: P::PhysicalProps,
+    physical_property_builders: Arc<P>,
     pub ctx: OptimizerContext,
     pub prop: OptimizerProperties,
 }
@@ -77,26 +80,28 @@ impl Display for ExprId {
     }
 }
 
-impl<T: RelNodeTyp> CascadesOptimizer<T> {
+impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
     pub fn new(
         rules: Vec<Arc<RuleWrapper<T, Self>>>,
         cost: Box<dyn CostModel<T>>,
         property_builders: Vec<Box<dyn PropertyBuilderAny<T>>>,
-        root_physical_properties: Arc<dyn PhysicalProps<T>>
+        physical_property_builders: Arc<P>,
+        required_root_props: P::PhysicalProps,
     ) -> Self {
-        Self::new_with_prop(rules, cost, property_builders, root_physical_properties, Default::default())
+        Self::new_with_prop(rules, cost, property_builders, physical_property_builders, required_root_props, Default::default())
     }
 
     pub fn new_with_prop(
         rules: Vec<Arc<RuleWrapper<T, Self>>>,
         cost: Box<dyn CostModel<T>>,
         property_builders: Vec<Box<dyn PropertyBuilderAny<T>>>,
-        root_physical_properties: Arc<dyn PhysicalProps<T>>,
+        physical_property_builders: Arc<P>,
+        required_root_props: P::PhysicalProps,
         prop: OptimizerProperties,
     ) -> Self {
         let tasks = VecDeque::new();
         let property_builders: Arc<[_]> = property_builders.into();
-        let memo = Memo::new(property_builders.clone(), root_physical_properties.clone());
+        let memo = Memo::new(property_builders.clone(), required_root_props.clone(), physical_property_builders.clone());
         Self {
             memo,
             tasks,
@@ -106,7 +111,8 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
             cost: cost.into(),
             ctx: OptimizerContext::default(),
             property_builders,
-            root_physical_properties,
+            physical_property_builders,
+            required_root_props,
             prop,
             disabled_rules: HashSet::new(),
         }
@@ -195,7 +201,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
 
     /// Clear the memo table and all optimizer states.
     pub fn step_clear(&mut self) {
-        self.memo = Memo::new(self.property_builders.clone(), self.root_physical_properties.clone());
+        self.memo = Memo::new(self.property_builders.clone(), self.physical_property_builders.clone(), self.required_root_props.clone());
         self.fired_rules.clear();
         self.explored_group.clear();
     }
@@ -208,7 +214,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     /// Optimize a `RelNode`.
     pub fn step_optimize_rel(&mut self, root_rel: RelNodeRef<T>) -> Result<GroupId> {
         let (group_id, _) = self.add_group_expr(root_rel, None);
-        self.fire_optimize_tasks(group_id, self.root_physical_properties.clone())?;
+        self.fire_optimize_tasks(group_id, self.physical_property_builders.clone(), self.required_root_props.clone())?;
         Ok(group_id)
     }
 
@@ -221,9 +227,9 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         self.memo.get_best_group_binding(group_id, meta)
     }
 
-    fn fire_optimize_tasks(&mut self, group_id: GroupId, root_physical_properties: Arc<dyn PhysicalProps<T>>) -> Result<()> {
+    fn fire_optimize_tasks(&mut self, group_id: GroupId, physical_property_builders: Arc<P>, required_root_props: P::PhysicalProps) -> Result<()> {
         self.tasks
-            .push_back(Box::new(OptimizeGroupTask::new(group_id, root_physical_properties.clone())));
+            .push_back(Box::new(OptimizeGroupTask::new(group_id, self.physical_property_builders.clone(), self.required_root_props.clone())));
         // get the task from the stack
         self.ctx.budget_used = false;
         let plan_space_begin = self.memo.compute_plan_space();
@@ -258,7 +264,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
 
     fn optimize_inner(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
         let (group_id, _) = self.add_group_expr(root_rel, None);
-        self.fire_optimize_tasks(group_id, self.root_physical_properties.clone())?;
+        self.fire_optimize_tasks(group_id, self.physical_property_builders.clone(), self.required_root_props.clone())?;
         self.memo.get_best_group_binding(group_id, &mut None)
     }
 
@@ -323,7 +329,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     pub(super) fn get_sub_group_info(
         &self,
         group_id: GroupId,
-        physical_props: Arc<dyn PhysicalProps<T>>,
+        physical_props: P::PhysicalProps,
     ) -> Option<SubGroupInfo<T>> {
         self.memo.get_sub_group_info(group_id, physical_props)
     }
@@ -333,14 +339,15 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         group_id: GroupId,
         expr_id: Option<ExprId>,
         sub_group_info: SubGroupInfo<T>,
+        physical_props: P::PhysicalProps,
     ) {
-        self.memo.update_sub_group_info(group_id, expr_id, sub_group_info)
+        self.memo.update_sub_group_info(group_id, expr_id, sub_group_info, physical_props)
     }
 
     pub(super) fn update_expr_children_sub_group_id(
         &mut self,
         expr_id: ExprId,
-        required_props: Vec<Arc<dyn PhysicalProps<T>>>,
+        required_props: Vec<P::PhysicalProps>,
     ) -> ExprId {
         self.memo.update_expr_children_sub_group_id(expr_id, required_props)
     }
@@ -349,13 +356,13 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     /// P is the type of the property you expect
     /// idx is the idx of the property you want. The order of properties is defined
     ///   by the property_builders parameter in CascadesOptimizer::new()
-    pub fn get_property_by_group<P: PropertyBuilder<T>>(
+    pub fn get_property_by_group<PB: PropertyBuilder<T>>(
         &self,
         group_id: GroupId,
         idx: usize,
     ) -> P::Prop {
         self.memo.get_group(group_id).properties[idx]
-            .downcast_ref::<P::Prop>()
+            .downcast_ref::<PB::Prop>()
             .unwrap()
             .clone()
     }
