@@ -39,6 +39,7 @@ pub mod properties;
 pub mod rules;
 #[cfg(test)]
 mod testing;
+// mod expand;
 
 pub struct DatafusionOptimizer {
     hueristic_optimizer: HeuristicsOptimizer<OptRelNodeTyp>,

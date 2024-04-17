@@ -5,6 +5,8 @@
 //! We modified it by hashing objects into 64-bit values instead of 32-bit ones to reduce the
 //! number of collisions and eliminate the need for a large range correction estimator.
 
+use optd_core::rel_node::Value;
+
 use crate::stats::murmur2::murmur_hash;
 use std::cmp::max;
 
@@ -23,6 +25,25 @@ pub struct HyperLogLog {
     precision: u8,      // The precision (p) of our HLL; 4 <= p <= 16.
     m: usize,           // The number of HLL buckets; 2^p.
     alpha: f64,         // The normal HLL multiplier factor.
+}
+
+// Serialize optd's Value.
+// TODO(Alexis): We should make stat serialization consistent.
+// This solution works for now, but a cleaner approach would be to not
+// create a new ByteSerializable interface. The initial design decision
+// was to have a way to serialize objects into bytes so we could use a custom
+// hash function and avoid hash recomputations.
+impl ByteSerializable for Vec<Option<Value>> {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for opt in self {
+            if let Some(val) = opt {
+                bytes.append(&mut val.to_string().to_bytes());
+            }
+            bytes.push(0);
+        }
+        bytes
+    }
 }
 
 // Serialize common data types for hashing (&str).
@@ -122,7 +143,7 @@ impl HyperLogLog {
             / self
                 .registers
                 .iter()
-                .fold(0.0, |acc, elem| (1.0 / (1 << elem) as f64) + acc);
+                .fold(0.0, |acc, elem| (1.0 / 2.0f64.powi(*elem as i32)) + acc);
 
         if raw_estimate <= ((5.0 * m) / 2.0) {
             let empty_reg = self.registers.iter().filter(|&elem| *elem == 0).count();
