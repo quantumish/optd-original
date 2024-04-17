@@ -1,7 +1,7 @@
 use super::expr::ExprList;
 use super::macros::define_plan_node;
 
-use super::{ColumnRefExpr, Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode};
+use super::{OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode};
 
 #[derive(Clone, Debug)]
 pub struct LogicalProjection(pub PlanNode);

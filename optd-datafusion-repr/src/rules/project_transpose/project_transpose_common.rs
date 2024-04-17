@@ -108,11 +108,13 @@ impl ProjectionMapping {
             }
             let exprs = exprs.to_vec();
             for i in &self.forward {
-                new_projection_exprs.push(exprs[*i].clone());
+                let col_idx = self.projection_col_maps_to(*i).unwrap();
+                new_projection_exprs.push(exprs[col_idx].clone());
             };
         } else {
-            for i in 0..exprs.len() {
-                let col_idx = self.projection_col_maps_to(i).unwrap();
+            for i in exprs.to_vec() {
+                let col_ref = ColumnRefExpr::from_rel_node(i.into_rel_node()).unwrap();
+                let col_idx = self.original_col_maps_to(col_ref.index()).unwrap();
                 let col: Expr = ColumnRefExpr::new(col_idx).into_expr();
                 new_projection_exprs.push(col);
             };    

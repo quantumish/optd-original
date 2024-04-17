@@ -57,7 +57,7 @@ mod tests {
         let mut test_optimizer = new_test_optimizer(Arc::new(FilterProjectTransposeRule::new()));
 
         let scan = LogicalScan::new("customer".into());
-        let proj = LogicalProjection::new(scan.into_plan_node(), ExprList::new(vec![]));
+        let proj = LogicalProjection::new(scan.into_plan_node(), ExprList::new(vec![ColumnRefExpr::new(0).into_expr()]));
 
         let filter_expr = BinOpExpr::new(
             ColumnRefExpr::new(0).into_expr(),
