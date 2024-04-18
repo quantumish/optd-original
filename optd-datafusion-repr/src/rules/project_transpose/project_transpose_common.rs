@@ -6,20 +6,27 @@ pub fn merge_exprs(first: ExprList, second: ExprList) -> ExprList {
     ExprList::new(res_vec)
 }
 
-pub fn split_exprs(exprs: ExprList, left_schema_len: usize) -> (ExprList, ExprList) {
+pub fn split_exprs(exprs: ExprList, left_schema_len: usize) -> (ExprList, ExprList, bool) {
     let mut left_vec = vec![];
     let mut right_vec = vec![];
+    let mut reached_right = false;
+    let mut is_left_right_ordered = true;
     for expr in exprs.to_vec() {
         let col_ref = ColumnRefExpr::from_rel_node(expr.into_rel_node()).unwrap();
         if col_ref.index() < left_schema_len {
             // left expr
             left_vec.push(col_ref.into_expr());
+            if reached_right {
+                is_left_right_ordered = false;
+            }
         } else {
             // right expr
-            right_vec.push(col_ref.into_expr());
+            let right_col_ref = ColumnRefExpr::new(col_ref.index() - left_schema_len);
+            right_vec.push(right_col_ref.into_expr());
+            reached_right = true;
         }
     }
-    (ExprList::new(left_vec), ExprList::new(right_vec))
+    (ExprList::new(left_vec), ExprList::new(right_vec), is_left_right_ordered)
 }
 
 /// This struct holds the mapping from original columns to projected columns.
@@ -78,13 +85,13 @@ impl ProjectionMapping {
     /// Join { cond: #1=#4 }
     ///     Scan
     ///     Scan
-    pub fn rewrite_join_cond(&self, cond: Expr, left_child_schema_len: usize, is_added: bool, is_left_child: bool) -> Expr {
+    pub fn rewrite_join_cond(&self, cond: Expr, left_schema_len: usize, is_added: bool, is_left_child: bool, new_left_schema_len: usize) -> Expr {
         if is_added {
             cond.rewrite_column_refs(&|col_idx| {
-                if is_left_child && col_idx < left_child_schema_len {
+                if is_left_child && col_idx < left_schema_len {
                     self.original_col_maps_to(col_idx)
-                } else if !is_left_child && col_idx >= left_child_schema_len {
-                    self.original_col_maps_to(col_idx - left_child_schema_len)
+                } else if !is_left_child && col_idx >= left_schema_len {
+                    Some(self.original_col_maps_to(col_idx - left_schema_len).unwrap() + new_left_schema_len)
                 } else {
                     Some(col_idx)
                 }
@@ -96,7 +103,7 @@ impl ProjectionMapping {
                 if col_idx < schema_size {
                     self.projection_col_maps_to(col_idx)
                 } else {
-                    Some(col_idx - schema_size + left_child_schema_len)
+                    Some(col_idx - schema_size + left_schema_len)
                 }
             })
             .unwrap()    
