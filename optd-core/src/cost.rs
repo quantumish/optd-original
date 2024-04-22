@@ -1,12 +1,13 @@
 use crate::{
     cascades::{CascadesOptimizer, RelNodeContext},
     rel_node::{RelNode, RelNodeTyp, Value},
+    physical_prop::PhysicalPropsBuilder,
 };
 
 #[derive(Default, Clone, Debug, PartialOrd, PartialEq)]
 pub struct Cost(pub Vec<f64>);
 
-pub trait CostModel<T: RelNodeTyp>: 'static + Send + Sync {
+pub trait CostModel<T: RelNodeTyp, P:PhysicalPropsBuilder<T>>: 'static + Send + Sync {
     fn compute_cost(
         &self,
         node: &T,
@@ -14,7 +15,7 @@ pub trait CostModel<T: RelNodeTyp>: 'static + Send + Sync {
         children: &[Cost],
         context: Option<RelNodeContext>,
         // one reason we need the optimizer is to traverse children nodes to build up an expression tree
-        optimizer: Option<&CascadesOptimizer<T>>,
+        optimizer: Option<&CascadesOptimizer<T,P>>,
     ) -> Cost;
 
     fn compute_plan_node_cost(&self, node: &RelNode<T>) -> Cost;

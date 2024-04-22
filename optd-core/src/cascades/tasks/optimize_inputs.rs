@@ -64,7 +64,7 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> OptimizeInputsTask<T, P> {
         let zero_cost = optimizer.cost().zero();
         let mut input_cost = Vec::with_capacity(children.len());
         for (&child, &prop) in children.iter().zip(self.required_children_props.unwrap().iter()) {
-            let group = optimizer.get_sub_group_info(child, prop);
+            let group = optimizer.get_sub_group_info_by_props(child, prop);
             if group.is_some() && group.winner.is_some() {
                 let winner = group.winner.unwrap();
                 if !winner.impossible {
@@ -105,7 +105,7 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> OptimizeInputsTask<T, P> {
     ) {
         let expr_id = optimizer.update_expr_children_sub_group_id(self.expr_id, self.required_children_props.clone());
         let group_id = optimizer.get_group_id(expr_id);
-        let sub_group_info = optimizer.get_sub_group_info(group_id, self.required_physical_props.clone());
+        let sub_group_info = optimizer.get_sub_group_info_by_props(group_id, self.required_physical_props.clone());
         let mut update_cost = false;
         if sub_group_info.is_some() && sub_group_info.unwrap().winner.is_some() {
             let winner = sub_group_info.unwrap().winner.unwrap();
@@ -132,12 +132,12 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> OptimizeInputsTask<T, P> {
     }
 }
 
-impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for OptimizeInputsTask<T, P> {
+impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeInputsTask<T, P> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn execute(&self, optimizer: &mut CascadesOptimizer<T,P>) -> Result<Vec<Box<dyn Task<T>>>> {
+    fn execute(&self, optimizer: &mut CascadesOptimizer<T,P>) -> Result<Vec<Box<dyn Task<T,P>>>> {
         if optimizer.tasks.iter().any(|t| {
             if let Some(task) = t.as_any().downcast_ref::<Self>() {
                 // skip optimize_inputs to avoid dead-loop: consider join commute being fired twice that produces
@@ -188,7 +188,7 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for OptimizeInputsTask<T,
                 let group_id = children_group_ids[next_group_idx];
                 let group_idx = next_group_idx;
                 let required_child_physical_props = self.required_children_props[group_idx].clone();
-                let sub_group_info = optimizer.get_sub_group_info(group_id, required_child_physical_props);
+                let sub_group_info = optimizer.get_sub_group_info_by_props(group_id, required_child_physical_props);
                 let mut has_full_winner = false;
                 if sub_group_info.is_some() && sub_group_info.winner.is_some() {
                     let winner = sub_group_info.winner.unwrap();
@@ -225,8 +225,8 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for OptimizeInputsTask<T,
                                     return_from_optimize_group: true,
                                 },
                                 self.pruning,
-                            )) as Box<dyn Task<T>>,
-                            Box::new(OptimizeGroupTask::new(group_id, self.physical_props_builder, required_child_physical_props)) as Box<dyn Task<T>>,
+                            )) as Box<dyn Task<T,P>>,
+                            Box::new(OptimizeGroupTask::new(group_id, self.physical_props_builder, required_child_physical_props)) as Box<dyn Task<T,P>>,
                         ]);
                     } else {
                         if sub_group_info.is_some() && sub_group_info.winner.is_some() {
@@ -270,7 +270,7 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for OptimizeInputsTask<T,
                         return_from_optimize_group: false,
                     },
                     self.pruning,
-                )) as Box<dyn Task<T>>])
+                )) as Box<dyn Task<T,P>>])
             } else {
                 self.update_winner(
                     &cost.sum(
@@ -313,7 +313,7 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for OptimizeInputsTask<T,
                     return_from_optimize_group: false,
                 },
                 self.pruning,
-            )) as Box<dyn Task<T>>])
+            )) as Box<dyn Task<T,P>>])
         }
     }
 

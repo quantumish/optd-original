@@ -37,12 +37,12 @@ pub struct OptimizerProperties {
 
 pub struct CascadesOptimizer<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> {
     memo: Memo<T, P>,
-    pub(super) tasks: VecDeque<Box<dyn Task<T>>>,
+    pub(super) tasks: VecDeque<Box<dyn Task<T,P>>>,
     explored_group: HashSet<GroupId>,
     fired_rules: HashMap<ExprId, HashSet<RuleId>>,
     rules: Arc<[Arc<RuleWrapper<T, Self>>]>,
     disabled_rules: HashSet<usize>,
-    cost: Arc<dyn CostModel<T>>,
+    cost: Arc<dyn CostModel<T, P>>,
     property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>,
     required_root_props: P::PhysicalProps,
     physical_property_builders: Arc<P>,
@@ -74,6 +74,12 @@ impl Display for GroupId {
     }
 }
 
+impl Display for SubGroupId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "!{}", self.0)
+    }
+}
+
 impl Display for ExprId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -83,7 +89,7 @@ impl Display for ExprId {
 impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
     pub fn new(
         rules: Vec<Arc<RuleWrapper<T, Self>>>,
-        cost: Box<dyn CostModel<T>>,
+        cost: Box<dyn CostModel<T,P>>,
         property_builders: Vec<Box<dyn PropertyBuilderAny<T>>>,
         physical_property_builders: Arc<P>,
         required_root_props: P::PhysicalProps,
@@ -93,7 +99,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
 
     pub fn new_with_prop(
         rules: Vec<Arc<RuleWrapper<T, Self>>>,
-        cost: Box<dyn CostModel<T>>,
+        cost: Box<dyn CostModel<T,P>>,
         property_builders: Vec<Box<dyn PropertyBuilderAny<T>>>,
         physical_property_builders: Arc<P>,
         required_root_props: P::PhysicalProps,
@@ -118,7 +124,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         }
     }
 
-    pub fn cost(&self) -> Arc<dyn CostModel<T>> {
+    pub fn cost(&self) -> Arc<dyn CostModel<T, P>> {
         self.cost.clone()
     }
 
@@ -138,30 +144,37 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         self.disabled_rules.contains(&rule_id)
     }
 
-    pub fn dump(&self, group_id: Option<GroupId>) {
+    pub fn dump(&self, group_id: Option<GroupId>, sub_group_id: Option<SubGroupId>) {
         if let Some(group_id) = group_id {
-            fn dump_inner<T: RelNodeTyp>(this: &CascadesOptimizer<T>, group_id: GroupId) {
-                if let Some(ref winner) = this.memo.get_group_info(group_id).winner {
+            fn dump_inner<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(this: &CascadesOptimizer<T, P>, group_id: GroupId, sub_group_id: Option<SubGroupId>) {
+                let mut real_sub_group_id = SubGroupId(0);
+                if sub_group_id.is_some(){
+                    real_sub_group_id = sub_group_id.unwrap();
+                }
+                if let Some(ref winner) = this.memo.get_sub_group_info_by_id(group_id, real_sub_group_id).winner {
                     let expr = this.memo.get_expr_memoed(winner.expr_id);
                     assert!(!winner.impossible);
                     if winner.cost.0[1] == 1.0 {
                         return;
                     }
                     println!(
-                        "group_id={} winner={} cost={} {}",
+                        "group_id={} sub_group_id={} winner={} cost={} {}",
                         group_id,
+                        real_sub_group_id,
                         winner.expr_id,
                         this.cost.explain(&winner.cost),
                         expr
                     );
                     for child in &expr.children {
-                        dump_inner(this, *child);
+                        dump_inner(this, child.0, Some(child.1));
                     }
                 }
             }
-            dump_inner(self, group_id);
+            dump_inner(self, group_id, sub_group_id);
             return;
         }
+        //TODO(avery): current implementation is that only dump default subgroup when no
+        // group id is passed. We might add dump for all subgroups in the future.
         for group_id in self.memo.get_all_group_ids() {
             let winner = if let Some(ref winner) = self.memo.get_group_info(group_id).winner {
                 if winner.impossible {
@@ -201,7 +214,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
 
     /// Clear the memo table and all optimizer states.
     pub fn step_clear(&mut self) {
-        self.memo = Memo::new(self.property_builders.clone(), self.physical_property_builders.clone(), self.required_root_props.clone());
+        self.memo = Memo::new(self.property_builders.clone(), self.required_root_props.clone(), self.physical_property_builders.clone());
         self.fired_rules.clear();
         self.explored_group.clear();
     }
@@ -314,11 +327,11 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         });
     }
 
-    pub(super) fn get_group_info(&self, group_id: GroupId) -> SubGroupInfo<T> {
+    pub(super) fn get_group_info(&self, group_id: GroupId) -> SubGroupInfo {
         self.memo.get_group_info(group_id)
     }
 
-    pub(super) fn update_group_info(&mut self, group_id: GroupId, group_info: SubGroupInfo<T>) {
+    pub(super) fn update_group_info(&mut self, group_id: GroupId, group_info: SubGroupInfo) {
         self.memo.update_group_info(group_id, group_info)
     }
 
@@ -326,19 +339,19 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         self.memo.merge_group(group_a, group_b);
     }
 
-    pub(super) fn get_sub_group_info(
+    pub(super) fn get_sub_group_info_by_props(
         &self,
         group_id: GroupId,
         physical_props: P::PhysicalProps,
-    ) -> Option<SubGroupInfo<T>> {
-        self.memo.get_sub_group_info(group_id, physical_props)
+    ) -> Option<SubGroupInfo> {
+        self.memo.get_sub_group_info_by_props(group_id, physical_props)
     }
 
     pub(super) fn update_sub_group_info(
         &mut self,
         group_id: GroupId,
         expr_id: Option<ExprId>,
-        sub_group_info: SubGroupInfo<T>,
+        sub_group_info: SubGroupInfo,
         physical_props: P::PhysicalProps,
     ) {
         self.memo.update_sub_group_info(group_id, expr_id, sub_group_info, physical_props)
@@ -360,7 +373,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         &self,
         group_id: GroupId,
         idx: usize,
-    ) -> P::Prop {
+    ) -> PB::Prop {
         self.memo.get_group(group_id).properties[idx]
             .downcast_ref::<PB::Prop>()
             .unwrap()
@@ -425,12 +438,12 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
     }
 }
 
-impl<T: RelNodeTyp> Optimizer<T> for CascadesOptimizer<T> {
+impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Optimizer<T> for CascadesOptimizer<T, P> {
     fn optimize(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
         self.optimize_inner(root_rel)
     }
 
-    fn get_property<P: PropertyBuilder<T>>(&self, root_rel: RelNodeRef<T>, idx: usize) -> P::Prop {
-        self.get_property_by_group::<P>(self.resolve_group_id(root_rel), idx)
+    fn get_property<PB: PropertyBuilder<T>>(&self, root_rel: RelNodeRef<T>, idx: usize) -> PB::Prop {
+        self.get_property_by_group::<PB>(self.resolve_group_id(root_rel), idx)
     }
 }

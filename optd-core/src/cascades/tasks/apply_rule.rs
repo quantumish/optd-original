@@ -178,12 +178,12 @@ fn match_and_pick<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
     }
 }
 
-impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Task<T> for ApplyRuleTask<T, P> {
+impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Task<T,P> for ApplyRuleTask<T, P> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T>>>> {
+    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T,P>>>> {
         if optimizer.is_rule_fired(self.expr_id, self.rule_id) {
             return Ok(vec![]);
         }
@@ -242,7 +242,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Task<T> for ApplyRuleTask<T, P> 
                     // so there's no optimizeExpressionTask for it in the original task list
                     // we should set exploring as false to both envoke tranform rule and impl rule for it
                     tasks.push(Box::new(OptimizeExpressionTask::new(self.expr_id, false,  self.physical_props_builder.clone(), self.required_physical_props.clone()))
-                        as Box<dyn Task<T>>);
+                        as Box<dyn Task<T,P>>);
                 }
                 continue;
             }
@@ -260,11 +260,11 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Task<T> for ApplyRuleTask<T, P> 
                 if expr_typ.is_logical() {
                     tasks.push(
                         Box::new(OptimizeExpressionTask::new(expr_id, self.exploring, self.physical_props_builder.clone(), self.required_physical_props.clone()))
-                            as Box<dyn Task<T>>,
+                            as Box<dyn Task<T,P>>,
                     );
                 } else {
                     tasks
-                        .push(Box::new(OptimizeInputsTask::new(expr_id, true, self.physical_props_builder.clone(), self.required_physical_props.clone())) as Box<dyn Task<T>>);
+                        .push(Box::new(OptimizeInputsTask::new(expr_id, true, self.physical_props_builder.clone(), self.required_physical_props.clone())) as Box<dyn Task<T,P>>);
                 }
             }
         }

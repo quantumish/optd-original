@@ -211,7 +211,7 @@ impl DatafusionOptimizer {
         Ok((group_id, optimized_rel, meta.unwrap()))
     }
 
-    pub fn dump(&self, group_id: Option<GroupId>) {
-        self.cascades_optimizer.dump(group_id)
+    pub fn dump(&self, group_id: Option<GroupId>, sub_group_id: Option<SubGroupId>) {
+        self.cascades_optimizer.dump(group_id, sub_group_id);
     }
 }

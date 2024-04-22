@@ -20,13 +20,11 @@ pub trait RelNodeTyp:
 {
     fn is_logical(&self) -> bool;
 
-    fn group_typ(group_id: GroupId) -> Self;
-
-    fn sub_group_typ(group_id: GroupId, sub_group_id: SubGroupId) -> Self;
+    fn group_typ(group_id: GroupId, sub_group_id: SubGroupId) -> Self;
 
     fn extract_group(&self) -> Option<GroupId>;
 
-    fn extract_sub_group(&self) -> Option<SubGroupId>;
+    fn extract_group_and_sub_group(&self) -> Option<(GroupId, SubGroupId)>;
 
     fn list_typ() -> Self;
 }
@@ -226,8 +224,8 @@ impl<T: RelNodeTyp> RelNode<T> {
         }
     }
 
-    pub fn new_group(group_id: GroupId) -> Self {
-        Self::new_leaf(T::group_typ(group_id))
+    pub fn new_group(group_id: GroupId, sub_group_id: SubGroupId) -> Self {
+        Self::new_leaf(T::group_typ(group_id, sub_group_id))
     }
 
     pub fn new_list(items: Vec<RelNodeRef<T>>) -> Self {

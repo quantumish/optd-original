@@ -25,12 +25,12 @@ impl<T:RelNodeTyp, P:PhysicalPropsBuilder<T>> ExploreGroupTask<T, P> {
     }
 }
 
-impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for ExploreGroupTask<T,P> {
+impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for ExploreGroupTask<T,P> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T>>>> {
+    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T,P>>>> {
         trace!(event = "task_begin", task = "explore_group", group_id = %self.group_id);
         let mut tasks = vec![];
         if optimizer.is_group_explored(self.group_id) {
@@ -42,7 +42,7 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for ExploreGroupTask<T,P>
         for expr in exprs {
             let typ = optimizer.get_expr_memoed(expr).typ.clone();
             if typ.is_logical() {
-                tasks.push(Box::new(OptimizeExpressionTask::new(expr, true, self.physical_props_builder.clone(), self.required_physical_props.clone())) as Box<dyn Task<T>>);
+                tasks.push(Box::new(OptimizeExpressionTask::new(expr, true, self.physical_props_builder.clone(), self.required_physical_props.clone())) as Box<dyn Task<T,P>>);
             }
         }
         optimizer.mark_group_explored(self.group_id);

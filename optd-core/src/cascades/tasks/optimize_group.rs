@@ -42,7 +42,7 @@ impl<T:RelNodeTyp, P: PhysicalPropsBuilder<T>> OptimizeGroupTask<T, P> {
         cost_so_far: &Cost,
         optimizer: &mut CascadesOptimizer<T,P>,
     ) {
-        let sub_group_info = optimizer.get_sub_group_info(self.group_id, self.required_physical_props.clone()).unwrap();
+        let sub_group_info = optimizer.get_sub_group_info_by_props(self.group_id, self.required_physical_props.clone()).unwrap();
     
         let mut update_cost = false;
         if let Some(ref winner) = sub_group_info.winner {
@@ -69,15 +69,15 @@ impl<T:RelNodeTyp, P: PhysicalPropsBuilder<T>> OptimizeGroupTask<T, P> {
     }
 }
 
-impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for OptimizeGroupTask<T, P> {
+impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeGroupTask<T, P> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T>>>> {
+    fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T,P>>>> {
         trace!(event = "task_begin", task = "optimize_group", group_id = %self.group_id);
 
-        let group_info = optimizer.get_sub_group_info(self.group_id, self.required_physical_props);
+        let group_info = optimizer.get_sub_group_info_by_props(self.group_id, self.required_physical_props);
         if group_info.is_some() && group_info.winner.is_some() {
             trace!(event = "task_finish", task = "optimize_group");
             return Ok(vec![]);
@@ -101,9 +101,9 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for OptimizeGroupTask<T, 
         let mut tasks = vec![];
         if !self.required_physical_props.is_any(){
             // first push the return task
-            tasks.push(self.continue_from_optimize_group() as Box<dyn Task<T>>);
+            tasks.push(self.continue_from_optimize_group() as Box<dyn Task<T,P>>);
             // try optimize group without required physical props and using enforcer to enforce them
-            tasks.push(Box::new(OptimizeGroupTask::new(self.group_id,  self.physical_props_builder.clone(), self.required_physical_props.Any())) as Box<dyn Task<T>>);
+            tasks.push(Box::new(OptimizeGroupTask::new(self.group_id,  self.physical_props_builder.clone(), self.required_physical_props.Any())) as Box<dyn Task<T,P>>);
         }
 
         let exprs = optimizer.get_all_exprs_in_group(self.group_id);
@@ -111,13 +111,13 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T> for OptimizeGroupTask<T, 
         for &expr in &exprs {
             let typ = optimizer.get_expr_memoed(expr).typ.clone();
             if typ.is_logical() {
-                tasks.push(Box::new(OptimizeExpressionTask::new(expr, false, self.physical_props_builder.clone(), self.required_physical_props.Any())) as Box<dyn Task<T>>);
+                tasks.push(Box::new(OptimizeExpressionTask::new(expr, false, self.physical_props_builder.clone(), self.required_physical_props.Any())) as Box<dyn Task<T,P>>);
             }
         }
         for &expr in &exprs {
             let typ = optimizer.get_expr_memoed(expr).typ.clone();
             if !typ.is_logical() {
-                tasks.push(Box::new(OptimizeInputsTask::new(expr, true, self.physical_props_builder.clone(), self.required_physical_props)) as Box<dyn Task<T>>);
+                tasks.push(Box::new(OptimizeInputsTask::new(expr, true, self.physical_props_builder.clone(), self.required_physical_props)) as Box<dyn Task<T,P>>);
             }
         }
         trace!(event = "task_finish", task = "optimize_group", group_id = %self.group_id, exprs_cnt = exprs_cnt);
