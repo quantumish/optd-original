@@ -235,9 +235,10 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
     pub fn step_get_optimize_rel(
         &self,
         group_id: GroupId,
+        physical_props: P::PhysicalProps,
         meta: &mut Option<RelNodeMetaMap>,
     ) -> Result<RelNodeRef<T>> {
-        self.memo.get_best_group_binding(group_id, meta)
+        self.memo.get_best_group_binding(group_id, physical_props, meta)
     }
 
     fn fire_optimize_tasks(&mut self, group_id: GroupId, physical_property_builders: Arc<P>, required_root_props: P::PhysicalProps) -> Result<()> {
@@ -278,7 +279,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
     fn optimize_inner(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
         let (group_id, _) = self.add_group_expr(root_rel, None);
         self.fire_optimize_tasks(group_id, self.physical_property_builders.clone(), self.required_root_props.clone())?;
-        self.memo.get_best_group_binding(group_id, &mut None)
+        self.memo.get_best_group_binding(group_id, self.required_root_props.clone(), &mut None)
     }
 
     pub fn resolve_group_id(&self, root_rel: RelNodeRef<T>) -> GroupId {

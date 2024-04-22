@@ -697,13 +697,48 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
             .insert(physical_props, SubGroupId(sub_group_id));
     }
 
+    pub fn get_best_group_binding(
+        &self,
+        group_id: GroupId,
+        physical_props: P::PhysicalProps,
+        meta: &mut Option<RelNodeMetaMap>,
+    ) -> Result<RelNodeRef<T>> {
+        let info = self.get_sub_group_info_by_props(group_id, physical_props);
+        if let Some(info) = info{
+            if let Some(winner) = info.winner {
+                if !winner.impossible {
+                    let expr_id = winner.expr_id;
+                    let expr = self.get_expr_memoed(expr_id);
+                    let mut children = Vec::with_capacity(expr.children.len());
+                    for child in &expr.children {
+                        children.push(self.get_best_sub_group_binding(child.0, child.1, meta)?);
+                    }
+                    let node = Arc::new(RelNode {
+                        typ: expr.typ.clone(),
+                        children,
+                        data: expr.data.clone(),
+                    });
+
+                    if let Some(meta) = meta {
+                        meta.insert(
+                            node.as_ref() as *const _ as usize,
+                            RelNodeMeta::new(group_id, winner.cost),
+                        );
+                    }
+                    return Ok(node);
+                }
+            }
+        }
+        bail!("no best group binding for group {} with required physical props {:?}", group_id, physical_props)
+    }
+
     pub fn get_best_sub_group_binding(
         &self,
         group_id: GroupId,
         sub_group_id: SubGroupId,
         meta: &mut Option<RelNodeMetaMap>,
     ) -> Result<RelNodeRef<T>> {
-        let info = self.get_group_info(group_id);
+        let info = self.get_sub_group_info_by_id(group_id, sub_group_id);
         if let Some(winner) = info.winner {
             if !winner.impossible {
                 let expr_id = winner.expr_id;
@@ -727,7 +762,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
                 return Ok(node);
             }
         }
-        bail!("no best group binding for group {}", group_id)
+        bail!("no best group binding for group {} subgroup {}", group_id, sub_group_id)
     }
 
     pub fn clear_winner(&mut self) {

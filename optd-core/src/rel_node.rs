@@ -252,5 +252,6 @@ impl RelNodeMeta {
     }
 }
 
+// TODO(avery): we might want to redesign this to make it align with Subgroups
 /// A hash table storing `RelNode` (memory address, metadata) pairs.
 pub type RelNodeMetaMap = HashMap<usize, RelNodeMeta>;
