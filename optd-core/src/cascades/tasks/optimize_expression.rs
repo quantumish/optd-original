@@ -15,6 +15,12 @@ use crate::{
 
 use super::Task;
 
+/// OptimizeExpressionTask calls 
+///  1. ExploreGroupTask for its children of the expr
+///  2. ApplyRuleTask for the expression 
+/// For required physical properties, it passes them to ApplyRuleTask
+///  ExploreGroupTask does not need physical properties requirement, 
+///  as it is only for logical transformations
 pub struct OptimizeExpressionTask<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> {
     expr_id: ExprId,
     exploring: bool,
@@ -70,7 +76,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Task<T,P> for OptimizeExpression
                 for &input_group_id in &expr.children {
                     // Explore the whole group instead of the specigic SubGroup the expr children points to
                     // As explore task is for logical transformations
-                    tasks.push(Box::new(ExploreGroupTask::new(input_group_id.0, self.physical_props_builder.clone(), self.required_physical_props.clone())) as Box<dyn Task<T,P>>);
+                    tasks.push(Box::new(ExploreGroupTask::new(input_group_id.0, self.physical_props_builder.clone(), self.physical_props_builder.any())) as Box<dyn Task<T,P>>);
                 }
             }
         }

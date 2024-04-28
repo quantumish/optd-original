@@ -21,6 +21,9 @@ pub struct ExploreGroupTask<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> {
 
 impl<T:RelNodeTyp, P:PhysicalPropsBuilder<T>> ExploreGroupTask<T, P> {
     pub fn new(group_id: GroupId, physical_props_builder: Arc<P>, required_physical_props: P::PhysicalProps) -> Self {
+        if !physical_props_builder.is_any(required_physical_props){
+            unreachable!("ExploreGroupTask should not have any required physical properties")
+        }
         Self { group_id, physical_props_builder, required_physical_props }
     }
 }

@@ -9,7 +9,7 @@ use crate::{
         memo::RelMemoNodeRef,
         optimizer::{CascadesOptimizer, ExprId, RuleId},
         tasks::{OptimizeExpressionTask, OptimizeInputsTask},
-        GroupId,
+        GroupId, SubGroupId
     },
     rel_node::{RelNode, RelNodeTyp},
     rules::{OptimizeType, RuleMatcher},
@@ -18,6 +18,15 @@ use crate::{
 
 use super::Task;
 
+/// ApplyRuleTask calls 
+///     1. OptimizeExpression task for newly generate logical expr (logical->logical rule)
+///     2. OptimizeInputsTask for newly generate physical expr (logical->physical rule)
+/// All the newly generated exprs are added to the default sub group
+/// For required physical properties, it passes them to OptimizeInputsTask and OptimizeExpressionTask
+/// 
+/// As we only move certain exprs to specific sub groups and rewrite their children in OptimizeInputsTask, 
+///     we don't care children node points to special subgroup in ApplyRuleTask, therefore the matcher
+///    in ApplyRuleTask tries to match all the exprs in default sub group
 pub struct ApplyRuleTask<T:RelNodeTyp, P:PhysicalPropsBuilder<T>> {
     rule_id: RuleId,
     expr_id: ExprId,
@@ -65,7 +74,8 @@ fn match_node<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
                 should_end = true;
             }
             RuleMatcher::PickOne { pick_to, expand } => {
-                let group_id = node.children[idx];
+                assert!(node.children[idx].1 == SubGroupId(0), "can expr points to special subgroup happens here?");
+                let group_id = node.children[idx].0;
                 let node = if *expand {
                     let mut exprs = optimizer.get_all_exprs_in_group(group_id);
                     assert_eq!(exprs.len(), 1, "can only expand expression");
@@ -74,7 +84,7 @@ fn match_node<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
                     assert_eq!(bindings.len(), 1, "can only expand expression");
                     bindings.remove(0).as_ref().clone()
                 } else {
-                    RelNode::new_group(group_id)
+                    RelNode::new_group(group_id, SubGroupId(0))
                 };
                 for pick in &mut picks {
                     let res = pick.insert(*pick_to, node.clone());
@@ -88,7 +98,12 @@ fn match_node<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
                         RelNode::new_list(
                             node.children[idx..]
                                 .iter()
-                                .map(|x| Arc::new(RelNode::new_group(*x)))
+                                .map(|x| 
+                                    {
+                                        assert!(x.1 == SubGroupId(0), "can expr points to special subgroup happens here?");
+                                        Arc::new(RelNode::new_group(x.0, SubGroupId(0)))
+                                    }
+                                )
                                 .collect_vec(),
                         ),
                     );
@@ -97,7 +112,7 @@ fn match_node<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
                 should_end = true;
             }
             _ => {
-                let new_picks = match_and_pick_group(child, node.children[idx], optimizer);
+                let new_picks = match_and_pick_group(child, node.children[idx].0, optimizer);
                 let mut merged_picks = vec![];
                 for old_pick in &picks {
                     for new_picks in &new_picks {
@@ -119,7 +134,12 @@ fn match_node<T: RelNodeTyp, P: PhysicalPropsBuilder<T>>(
                     children: node
                         .children
                         .iter()
-                        .map(|x| RelNode::new_group(*x).into())
+                        .map(|x| 
+                            {
+                                assert!(x.1 == SubGroupId(0), "can expr points to special subgroup happens here?");
+                                RelNode::new_group(x.0, SubGroupId(0)).into()
+                            }
+                        )
                         .collect_vec(),
                     data: node.data.clone(),
                 },
@@ -255,7 +275,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Task<T,P> for ApplyRuleTask<T, P
                     continue;
                 }
                 let expr_typ = typ.clone();
-                let (_, expr_id) = optimizer.add_group_expr(expr.into(), Some(group_id));
+                let (_, expr_id) = optimizer.add_group_expr_to_default_sub_group(expr.into(), Some(group_id));
                 trace!(event = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id, new_expr_id = %expr_id);
                 if expr_typ.is_logical() {
                     tasks.push(

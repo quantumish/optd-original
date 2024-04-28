@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    memo::{SubGroupInfo, RelMemoNodeRef},
+    memo::{SubGroupInfo, RelMemoNodeRef, RelMemoNode},
     tasks::OptimizeGroupTask,
     Memo, Task,
 };
@@ -56,7 +56,7 @@ pub struct CascadesOptimizer<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> {
 pub struct RelNodeContext {
     pub group_id: GroupId,
     pub expr_id: ExprId,
-    pub children_group_ids: Vec<GroupId>,
+    pub children_group_ids: Vec<(GroupId, SubGroupId)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
@@ -226,7 +226,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
 
     /// Optimize a `RelNode`.
     pub fn step_optimize_rel(&mut self, root_rel: RelNodeRef<T>) -> Result<GroupId> {
-        let (group_id, _) = self.add_group_expr(root_rel, None);
+        let (group_id, _) = self.add_group_expr_to_default_sub_group(root_rel, None);
         self.fire_optimize_tasks(group_id, self.physical_property_builders.clone(), self.required_root_props.clone())?;
         Ok(group_id)
     }
@@ -277,7 +277,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
     }
 
     fn optimize_inner(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
-        let (group_id, _) = self.add_group_expr(root_rel, None);
+        let (group_id, _) = self.add_group_expr_to_default_sub_group(root_rel, None);
         self.fire_optimize_tasks(group_id, self.physical_property_builders.clone(), self.required_root_props.clone())?;
         self.memo.get_best_group_binding(group_id, self.required_root_props.clone(), &mut None)
     }
@@ -298,12 +298,12 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         self.memo.get_expr_info(expr)
     }
 
-    pub(super) fn add_group_expr(
+    pub(super) fn add_group_expr_to_default_sub_group(
         &mut self,
         expr: RelNodeRef<T>,
         group_id: Option<GroupId>,
     ) -> (GroupId, ExprId) {
-        self.memo.add_new_group_expr(expr, group_id)
+        self.memo.add_new_group_expr_to_default_sub_group(expr, group_id)
     }
 
     pub(super) fn replace_group_expr(
@@ -346,6 +346,23 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         physical_props: P::PhysicalProps,
     ) -> Option<SubGroupInfo> {
         self.memo.get_sub_group_info_by_props(group_id, physical_props)
+    }
+
+    pub(super) fn get_sub_group_id(
+        &self,
+        group_id: GroupId,
+        physical_props: P::PhysicalProps,
+    ) -> Option<SubGroupId> {
+        self.memo.get_sub_group_id(group_id, physical_props)
+    }
+
+    pub(super) fn add_sub_group_expr(
+        &mut self,
+        expr: RelMemoNode<T>,
+        group_id: GroupId,
+        physical_props: P::PhysicalProps,
+    ) -> ExprId {
+        self.memo.add_sub_group_expr(expr, group_id, physical_props)
     }
 
     pub(super) fn update_sub_group_info(
