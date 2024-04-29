@@ -413,11 +413,11 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeInputsTask<
             // 1. for situation that current expr cannot provide any of the required physical props, we set others as any and put all required to required_enforce_props
             // 2. for situation that expr can pass requirement to children, we separate required_props to pass_to_children_props and required_enforce_props
             // 3. for situation that expr can provide the required physical props by its own(sort merge join to provide ordering), we set pass_to_children_props to any and required_enforce_props to any
-            let props = self.physical_props_builder.separate_physical_props(expr.typ, expr.data, self.required_physical_props, len(children_group_ids));
+            let props = self.physical_props_builder.separate_physical_props(expr.typ, expr.data, self.required_physical_props, children_group_ids.len());
 
             let mut tasks = Vec::with_capacity(props.len());
             for (pass_to_children_props, required_enforce_prop, required_children_props) in props.into_iter(){
-                let input_cost = self.first_invoke(children_group_ids, optimizer, required_children_props);
+                let input_cost = self.first_invoke(children_group_ids,  required_children_props, optimizer);
                 tasks.push(
                         Box::new(OptimizeInputsTask::<T,P>{
                             expr_id: self.expr_id,

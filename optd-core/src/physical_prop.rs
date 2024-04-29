@@ -33,4 +33,14 @@ pub trait PhysicalPropsBuilder<T: RelNodeTyp>: 'static + Send + Sync{
         expr: RelNodeRef<T>,
         required: &Self::PhysicalProps
     ) -> RelNodeRef<T>;
+
+    // separate physical properties to pass_to_children prop and enforcer prop
+    // pass_to_children prop are further separated to each child
+    fn separate_physical_props(
+        &self,
+        typ: T,
+        data: Option<Vakue>,
+        required: &Self::PhysicalProps,
+        children_len: usize,
+    ) -> Vec<(Self::PhysicalProps, Self::PhysicalProps, Vec<Self::PhysicalProps>)>;
 }
