@@ -7,7 +7,7 @@ use crate::{
         memo::{RelMemoNode, SubGroupInfo, Winner},
         optimizer::ExprId,
         tasks::OptimizeGroupTask,
-        CascadesOptimizer, GroupId, RelNodeContext,
+        CascadesOptimizer, GroupId, RelNodeContext, SubGroupId
     }, cost::Cost, physical_prop::PhysicalPropsBuilder, rel_node::RelNodeTyp
 };
 
@@ -70,13 +70,16 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> OptimizeInputsTask<T, P> {
     /// first invoke of this task, compute the cost of children
     fn first_invoke(
         &self,
-        children: &[GroupId],
+        children: &[(GroupId, SubGroupId)],
+        required_children_props: Vec<P::PhysicalProps>,
         optimizer: &mut CascadesOptimizer<T, P>,
     ) -> Vec<Cost> {
         let zero_cost = optimizer.cost().zero();
         let mut input_cost = Vec::with_capacity(children.len());
-        for (&child, &prop) in children.iter().zip(self.required_children_props.unwrap().iter()) {
-            let group = optimizer.get_sub_group_info_by_props(child, prop);
+        for (&child, &prop) in children.iter().zip(required_children_props.iter()) {
+            // when optimize input task is first invoked, all the children are in default subgroup
+            assert!(child.1 == SubGroupId(0));
+            let group = optimizer.get_sub_group_info_by_props(child.0, prop);
             if group.is_some() && group.unwrap().winner.is_some() {
                 let winner = group.unwrap().winner.unwrap();
                 if !winner.impossible {
@@ -389,31 +392,52 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeInputsTask<
                 Ok(vec![])
             }
         } else {
-            // three situations we can provide the required physical properties:
-            // 1. if current expr can provide the required physical properties like sort merge join can provide ordering
-            // 2. if current expr can pass the required physical properties to its children, like select, project can pass ordering to children
-            // 3. no required_children_props constraints, like any ordering
-            // One situation we can't provide the required physical properties:
-            // 1. current expr cannot provide nor pass the required physical properties to its children, like hash join 
-            if !self.physical_props_builder.can_provide(expr.typ, expr.data, self.required_physical_props.clone()){
-                trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
-                return Ok(vec![]);
+            // 1. if there's no required physical props, we make pass_to_children_props as any and required_enforce_props as any
+            if self.physical_props_builder.is_any(self.required_physical_props){
+                self.pass_to_children_props = Some(self.physical_props_builder.any());
+                self.required_enforce_props = Some(self.physical_props_builder.any());
+                self.required_children_props = Some(vec![self.physical_props_builder.any(); children_group_ids.len()]);
+                let input_cost = self.first_invoke(children_group_ids,  self.required_children_props.clone().unwrap(), optimizer);
+                trace!(event = "task_yield", task = "optimize_inputs", expr_id = %self.expr_id);
+                return Ok(vec![Box::new(self.continue_from(
+                    ContinueTask {
+                        next_group_idx: 0,
+                        input_cost,
+                        return_from_optimize_group: false,
+                    },
+                    self.pruning,
+                )) as Box<dyn Task<T,P>>]);
             }
-            // we leave the passing rules of required physical properties completely to the user
-            // 1. if current expr can provide the required physical props, like sort merge join, the required physical props for children should be Any
-            // 2. if current expr cannot provide, the required physical props should be assigned to children
-            self.required_children_props = Some(self.physical_props_builder.build_children_properties(expr.typ.clone(), expr.data.clone(), children_group_ids.len(), self.required_physical_props.clone()));
 
-            let input_cost = self.first_invoke(children_group_ids, optimizer);
+            // separate the physical properties for the current expr gives us a vector of (pass_to_children_props, required_enforce_props, required_children_props)
+            // 1. for situation that current expr cannot provide any of the required physical props, we set others as any and put all required to required_enforce_props
+            // 2. for situation that expr can pass requirement to children, we separate required_props to pass_to_children_props and required_enforce_props
+            // 3. for situation that expr can provide the required physical props by its own(sort merge join to provide ordering), we set pass_to_children_props to any and required_enforce_props to any
+            let props = self.physical_props_builder.separate_physical_props(expr.typ, expr.data, self.required_physical_props, len(children_group_ids));
+
+            let mut tasks = Vec::with_capacity(props.len());
+            for (pass_to_children_props, required_enforce_prop, required_children_props) in props.into_iter(){
+                let input_cost = self.first_invoke(children_group_ids, optimizer, required_children_props);
+                tasks.push(
+                        Box::new(OptimizeInputsTask::<T,P>{
+                            expr_id: self.expr_id,
+                            continue_from: Some(ContinueTask{
+                                next_group_idx: 0,
+                                input_cost: input_cost,
+                                return_from_optimize_group: false
+                            }),
+                            pruning: self.pruning,
+                            physical_props_builder: self.physical_props_builder.clone(),
+                            required_physical_props: self.required_physical_props.clone(),
+                            required_enforce_props: Some(required_enforce_prop),
+                            required_children_props: Some(required_children_props),
+                            pass_to_children_props: Some(pass_to_children_props), // Add a semicolon here
+                        }) as Box<dyn Task<T,P>>
+                    );
+            }
+            
             trace!(event = "task_yield", task = "optimize_inputs", expr_id = %self.expr_id);
-            Ok(vec![Box::new(self.continue_from(
-                ContinueTask {
-                    next_group_idx: 0,
-                    input_cost,
-                    return_from_optimize_group: false,
-                },
-                self.pruning,
-            )) as Box<dyn Task<T,P>>])
+            Ok(tasks)
         }
     }
 
