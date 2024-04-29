@@ -370,17 +370,30 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeInputsTask<
                 if self.required_enforce_props.is_some() {
                     let required_enforcer_props = self.required_enforce_props.clone().unwrap();
                     if !self.physical_props_builder.is_any(required_enforcer_props){
-                        // TODO: enforce should return an operator which takes the group_id and sub_group_id as children
-                        // and returns a new expr (RelMemoNode)
-                        let new_expr = self.physical_props_builder.enforce(group_id, sub_group_id, required_enforce_props);
-                        // TODO: calculate enforcer cost
-                        let enforcer_cost = cost.zero();
+                        // enforce start enforce operator based on the winner of (group_id, sub_group_id)
+                        let winner_info  = optimizer.get_sub_group_info_by_id(group_id, sub_group_id).winner.unwrap();
+                        let winner_expr_id = winner_info.expr_id;
+                        let winner_cost = winner_info.cost;
 
+                        let winner_expr = optimizer.get_expr_memoed(winner_expr_id);
+
+                        // TODO: we might need to add a match and pick here to create RelNodeRef based on RelMemoNodeRef
+                        let new_expr = self.physical_props_builder.enforce(winner_expr, self.required_enforce_props);
+                        
+                        let enforcer_cost = cost.sum(&cost.compute_cost(
+                            &new_expr.typ,
+                                &new_expr.data,
+                        &[winner_cost],
+                        Some(context.clone()),
+                        Some(optimizer),
+                        ),
+                        &[winner_cost]);
+                        
                         // here we use required_physical_props because the base expr provides the pass_to_children_props and enforcer provides the required_enforce_props
                         // they together provides the required_physical_props
                         let new_expr_id = optimizer.add_sub_group_expr(new_expr, group_id, self.required_physical_props);
                         self.update_winner(
-                            &cost.sum(&cost_so_far, &enforcer_cost),
+                            &enforcer_cost,
                             optimizer,
                             Some(self.required_physical_props),
                             Some(new_expr_id)

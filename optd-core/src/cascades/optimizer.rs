@@ -348,6 +348,14 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         self.memo.get_sub_group_info_by_props(group_id, physical_props)
     }
 
+    pub(super) fn get_sub_group_info_by_id(
+        &self,
+        group_id: GroupId,
+        sub_group_id: SubGroupId,
+    ) -> SubGroupInfo {
+        self.memo.get_sub_group_info_by_id(group_id, sub_group_id)
+    }
+
     pub(super) fn get_sub_group_id(
         &self,
         group_id: GroupId,
