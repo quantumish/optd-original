@@ -74,6 +74,12 @@ enum Commands {
         #[clap(default_value = "password")]
         #[clap(help = "The name of a user with superuser privileges")]
         pgpassword: String,
+
+        #[clap(long)]
+        #[clap(
+            help = "Path to the directory containing warm up queries to be executed before the benchmark"
+        )]
+        warmup_queries_dpath: Option<String>,
     },
 }
 
@@ -100,6 +106,7 @@ async fn cardtest<P: AsRef<Path>>(
     pguser: String,
     pgpassword: String,
     adaptive: bool,
+    warmup_queries_dpath: Option<String>,
 ) -> anyhow::Result<()> {
     let query_ids = if query_ids.is_empty() {
         Vec::from(match benchmark_name {
@@ -124,10 +131,12 @@ async fn cardtest<P: AsRef<Path>>(
         BenchmarkName::Job => Benchmark::Job(JobKitConfig {
             query_ids: query_ids.clone(),
             is_light: false,
+            warmup_queries_dpath: None,
         }),
         BenchmarkName::Joblight => Benchmark::Joblight(JobKitConfig {
             query_ids: query_ids.clone(),
             is_light: true,
+            warmup_queries_dpath,
         }),
     };
 
@@ -277,6 +286,7 @@ async fn main() -> anyhow::Result<()> {
             pguser,
             pgpassword,
             adaptive,
+            warmup_queries_dpath,
         } => {
             cardtest(
                 workspace_dpath,
@@ -288,6 +298,7 @@ async fn main() -> anyhow::Result<()> {
                 pguser,
                 pgpassword,
                 adaptive,
+                warmup_queries_dpath,
             )
             .await
         }

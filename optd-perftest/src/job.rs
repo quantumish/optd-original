@@ -32,6 +32,7 @@ pub const WORKING_JOBLIGHT_QUERY_IDS: &[&str] = &[
 pub struct JobKitConfig {
     pub query_ids: Vec<String>,
     pub is_light: bool,
+    pub warmup_queries_dpath: Option<String>,
 }
 
 impl Display for JobKitConfig {

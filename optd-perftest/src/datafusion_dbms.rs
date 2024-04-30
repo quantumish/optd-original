@@ -41,7 +41,7 @@ pub struct DatafusionDBMS {
 }
 
 const WITH_LOGICAL_FOR_TPCH: bool = true;
-const WITH_LOGICAL_FOR_JOB: bool = true;
+const WITH_LOGICAL_FOR_JOB: bool = false;
 
 #[async_trait]
 impl CardtestRunnerDBMSHelper for DatafusionDBMS {
@@ -200,6 +200,22 @@ impl DatafusionDBMS {
 
     async fn eval_job_estcards(&self, job_kit_config: &JobKitConfig) -> anyhow::Result<Vec<usize>> {
         let job_kit = JobKit::build(&self.workspace_dpath)?;
+
+        // Execute warmup queries, if any.
+        if let Some(warmup_queries_fpath) = &job_kit_config.warmup_queries_dpath {
+            for dent in fs::read_dir(warmup_queries_fpath)? {
+                let dent = dent?;
+                let path = dent.path();
+                if path.is_file() {
+                    let sql = fs::read_to_string(path)?;
+                    println!("executing warmup query: {}", sql);
+                    self.execute_query(&sql).await?;
+                    let explains =
+                        Self::execute(self.get_ctx(), &format!("explain verbose {}", sql)).await?;
+                    self.log_explain(&explains);
+                }
+            }
+        }
 
         let mut estcards = vec![];
         for (query_id, sql_fpath) in job_kit.get_sql_fpath_ordered_iter(job_kit_config)? {
