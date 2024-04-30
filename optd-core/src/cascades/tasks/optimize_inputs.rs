@@ -375,10 +375,12 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeInputsTask<
                         let winner_expr_id = winner_info.expr_id;
                         let winner_cost = winner_info.cost;
 
-                        let winner_expr = optimizer.get_expr_memoed(winner_expr_id);
+                        let winner_expr = optimizer.get_all_expr_bindings(winner_expr_id, Some(0));
+                        assert!(winner_expr.len() == 1);
+                        let winner_expr = winner_expr[0];
 
                         // TODO: we might need to add a match and pick here to create RelNodeRef based on RelMemoNodeRef
-                        let new_expr = self.physical_props_builder.enforce(winner_expr, self.required_enforce_props);
+                        let new_expr = self.physical_props_builder.enforce(winner_expr, &required_enforcer_props);
                         
                         let enforcer_cost = cost.sum(&cost.compute_cost(
                             &new_expr.typ,
@@ -389,9 +391,14 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeInputsTask<
                         ),
                         &[winner_cost]);
                         
+                        let new_expr_memo = RelMemoNode {
+                            typ: new_expr.typ.clone(),
+                            data: new_expr.data.clone(),
+                            children: vec![(group_id, sub_group_id)],
+                        };
                         // here we use required_physical_props because the base expr provides the pass_to_children_props and enforcer provides the required_enforce_props
                         // they together provides the required_physical_props
-                        let new_expr_id = optimizer.add_sub_group_expr(new_expr, group_id, self.required_physical_props);
+                        let new_expr_id = optimizer.add_sub_group_expr(new_expr_memo, group_id, self.required_physical_props);
                         self.update_winner(
                             &enforcer_cost,
                             optimizer,
@@ -426,7 +433,7 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeInputsTask<
             // 1. for situation that current expr cannot provide any of the required physical props, we set others as any and put all required to required_enforce_props
             // 2. for situation that expr can pass requirement to children, we separate required_props to pass_to_children_props and required_enforce_props
             // 3. for situation that expr can provide the required physical props by its own(sort merge join to provide ordering), we set pass_to_children_props to any and required_enforce_props to any
-            let props = self.physical_props_builder.separate_physical_props(expr.typ, expr.data, self.required_physical_props, children_group_ids.len());
+            let props = self.physical_props_builder.separate_physical_props(expr.typ, expr.data, &self.required_physical_props, children_group_ids.len());
 
             let mut tasks = Vec::with_capacity(props.len());
             for (pass_to_children_props, required_enforce_prop, required_children_props) in props.into_iter(){

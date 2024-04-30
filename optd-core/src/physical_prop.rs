@@ -2,7 +2,6 @@ use std::hash::Hash;
 use std::cmp::{Eq, PartialEq};
 use std::fmt::Debug;
 use crate::rel_node::{RelNodeTyp, Value, RelNodeRef};
-use crate::cascades::RelMemoNodeRef;
 
 pub trait PhysicalPropsBuilder<T: RelNodeTyp>: 'static + Send + Sync{
 
