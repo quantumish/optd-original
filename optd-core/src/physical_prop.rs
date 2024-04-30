@@ -7,23 +7,23 @@ pub trait PhysicalPropsBuilder<T: RelNodeTyp>: 'static + Send + Sync{
 
     type PhysicalProps: 'static + Send + Sync + Sized + Clone + Debug + Eq + PartialEq + Hash;
 
-    fn names(&self, props: Self::PhysicalProps) -> Vec<&'static str>;
+    fn names(&self, props: &Self::PhysicalProps) -> Vec<&'static str>;
 
-    fn is_any(&self, props: Self::PhysicalProps) -> bool;
+    fn is_any(&self, props: &Self::PhysicalProps) -> bool;
 
     fn any(&self) -> Self::PhysicalProps;
 
     fn can_provide(
         &self,
-        typ: T,
-        data: Option<Value>,
+        typ: &T,
+        data: &Option<Value>,
         required: &Self::PhysicalProps
     ) -> bool;
 
     fn build_children_properties(
         &self,
-        typ: T,
-        data: Option<Value>,
+        typ: &T,
+        data: &Option<Value>,
         children_len: usize,
         required: &Self::PhysicalProps
     ) -> Vec<Self::PhysicalProps>;
@@ -38,8 +38,8 @@ pub trait PhysicalPropsBuilder<T: RelNodeTyp>: 'static + Send + Sync{
     // pass_to_children prop are further separated to each child
     fn separate_physical_props(
         &self,
-        typ: T,
-        data: Option<Value>,
+        typ: &T,
+        data: &Option<Value>,
         required: &Self::PhysicalProps,
         children_len: usize,
     ) -> Vec<(Self::PhysicalProps, Self::PhysicalProps, Vec<Self::PhysicalProps>)>;

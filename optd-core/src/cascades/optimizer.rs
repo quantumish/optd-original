@@ -343,7 +343,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
     pub(super) fn get_sub_group_info_by_props(
         &self,
         group_id: GroupId,
-        physical_props: P::PhysicalProps,
+        physical_props: &P::PhysicalProps,
     ) -> Option<SubGroupInfo> {
         self.memo.get_sub_group_info_by_props(group_id, physical_props)
     }
@@ -359,7 +359,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
     pub(super) fn get_sub_group_id(
         &self,
         group_id: GroupId,
-        physical_props: P::PhysicalProps,
+        physical_props: &P::PhysicalProps,
     ) -> Option<SubGroupId> {
         self.memo.get_sub_group_id(group_id, physical_props)
     }
@@ -368,7 +368,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         &mut self,
         expr: RelMemoNode<T>,
         group_id: GroupId,
-        physical_props: P::PhysicalProps,
+        physical_props: &P::PhysicalProps,
     ) -> ExprId {
         self.memo.add_sub_group_expr(expr, group_id, physical_props)
     }
@@ -378,7 +378,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
         group_id: GroupId,
         expr_id: Option<ExprId>,
         sub_group_info: SubGroupInfo,
-        physical_props: P::PhysicalProps,
+        physical_props: &P::PhysicalProps,
     ) {
         self.memo.update_sub_group_info(group_id, expr_id, sub_group_info, physical_props)
     }

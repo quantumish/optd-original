@@ -74,12 +74,12 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Group<T, P>{
     pub fn new(physical_props_builder: Arc<P>) -> Self {
         let mut group = Group::<T, P> {
             sub_groups: Vec::new(),
-            physical_props_builder,
+            physical_props_builder: physical_props_builder.clone(),
             physical_props: Vec::new(),
             sub_group_physical_prop_map: HashMap::new(),
             properties: Vec::new().into(),
         };
-        let mut default_sub_group = SubGroup {
+        let default_sub_group = SubGroup {
             sub_group_info: SubGroupInfo{
                 winner: None,
             },
@@ -548,9 +548,9 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
     }
 
     pub fn get_sub_group_info_by_props(&self, group_id: GroupId,
-        required_physical_props: P::PhysicalProps) -> Option<SubGroupInfo> {
+        required_physical_props: &P::PhysicalProps) -> Option<SubGroupInfo> {
         let group = self.groups.get(&self.get_reduced_group_id(group_id)).unwrap();
-        let sub_group_id = group.sub_group_physical_prop_map.get(&required_physical_props);
+        let sub_group_id = group.sub_group_physical_prop_map.get(required_physical_props);
         if let Some(sub_group_id) = sub_group_id {
             return Some(group.sub_groups[sub_group_id.0].sub_group_info.clone());
         }
@@ -563,12 +563,12 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
         group.sub_groups[sub_group_id.0].sub_group_info.clone()
     }
 
-    pub fn get_sub_group_id(&self, group_id: GroupId, required_physical_props: P::PhysicalProps) -> Option<SubGroupId> {
+    pub fn get_sub_group_id(&self, group_id: GroupId, required_physical_props: &P::PhysicalProps) -> Option<SubGroupId> {
         let group = self.groups.get(&self.get_reduced_group_id(group_id)).unwrap();
-        group.sub_group_physical_prop_map.get(&required_physical_props).copied()
+        group.sub_group_physical_prop_map.get(required_physical_props).copied()
     }
 
-    pub fn update_expr_children_sub_group_id(&self, expr_id: ExprId, children_props: Vec<P::PhysicalProps>) -> ExprId{
+    pub fn update_expr_children_sub_group_id(&mut self, expr_id: ExprId, children_props: Vec<P::PhysicalProps>) -> ExprId{
         let memo_node = self.get_expr_memoed(expr_id);
         let children = memo_node.children.iter().zip(children_props.iter()).map(|(child, prop)| {
             let group_id = child.0;
@@ -595,7 +595,8 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
         self.expr_id_to_expr_node.insert(new_expr_id, memo_node.clone().into());
         self.expr_id_to_group_id.insert(new_expr_id, group_id);
         self.expr_node_to_expr_id.insert(memo_node.clone(), new_expr_id);
-        self.get_group(group_id).insert_expr_to_default_sub_group(new_expr_id);
+        let group = self.groups.get_mut(&self.get_reduced_group_id(group_id)).unwrap();
+        group.insert_expr_to_default_sub_group(new_expr_id);
         new_expr_id
     }
 
@@ -621,7 +622,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
         group_id: GroupId,
         expr_id: Option<ExprId>,
         sub_group_info: SubGroupInfo,
-        physical_props: P::PhysicalProps,
+        physical_props: &P::PhysicalProps,
     ) {
         if let Some(ref winner) = sub_group_info.winner {
             if !winner.impossible {
@@ -633,7 +634,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
             }
         }
         let group = self.groups.get_mut(&self.get_reduced_group_id(group_id)).unwrap();
-        if let Some(sub_group_id) = group.sub_group_physical_prop_map.get(&physical_props) {
+        if let Some(sub_group_id) = group.sub_group_physical_prop_map.get(physical_props) {
             group.sub_groups[sub_group_id.0].sub_group_info = sub_group_info;
             if let Some(expr_id) = expr_id {
                 group.sub_groups[sub_group_id.0].sub_group_exprs.insert(expr_id);
@@ -651,7 +652,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
         });
         group.physical_props.push(physical_props.clone());
         group.sub_group_physical_prop_map
-            .insert(physical_props, SubGroupId(sub_group_id));
+            .insert(physical_props.clone(), SubGroupId(sub_group_id));
     }
 
     pub fn update_group_info(&mut self, group_id: GroupId, group_info: SubGroupInfo) {
@@ -668,7 +669,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
         grp.unwrap().sub_groups[0].sub_group_info = group_info;
     }
 
-    pub fn add_sub_group_expr(&mut self, new_expr: RelMemoNode<T>, group_id: GroupId, physical_props: P::PhysicalProps) -> ExprId{
+    pub fn add_sub_group_expr(&mut self, new_expr: RelMemoNode<T>, group_id: GroupId, physical_props: &P::PhysicalProps) -> ExprId{
         // 1. add the new expr to the memo table
         if let Some(&expr_id) = self.expr_node_to_expr_id.get(&new_expr) {
             return expr_id;
@@ -685,7 +686,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
         // 2. insert the expr id to sub group
         // as add_sub_group_expr are called for counterpart exprs, there's
         // no need to add the counterpart expr to the default sub group
-        let group = self.get_group(group_id);
+        let group = self.groups.get_mut(&self.get_reduced_group_id(group_id)).unwrap();
         if group.sub_group_physical_prop_map.contains_key(&physical_props) {
             let sub_group_id = group.sub_group_physical_prop_map.get(&physical_props).unwrap();
             group.sub_groups[sub_group_id.0].sub_group_exprs.insert(expr_id);
@@ -702,7 +703,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
         });
         group.physical_props.push(physical_props.clone());
         group.sub_group_physical_prop_map
-            .insert(physical_props, SubGroupId(sub_group_id));
+            .insert(physical_props.clone(), SubGroupId(sub_group_id));
         return expr_id;
     }
 
@@ -712,7 +713,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
         physical_props: P::PhysicalProps,
         meta: &mut Option<RelNodeMetaMap>,
     ) -> Result<RelNodeRef<T>> {
-        let info = self.get_sub_group_info_by_props(group_id, physical_props);
+        let info = self.get_sub_group_info_by_props(group_id, &physical_props);
         if let Some(info) = info{
             if let Some(winner) = info.winner {
                 if !winner.impossible {

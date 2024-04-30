@@ -38,7 +38,7 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeGroupTask<T
     fn execute(&self, optimizer: &mut CascadesOptimizer<T, P>) -> Result<Vec<Box<dyn Task<T,P>>>> {
         trace!(event = "task_begin", task = "optimize_group", group_id = %self.group_id);
 
-        let group_info = optimizer.get_sub_group_info_by_props(self.group_id, self.required_physical_props);
+        let group_info = optimizer.get_sub_group_info_by_props(self.group_id, &self.required_physical_props);
         if group_info.is_some() && group_info.unwrap().winner.is_some() {
             trace!(event = "task_finish", task = "optimize_group");
             return Ok(vec![]);
