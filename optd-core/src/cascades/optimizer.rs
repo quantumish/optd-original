@@ -426,10 +426,11 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> CascadesOptimizer<T, P> {
     pub fn get_all_group_bindings(
         &self,
         group_id: GroupId,
+        sub_group_id: SubGroupId,
         physical_only: bool,
     ) -> Vec<RelNodeRef<T>> {
         self.memo
-            .get_all_group_bindings(group_id, physical_only, true, Some(10))
+            .get_all_group_bindings(group_id, sub_group_id, physical_only, true, Some(10))
     }
 
     pub(super) fn is_group_explored(&self, group_id: GroupId) -> bool {

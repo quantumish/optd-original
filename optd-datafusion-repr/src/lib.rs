@@ -118,6 +118,8 @@ impl DatafusionOptimizer {
             Box::new(ColumnRefPropertyBuilder::new(catalog.clone())),
         ]);
         let physical_properties_builder = PhysicalPropsBuilderImpl::new();
+        // TODO(avery): add real required_root_props
+        let required_root_props = physical_properties_builder.any();
         let cost_model = AdaptiveCostModel::new(DEFAULT_DECAY, stats);
         Self {
             runtime_statistics: cost_model.get_runtime_map(),
@@ -129,7 +131,7 @@ impl DatafusionOptimizer {
                     Box::new(ColumnRefPropertyBuilder::new(catalog.clone())),
                 ],
                 Arc::new(physical_properties_builder),
-                physical_properties_builder.any(),
+                required_root_props,
                 OptimizerProperties {
                     partial_explore_iter: Some(1 << 20),
                     partial_explore_space: Some(1 << 10),

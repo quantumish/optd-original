@@ -425,7 +425,7 @@ impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp, EmptyPhysica
                 let (row_cnt, compute_cost, _) = Self::cost_tuple(&children[0]);
                 let row_cnt = if let (Some(context), Some(optimizer)) = (context, optimizer) {
                     let mut fetch_expr =
-                        optimizer.get_all_group_bindings(context.children_group_ids[2], false);
+                        optimizer.get_all_group_bindings(context.children_group_ids[2].0, context.children_group_ids[2].1, false);
                     assert!(
                         fetch_expr.len() == 1,
                         "fetch expression should be the only expr in the group"
@@ -460,7 +460,7 @@ impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp, EmptyPhysica
                     let column_refs = optimizer
                         .get_property_by_group::<ColumnRefPropertyBuilder>(context.group_id, 1);
                     let expr_group_id = context.children_group_ids[1];
-                    let expr_trees = optimizer.get_all_group_bindings(expr_group_id, false);
+                    let expr_trees = optimizer.get_all_group_bindings(expr_group_id.0, expr_group_id.1, false);
                     // there may be more than one expression tree in a group (you can see this trivially as you can just swap the order of two subtrees for commutative operators)
                     // however, we just take an arbitrary expression tree from the group to compute selectivity
                     let expr_tree = expr_trees.first().expect("expression missing");
@@ -482,7 +482,7 @@ impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp, EmptyPhysica
                     let column_refs = optimizer
                         .get_property_by_group::<ColumnRefPropertyBuilder>(context.group_id, 1);
                     let expr_group_id = context.children_group_ids[2];
-                    let expr_trees = optimizer.get_all_group_bindings(expr_group_id, false);
+                    let expr_trees = optimizer.get_all_group_bindings(expr_group_id.0, expr_group_id.1, false);
                     // there may be more than one expression tree in a group. see comment in OptRelNodeTyp::PhysicalFilter(_) for more information
                     let expr_tree = expr_trees.first().expect("expression missing");
                     self.get_join_selectivity_from_expr_tree(
@@ -515,9 +515,9 @@ impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp, EmptyPhysica
                     let left_keys_group_id = context.children_group_ids[2];
                     let right_keys_group_id = context.children_group_ids[3];
                     let left_keys_list =
-                        optimizer.get_all_group_bindings(left_keys_group_id, false);
+                        optimizer.get_all_group_bindings(left_keys_group_id.0, left_keys_group_id.1, false);
                     let right_keys_list =
-                        optimizer.get_all_group_bindings(right_keys_group_id, false);
+                        optimizer.get_all_group_bindings(right_keys_group_id.0, right_keys_group_id.1, false);
                     // there may be more than one expression tree in a group. see comment in OptRelNodeTyp::PhysicalFilter(_) for more information
                     let left_keys = left_keys_list.first().expect("left keys missing");
                     let right_keys = right_keys_list.first().expect("right keys missing");
@@ -603,9 +603,9 @@ impl<M: MostCommonValues, D: Distribution> OptCostModel<M, D> {
         child_row_cnt: f64,
     ) -> f64 {
         if let (Some(context), Some(optimizer)) = (context, optimizer) {
-            let group_by_id = context.children_group_ids[2].0;
+            let group_by_id = context.children_group_ids[2];
             let mut group_by_exprs: Vec<Arc<RelNode<OptRelNodeTyp>>> =
-                optimizer.get_all_group_bindings(group_by_id, false);
+                optimizer.get_all_group_bindings(group_by_id.0, group_by_id.1, false);
             assert!(
                 group_by_exprs.len() == 1,
                 "ExprList expression should be the only expression in the GROUP BY group"

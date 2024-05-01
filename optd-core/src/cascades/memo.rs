@@ -95,6 +95,10 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Group<T, P>{
         self.sub_groups[0].sub_group_exprs.insert(expr_id);
     }
 
+    pub fn sub_group_exprs(&self, sub_group_id: SubGroupId) -> &HashSet<ExprId> {
+        &self.sub_groups[sub_group_id.0].sub_group_exprs
+    }
+
     pub fn group_exprs(&self) -> &HashSet<ExprId> {
         &(self.sub_groups[0].sub_group_exprs)
     }
@@ -430,6 +434,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
     pub fn get_all_group_bindings(
         &self,
         group_id: GroupId,
+        sub_group_id: SubGroupId,
         physical_only: bool,
         exclude_placeholder: bool,
         level: Option<usize>,
@@ -437,7 +442,7 @@ impl<T: RelNodeTyp, P: PhysicalPropsBuilder<T>> Memo<T, P> {
         let group_id = self.get_reduced_group_id(group_id);
         let group = self.groups.get(&group_id).expect("group not found");
         group
-            .group_exprs()
+            .sub_group_exprs(sub_group_id)
             .iter()
             .filter(|x| !physical_only || !self.get_expr_memoed(**x).typ.is_logical())
             .map(|&expr_id| {
