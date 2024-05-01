@@ -111,6 +111,7 @@ impl<
         } else {
             DEFAULT_UNK_SEL
         };
+        println!("selectivity: {}", selectivity);
         Self::cost(
             (row_cnt_1 * row_cnt_2 * selectivity).max(1.0),
             row_cnt_1 * 2.0 + row_cnt_2,
@@ -376,7 +377,13 @@ impl<
             .into_iter()
             .map(|base_col_ref| {
                 match self.get_column_comb_stats(&base_col_ref.table, &[base_col_ref.col_idx]) {
-                    Some(per_col_stats) => per_col_stats.ndistinct,
+                    Some(per_col_stats) => {
+                        println!(
+                            "ndistinct: {:?} from {:?}",
+                            per_col_stats.ndistinct, base_col_ref
+                        );
+                        per_col_stats.ndistinct
+                    }
                     None => DEFAULT_NUM_DISTINCT,
                 }
             })
@@ -432,6 +439,7 @@ impl<
                 } else {
                     1.0
                 };
+                println!("left sel: {}", left_sel);
                 let right_sel = if past_eq_columns.contains(&predicate.right) {
                     self.get_join_selectivity_from_most_selective_columns(
                         past_eq_columns.find_cols_for_eq_column_set(&predicate.right),
@@ -439,9 +447,11 @@ impl<
                 } else {
                     1.0
                 };
+                println!("right sel: {}", right_sel);
                 left_sel * right_sel
             }
         };
+        println!("children_pred_sel: {}", children_pred_sel);
 
         // Add predicate to past_eq_columns and compute the selectivity of the connected component it creates.
         past_eq_columns.add_predicate(predicate.clone());
@@ -449,6 +459,7 @@ impl<
             let cols = past_eq_columns.find_cols_for_eq_column_set(&predicate.left);
             self.get_join_selectivity_from_most_selective_columns(cols)
         };
+        println!("new_pred_sel: {}", new_pred_sel);
 
         // Compute the adjustment factor.
         new_pred_sel / children_pred_sel

@@ -82,7 +82,6 @@ impl<
             let guard = self.runtime_row_cnt.lock().unwrap();
             if let Some((runtime_row_cnt, iter)) = guard.history.get(&context.group_id) {
                 if *iter + self.decay >= guard.iter_cnt {
-                    println!("runtime_row_cnt: {}", runtime_row_cnt);
                     let runtime_row_cnt = (*runtime_row_cnt).max(1) as f64;
                     row_cnt = runtime_row_cnt;
                 }
