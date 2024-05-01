@@ -99,9 +99,9 @@ impl DatafusionOptimizer {
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
             ProjectFilterTransposeRule::new(),
         )));
-        rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
-            ProjectionPushDownJoin::new(),
-        )));
+        // rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
+        //     ProjectionPushDownJoin::new(),
+        // )));
         // add all filter pushdown rules as heuristic rules
         rule_wrappers.push(RuleWrapper::new_heuristic(Arc::new(
             FilterProjectTransposeRule::new(),

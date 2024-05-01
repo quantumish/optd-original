@@ -17,6 +17,10 @@ use crate::plan_nodes::{
 use crate::properties::schema::SchemaPropertyBuilder;
 
 // (Proj A) join B -> (Proj (A join B))
+// TODO: rule currently doesn't work under current 
+// cascades + heuristic rule wrapper infrastructure
+// correctness verified using unit tests in current file
+// and via comparisons against CockroachDB & Calcite
 define_rule!(
     ProjectionPullUpJoin,
     apply_projection_pull_up_join,
