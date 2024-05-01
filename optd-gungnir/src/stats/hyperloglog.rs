@@ -8,9 +8,9 @@
 use optd_core::rel_node::Value;
 
 use crate::stats::murmur2::murmur_hash;
-use std::cmp::max;
+use std::{cmp::max, marker::PhantomData};
 
-pub const DEFAULT_PRECISION: u8 = 12;
+pub const DEFAULT_PRECISION: u8 = 16;
 
 /// Trait to transform any object into a stream of bytes.
 pub trait ByteSerializable {
@@ -20,11 +20,13 @@ pub trait ByteSerializable {
 /// The HyperLogLog (HLL) structure to provide a statistical estimate of NDistinct.
 /// For safety reasons, HLLs can only count elements of the same ByteSerializable type.
 #[derive(Clone)]
-pub struct HyperLogLog {
+pub struct HyperLogLog<T: ByteSerializable> {
     registers: Vec<u8>, // The buckets to estimate HLL on (i.e. upper p bits).
     precision: u8,      // The precision (p) of our HLL; 4 <= p <= 16.
     m: usize,           // The number of HLL buckets; 2^p.
     alpha: f64,         // The normal HLL multiplier factor.
+
+    data_type: PhantomData<T>, // For type checker.
 }
 
 // Serialize optd's Value.
@@ -86,7 +88,10 @@ impl_byte_serializable_for_numeric!(usize, isize);
 impl_byte_serializable_for_numeric!(f64, f32);
 
 // Self-contained implementation of the HyperLogLog data structure.
-impl HyperLogLog {
+impl<'a, T> HyperLogLog<T>
+where
+    T: ByteSerializable + 'a,
+{
     /// Creates and initializes a new empty HyperLogLog.
     pub fn new(precision: u8) -> Self {
         assert!((4..=16).contains(&precision));
@@ -99,41 +104,41 @@ impl HyperLogLog {
             precision,
             m,
             alpha,
+
+            data_type: PhantomData,
         }
     }
 
-    /// Digests an array of ByteSerializable data into the HLL.
-    pub fn aggregate<T>(&mut self, data: &[T])
+    pub fn process(&mut self, element: &T)
     where
         T: ByteSerializable,
     {
-        for d in data {
-            let hash = murmur_hash(&d.to_bytes(), 0); // TODO: We ignore DoS attacks (seed).
-            let mask = (1 << (self.precision)) - 1;
-            let idx = (hash & mask) as usize; // LSB is bucket discriminator; MSB is zero streak.
-            self.registers[idx] = max(self.registers[idx], self.zeros(hash) + 1);
-        }
+        let hash = murmur_hash(&element.to_bytes(), 0); // TODO: We ignore DoS attacks (seed).
+        let mask = (1 << (self.precision)) - 1;
+        let idx = (hash & mask) as usize; // LSB is bucket discriminator; MSB is zero streak.
+        self.registers[idx] = max(self.registers[idx], self.zeros(hash) + 1);
+    }
+
+    /// Digests an array of ByteSerializable data into the HLL.
+    pub fn aggregate<I>(&mut self, data: I)
+    where
+        I: Iterator<Item = &'a T>,
+        T: ByteSerializable,
+    {
+        data.for_each(|e| self.process(e));
     }
 
     /// Merges two HLLs together and returns a new one.
     /// Particularly useful for parallel execution.
-    /// NOTE: Takes ownership of self and other.
-    pub fn merge(self, other: HyperLogLog) -> Self {
+    pub fn merge(&mut self, other: &HyperLogLog<T>) {
         assert!(self.precision == other.precision);
 
-        let merged_registers = self
+        self.registers = self
             .registers
-            .into_iter()
-            .zip(other.registers)
-            .map(|(x, y)| x.max(y))
+            .iter()
+            .zip(other.registers.iter())
+            .map(|(&x, &y)| x.max(y))
             .collect();
-
-        HyperLogLog {
-            registers: merged_registers,
-            precision: self.precision,
-            m: self.m,
-            alpha: self.alpha,
-        }
     }
 
     /// Returns an estimation of the n_distinct seen so far by the HLL.
@@ -192,8 +197,8 @@ mod tests {
     fn hll_small_strings() {
         let mut hll = HyperLogLog::new(12);
 
-        let data = vec!["a".to_string(), "b".to_string()];
-        hll.aggregate(&data);
+        let data = ["a".to_string(), "b".to_string()];
+        hll.aggregate(data.iter());
         assert_eq!(hll.n_distinct(), data.len() as u64);
     }
 
@@ -201,8 +206,8 @@ mod tests {
     fn hll_small_u64() {
         let mut hll = HyperLogLog::new(12);
 
-        let data = vec![1, 2];
-        hll.aggregate(&data);
+        let data = [1, 2];
+        hll.aggregate(data.iter());
         assert_eq!(hll.n_distinct(), data.len() as u64);
     }
 
@@ -240,7 +245,7 @@ mod tests {
         let relative_error = 0.05; // We allow a 5% relatative error rate.
 
         let strings = generate_random_strings(n_distinct, 100, 0);
-        hll.aggregate(&strings);
+        hll.aggregate(strings.iter());
 
         assert!(is_close(
             hll.n_distinct() as f64,
@@ -256,7 +261,7 @@ mod tests {
         let n_jobs = 16;
         let relative_error = 0.05; // We allow a 5% relatative error rate.
 
-        let result_hll = Arc::new(Mutex::new(Option::Some(HyperLogLog::new(precision))));
+        let result_hll = Arc::new(Mutex::new(HyperLogLog::new(precision)));
         let job_id = AtomicUsize::new(0);
         thread::scope(|s| {
             for _ in 0..n_jobs {
@@ -265,7 +270,7 @@ mod tests {
                     let curr_job_id = job_id.fetch_add(1, Ordering::SeqCst);
 
                     let strings = generate_random_strings(n_distinct, 100, curr_job_id);
-                    local_hll.aggregate(&strings);
+                    local_hll.aggregate(strings.iter());
 
                     assert!(is_close(
                         local_hll.n_distinct() as f64,
@@ -274,13 +279,13 @@ mod tests {
                     ));
 
                     let mut result = result_hll.lock().unwrap();
-                    *result = Option::Some(result.take().unwrap().merge(local_hll));
+                    result.merge(&local_hll);
                 });
             }
         })
         .unwrap();
 
-        let hll = result_hll.lock().unwrap().take().unwrap();
+        let hll = result_hll.lock().unwrap();
         assert!(is_close(
             hll.n_distinct() as f64,
             (n_distinct * n_jobs) as f64,
