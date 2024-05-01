@@ -1,5 +1,5 @@
 SELECT *
-FROM movie_companies mc,
+FROM movie_keyword mk,
     title t
-WHERE t.id=mc.movie_id
-    AND mc.company_type_id=2;
+WHERE t.id=mk.movie_id
+AND t.production_year>2005;

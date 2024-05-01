@@ -456,6 +456,7 @@ impl<
         // Add predicate to past_eq_columns and compute the selectivity of the connected component it creates.
         past_eq_columns.add_predicate(predicate.clone());
         let new_pred_sel = {
+            assert!(past_eq_columns.is_eq(&predicate.left, &predicate.right), "We're about to call find_cols_for_eq_column_set on only &predicate.left. Make sure this would get the cols for &predicate.right as well");
             let cols = past_eq_columns.find_cols_for_eq_column_set(&predicate.left);
             self.get_join_selectivity_from_most_selective_columns(cols)
         };
