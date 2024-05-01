@@ -24,4 +24,5 @@ pub use project_transpose::{
     project_filter_transpose::{FilterProjectTransposeRule, ProjectFilterTransposeRule},
     project_join_transpose::{ProjectionPullUpJoin, ProjectionPushDownJoin},
     project_merge::ProjectMergeRule,
+    project_remove::ProjectRemoveRule,
 };
