@@ -5,15 +5,14 @@ use optd_core::{
     heuristics::HeuristicsOptimizer,
     optimizer::Optimizer,
     rel_node::Value,
+    physical_prop::PhysicalPropsBuilder,
     rules::{Rule, RuleWrapper},
 };
 use optd_datafusion_repr::{
-    cost::{base_cost::DataFusionPerTableStats, OptCostModel},
-    plan_nodes::{
+    cost::{base_cost::DataFusionPerTableStats, OptCostModel}, physical_properties::{self, PhysicalPropsBuilderImpl}, plan_nodes::{
         BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, JoinType, LogicalFilter, LogicalJoin,
         LogicalScan, OptRelNode, OptRelNodeTyp, PlanNode,
-    },
-    rules::{HashJoinRule, JoinAssocRule, JoinCommuteRule, PhysicalConversionRule},
+    }, rules::{HashJoinRule, JoinAssocRule, JoinCommuteRule, PhysicalConversionRule}
 };
 
 use tracing::Level;
@@ -25,7 +24,7 @@ pub fn main() {
         .with_target(false)
         .init();
 
-    let rules: Vec<Arc<dyn Rule<OptRelNodeTyp, CascadesOptimizer<OptRelNodeTyp>>>> = vec![
+    let rules: Vec<Arc<dyn Rule<OptRelNodeTyp, CascadesOptimizer<OptRelNodeTyp, PhysicalPropsBuilderImpl>>>> = vec![
         Arc::new(JoinCommuteRule::new()),
         Arc::new(JoinAssocRule::new()),
         Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Scan)),
@@ -40,6 +39,8 @@ pub fn main() {
         rule_wrappers.push(RuleWrapper::new_cascades(rule));
     }
 
+    let physical_properties_builder = PhysicalPropsBuilderImpl::new();
+    let required_root_props = physical_properties_builder.any();
     let mut optimizer = CascadesOptimizer::new(
         rule_wrappers,
         Box::new(OptCostModel::new(
@@ -49,6 +50,8 @@ pub fn main() {
                 .collect(),
         )),
         vec![],
+        Arc::new(physical_properties_builder),
+        required_root_props,
     );
 
     // The plan: (filter (scan t1) #1=2) join (scan t2) join (scan t3)
@@ -65,7 +68,7 @@ pub fn main() {
     let join_filter = LogicalJoin::new(filter1.0, scan2.0, join_cond.clone().0, JoinType::Inner);
     let fnal = LogicalJoin::new(scan3.0, join_filter.0, join_cond.0, JoinType::Inner);
     let node = optimizer.optimize(fnal.0.clone().into_rel_node());
-    optimizer.dump(None);
+    optimizer.dump(None, None);
     let node: Arc<optd_core::rel_node::RelNode<OptRelNodeTyp>> = node.unwrap();
     println!(
         "cost={}",

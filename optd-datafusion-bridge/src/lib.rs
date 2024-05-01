@@ -29,6 +29,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     sync::{Arc, Mutex},
 };
+use optd_core::cascades::SubGroupId;
 
 pub struct OptdPlanContext<'a> {
     tables: HashMap<String, Arc<dyn TableSource>>,
@@ -267,9 +268,10 @@ impl OptdQueryPlanner {
                     "None".to_string()
                 },
             ));
+            // TODO(avery):use real required root props corresponding sub_group_id
             let bindings = optimizer
                 .optd_cascades_optimizer()
-                .get_all_group_bindings(group_id, true);
+                .get_all_group_bindings(group_id, SubGroupId(0), true);
             let mut join_orders = BTreeSet::new();
             let mut logical_join_orders = BTreeSet::new();
             for binding in bindings {

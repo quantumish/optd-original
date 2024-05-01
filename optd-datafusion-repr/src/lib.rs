@@ -214,6 +214,7 @@ impl DatafusionOptimizer {
         let group_id = self.cascades_optimizer.step_optimize_rel(root_rel)?;
 
         let mut meta = Some(HashMap::new());
+        // TODO(avery): use real required_root_props
         let optimized_rel = self
             .cascades_optimizer
             .step_get_optimize_rel(group_id, PhysicalPropsBuilderImpl::new().any(), &mut meta)?;
