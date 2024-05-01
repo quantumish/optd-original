@@ -1,5 +1,1 @@
-SELECT *
-FROM movie_keyword mk,
-    title t
-WHERE t.id=mk.movie_id
-AND t.production_year>2005;
+SELECT * FROM movie_keyword mk WHERE mk.keyword_id=7084;

@@ -197,6 +197,10 @@ impl Value {
                 Value::Int64(i64) => (*i64).try_into().unwrap(),
                 _ => panic!("{self} could not be converted into an Int32"),
             }),
+            DataType::UInt64 => Value::Int64(match self {
+                Value::Int64(i64) => (*i64).try_into().unwrap(),
+                _ => panic!("{self} could not be converted into an Int64"),
+            }),
             DataType::Date32 => Value::Date32(match self {
                 Value::Date32(date32) => *date32,
                 Value::String(str) => {
@@ -208,7 +212,9 @@ impl Value {
                 }
                 _ => panic!("{self} could not be converted into an Date32"),
             }),
-            _ => unimplemented!("Have not implemented convert_to_type for DataType {typ}"),
+            _ => unimplemented!(
+                "Have not implemented convert_to_type for DataType {typ} from {self}"
+            ),
         }
     }
 }
