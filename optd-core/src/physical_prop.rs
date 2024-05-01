@@ -7,6 +7,8 @@ pub trait PhysicalPropsBuilder<T: RelNodeTyp>: 'static + Send + Sync{
 
     type PhysicalProps: 'static + Send + Sync + Sized + Clone + Debug + Eq + PartialEq + Hash;
 
+    fn new() -> Self;
+
     fn names(&self, props: &Self::PhysicalProps) -> Vec<&'static str>;
 
     fn is_any(&self, props: &Self::PhysicalProps) -> bool;

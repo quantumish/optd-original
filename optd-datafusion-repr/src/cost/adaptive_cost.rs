@@ -1,13 +1,10 @@
 use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
+    collections::HashMap, io::Empty, sync::{Arc, Mutex}
 };
 
-use crate::{cost::OptCostModel, plan_nodes::OptRelNodeTyp};
+use crate::{cost::OptCostModel, plan_nodes::OptRelNodeTyp, physical_properties::EmptyPhysicalPropsBuilder};
 use optd_core::{
-    cascades::{CascadesOptimizer, GroupId, RelNodeContext},
-    cost::{Cost, CostModel},
-    rel_node::{RelNode, Value},
+    cascades::{CascadesOptimizer, GroupId, RelNodeContext}, cost::{Cost, CostModel}, physical_prop::PhysicalPropsBuilder, rel_node::{RelNode, Value}
 };
 
 use super::base_cost::{
@@ -33,7 +30,7 @@ pub struct AdaptiveCostModel<M: MostCommonValues, D: Distribution> {
     decay: usize,
 }
 
-impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp> for AdaptiveCostModel<M, D> {
+impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp, EmptyPhysicalPropsBuilder> for AdaptiveCostModel<M, D> {
     fn explain(&self, cost: &Cost) -> String {
         self.base_model.explain(cost)
     }
@@ -52,7 +49,7 @@ impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp> for Adaptive
         data: &Option<Value>,
         children: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp, EmptyPhysicalPropsBuilder>>,
     ) -> Cost {
         if let OptRelNodeTyp::PhysicalScan = node {
             let guard = self.runtime_row_cnt.lock().unwrap();

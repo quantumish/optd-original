@@ -37,7 +37,7 @@ pub use projection::{LogicalProjection, PhysicalProjection};
 pub use scan::{LogicalScan, PhysicalScan};
 pub use sort::{LogicalSort, PhysicalSort};
 
-use crate::properties::schema::{Schema, SchemaPropertyBuilder};
+use crate::{physical_properties::PhysicalPropsBuilderImpl, properties::schema::{Schema, SchemaPropertyBuilder}};
 
 /// OptRelNodeTyp FAQ:
 ///   - The define_plan_node!() macro defines what the children of each join node are
@@ -147,12 +147,16 @@ impl RelNodeTyp for OptRelNodeTyp {
         )
     }
 
-    fn group_typ(group_id: GroupId) -> Self {
-        Self::Placeholder(group_id, 0)
+    fn group_typ(group_id: GroupId, sub_group_id: SubGroupId) -> Self {
+        Self::Placeholder(group_id, sub_group_id)
     }
 
-    fn sub_group_typ(group_id: GroupId, sub_group_id: SubGroupId) -> Self {
-        Self::Placeholder(group_id, sub_group_id)
+    fn extract_group_and_sub_group(&self) -> Option<(GroupId, SubGroupId)> {
+        if let Self::Placeholder(group_id, sub_group_id) = self {
+            Some((*group_id, *sub_group_id))
+        } else {
+            None
+        }
     }
 
     fn list_typ() -> Self {
@@ -162,14 +166,6 @@ impl RelNodeTyp for OptRelNodeTyp {
     fn extract_group(&self) -> Option<GroupId> {
         if let Self::Placeholder(group_id, _) = self {
             Some(*group_id)
-        } else {
-            None
-        }
-    }
-
-    fn extract_sub_group(&self) -> Option<SubGroupId> {
-        if let Self::Placeholder(_, sub_group_id) = self {
-            Some(*sub_group_id)
         } else {
             None
         }
@@ -241,7 +237,7 @@ impl PlanNode {
         self.0.typ.clone()
     }
 
-    pub fn schema(&self, optimizer: &CascadesOptimizer<OptRelNodeTyp>) -> Schema {
+    pub fn schema(&self, optimizer: &CascadesOptimizer<OptRelNodeTyp, PhysicalPropsBuilderImpl>) -> Schema {
         let group_id = optimizer.resolve_group_id(self.0.clone());
         optimizer.get_property_by_group::<SchemaPropertyBuilder>(group_id, 0)
     }
@@ -368,7 +364,7 @@ pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pr
         OptRelNodeTyp::PhysicalNestedLoopJoin(_) => PhysicalNestedLoopJoin::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
-        OptRelNodeTyp::Placeholder(_) => unreachable!("should not explain a placeholder"),
+        OptRelNodeTyp::Placeholder(_, _) => unreachable!("should not explain a placeholder"),
         OptRelNodeTyp::List => {
             ExprList::from_rel_node(rel_node) // ExprList is the only place that we will have list in the datafusion repr
                 .unwrap()

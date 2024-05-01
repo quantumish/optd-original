@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::physical_properties::EmptyPhysicalPropsBuilder;
 use crate::plan_nodes::{
     BinOpType, ColumnRefExpr, ConstantExpr, ConstantType, Expr, ExprList, LogOpExpr, LogOpType,
     OptRelNode, UnOpType,
@@ -20,13 +21,14 @@ use optd_core::{
     cascades::{CascadesOptimizer, RelNodeContext},
     cost::{Cost, CostModel},
     rel_node::{RelNode, RelNodeTyp, Value},
+    physical_prop::PhysicalPropsBuilder
 };
 use optd_gungnir::stats::hyperloglog::{self, HyperLogLog};
 use optd_gungnir::stats::tdigest::{self, TDigest};
 use optd_gungnir::utils::arith_encoder;
 use serde::{Deserialize, Serialize};
 
-fn compute_plan_node_cost<T: RelNodeTyp, C: CostModel<T>>(
+fn compute_plan_node_cost<T: RelNodeTyp, P: PhysicalPropsBuilder<T>, C: CostModel<T, P>>(
     model: &C,
     node: &RelNode<T>,
     total_cost: &mut Cost,
@@ -378,7 +380,7 @@ impl<M: MostCommonValues, D: Distribution> OptCostModel<M, D> {
     }
 }
 
-impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp> for OptCostModel<M, D> {
+impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp, EmptyPhysicalPropsBuilder> for OptCostModel<M, D> {
     fn explain(&self, cost: &Cost) -> String {
         format!(
             "weighted={},row_cnt={},compute={},io={}",
@@ -410,7 +412,7 @@ impl<M: MostCommonValues, D: Distribution> CostModel<OptRelNodeTyp> for OptCostM
         data: &Option<Value>,
         children: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp, EmptyPhysicalPropsBuilder>>,
     ) -> Cost {
         match node {
             OptRelNodeTyp::PhysicalScan => {
@@ -597,11 +599,11 @@ impl<M: MostCommonValues, D: Distribution> OptCostModel<M, D> {
     fn get_agg_row_cnt(
         &self,
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp, EmptyPhysicalPropsBuilder>>,
         child_row_cnt: f64,
     ) -> f64 {
         if let (Some(context), Some(optimizer)) = (context, optimizer) {
-            let group_by_id = context.children_group_ids[2];
+            let group_by_id = context.children_group_ids[2].0;
             let mut group_by_exprs: Vec<Arc<RelNode<OptRelNodeTyp>>> =
                 optimizer.get_all_group_bindings(group_by_id, false);
             assert!(

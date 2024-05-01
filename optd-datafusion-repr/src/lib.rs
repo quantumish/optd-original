@@ -8,14 +8,16 @@ use cost::{
     AdaptiveCostModel, BaseTableStats, RuntimeAdaptionStorage, DEFAULT_DECAY,
 };
 use optd_core::{
-    cascades::{CascadesOptimizer, GroupId, OptimizerProperties},
+    cascades::{CascadesOptimizer, GroupId, SubGroupId, OptimizerProperties},
     heuristics::{ApplyOrder, HeuristicsOptimizer},
     optimizer::Optimizer,
     property::PropertyBuilderAny,
+    physical_prop::PhysicalPropsBuilder,
     rel_node::RelNodeMetaMap,
     rules::{Rule, RuleWrapper},
 };
 
+use physical_properties::PhysicalPropsBuilderImpl;
 use plan_nodes::{OptRelNodeRef, OptRelNodeTyp};
 use properties::{
     column_ref::ColumnRefPropertyBuilder,
@@ -34,10 +36,11 @@ mod explain;
 pub mod plan_nodes;
 pub mod properties;
 pub mod rules;
+pub mod physical_properties;
 
 pub struct DatafusionOptimizer {
     hueristic_optimizer: HeuristicsOptimizer<OptRelNodeTyp>,
-    cascades_optimizer: CascadesOptimizer<OptRelNodeTyp>,
+    cascades_optimizer: CascadesOptimizer<OptRelNodeTyp,PhysicalPropsBuilderImpl>,
     pub runtime_statistics: RuntimeAdaptionStorage,
     enable_adaptive: bool,
     enable_heuristic: bool,
@@ -60,7 +63,7 @@ impl DatafusionOptimizer {
         self.enable_heuristic
     }
 
-    pub fn optd_cascades_optimizer(&self) -> &CascadesOptimizer<OptRelNodeTyp> {
+    pub fn optd_cascades_optimizer(&self) -> &CascadesOptimizer<OptRelNodeTyp, PhysicalPropsBuilderImpl> {
         &self.cascades_optimizer
     }
 
@@ -68,7 +71,7 @@ impl DatafusionOptimizer {
         &self.hueristic_optimizer
     }
 
-    pub fn optd_optimizer_mut(&mut self) -> &mut CascadesOptimizer<OptRelNodeTyp> {
+    pub fn optd_optimizer_mut(&mut self) -> &mut CascadesOptimizer<OptRelNodeTyp, PhysicalPropsBuilderImpl> {
         &mut self.cascades_optimizer
     }
 
@@ -86,7 +89,7 @@ impl DatafusionOptimizer {
     }
 
     pub fn default_cascades_rules(
-    ) -> Vec<Arc<RuleWrapper<OptRelNodeTyp, CascadesOptimizer<OptRelNodeTyp>>>> {
+    ) -> Vec<Arc<RuleWrapper<OptRelNodeTyp, CascadesOptimizer<OptRelNodeTyp, PhysicalPropsBuilderImpl>>>> {
         let rules = PhysicalConversionRule::all_conversions();
         let mut rule_wrappers = vec![];
         for rule in rules {
@@ -114,6 +117,7 @@ impl DatafusionOptimizer {
             Box::new(SchemaPropertyBuilder::new(catalog.clone())),
             Box::new(ColumnRefPropertyBuilder::new(catalog.clone())),
         ]);
+        let physical_properties_builder = PhysicalPropsBuilderImpl::new();
         let cost_model = AdaptiveCostModel::new(DEFAULT_DECAY, stats);
         Self {
             runtime_statistics: cost_model.get_runtime_map(),
@@ -124,6 +128,8 @@ impl DatafusionOptimizer {
                     Box::new(SchemaPropertyBuilder::new(catalog.clone())),
                     Box::new(ColumnRefPropertyBuilder::new(catalog.clone())),
                 ],
+                Arc::new(physical_properties_builder),
+                physical_properties_builder.any(),
                 OptimizerProperties {
                     partial_explore_iter: Some(1 << 20),
                     partial_explore_space: Some(1 << 10),
@@ -170,6 +176,8 @@ impl DatafusionOptimizer {
                 Box::new(SchemaPropertyBuilder::new(catalog.clone())),
                 Box::new(ColumnRefPropertyBuilder::new(catalog)),
             ],
+            Arc::new(PhysicalPropsBuilderImpl::new()),
+            PhysicalPropsBuilderImpl::new().any(),
         );
         Self {
             runtime_statistics,
@@ -206,7 +214,7 @@ impl DatafusionOptimizer {
         let mut meta = Some(HashMap::new());
         let optimized_rel = self
             .cascades_optimizer
-            .step_get_optimize_rel(group_id, &mut meta)?;
+            .step_get_optimize_rel(group_id, PhysicalPropsBuilderImpl::new().any(), &mut meta)?;
 
         Ok((group_id, optimized_rel, meta.unwrap()))
     }
