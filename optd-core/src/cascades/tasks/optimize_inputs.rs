@@ -423,8 +423,8 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeInputsTask<
             if self.physical_props_builder.is_any(&self.required_physical_props){
                 let pass_to_children_props = Some(self.physical_props_builder.any());
                 let required_enforce_props = Some(self.physical_props_builder.any());
-                let required_children_props = Some(vec![self.physical_props_builder.any(); children_group_ids.len()]);
-                let input_cost = self.first_invoke(children_group_ids,  self.required_children_props.as_ref().unwrap(), optimizer);
+                let required_children_props = vec![self.physical_props_builder.any(); children_group_ids.len()];
+                let input_cost = self.first_invoke(children_group_ids,  &required_children_props, optimizer);
                 trace!(event = "task_yield", task = "optimize_inputs", expr_id = %self.expr_id);
                 return Ok(vec![Box::new(OptimizeInputsTask::<T,P>{
                     expr_id: self.expr_id,
@@ -437,7 +437,7 @@ impl<T: RelNodeTyp, P:PhysicalPropsBuilder<T>> Task<T,P> for OptimizeInputsTask<
                     physical_props_builder: self.physical_props_builder.clone(),
                     required_physical_props: self.required_physical_props.clone(),
                     required_enforce_props: required_enforce_props,
-                    required_children_props: required_children_props,
+                    required_children_props: Some(required_children_props),
                     pass_to_children_props: pass_to_children_props,
                 }) as Box<dyn Task<T,P>>]);
             }
