@@ -19,6 +19,7 @@ use arrow_schema::DataType;
 use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
+    optimizer::Optimizer,
     rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp},
 };
 
@@ -231,8 +232,7 @@ impl PlanNode {
     }
 
     pub fn schema(&self, optimizer: &CascadesOptimizer<OptRelNodeTyp>) -> Schema {
-        let group_id = optimizer.resolve_group_id(self.0.clone());
-        optimizer.get_property_by_group::<SchemaPropertyBuilder>(group_id, 0)
+        optimizer.get_property::<SchemaPropertyBuilder>(self.0.clone(), 0)
     }
 
     pub fn from_group(rel_node: OptRelNodeRef) -> Self {
