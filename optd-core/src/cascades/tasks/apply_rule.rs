@@ -250,11 +250,10 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
             let is_transformation_rule = !self.rule.is_impl_rule();
             if is_transformation_rule {
                 // TODO: Increment transformation count
-                optimizer
-                    .enqueue_task(Box::new(ExploreExprTask::new(new_expr_id, self.cost_limit)));
+                optimizer.push_task(Box::new(ExploreExprTask::new(new_expr_id, self.cost_limit)));
             } else {
                 let new_limit = None; // TODO: How do we update cost limit
-                optimizer.enqueue_task(Box::new(OptimizeInputsTask::new(new_expr_id, new_limit)));
+                optimizer.push_task(Box::new(OptimizeInputsTask::new(new_expr_id, new_limit)));
             }
         }
         trace!(event = "task_finish", task = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id);

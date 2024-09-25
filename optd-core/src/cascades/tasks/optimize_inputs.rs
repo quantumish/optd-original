@@ -1,4 +1,3 @@
-use serde::ser::Impossible;
 use tracing::trace;
 
 use crate::{
@@ -58,6 +57,7 @@ fn get_input_cost<T: RelNodeTyp>(
 }
 
 fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>) {
+    dbg!("Update winner invoked");
     let cost = optimizer.cost();
     let expr = optimizer.get_expr_memoed(expr_id);
     let group_id = optimizer.get_group_id(expr_id);
@@ -87,10 +87,20 @@ fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T
     let mut update_cost = false;
     if let Some(winner) = &group_info.winner {
         if winner.impossible || winner.cost > total_cost {
+            dbg!(
+                "updating cost",
+                winner.impossible,
+                winner.cost.clone(),
+                total_cost.clone()
+            );
             update_cost = true;
         }
     } else {
+        dbg!("Updating cost, no winner.");
         update_cost = true;
+    }
+    if !update_cost {
+        dbg!("Not updating cost.");
     }
     // TODO: Deciding the winner and constructing the struct should
     // be performed in the memotable
@@ -122,8 +132,9 @@ fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T
 ///     tasks.Push(OptGrp(GetGroup(childExpr), limit))
 impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
-        trace!(event = "task_begin", task = "optimize_inputs", expr_id = %self.expr_id);
         let expr = optimizer.get_expr_memoed(self.expr_id);
+        // TODO: add typ to more traces and iteration to traces below
+        trace!(event = "task_begin", task = "optimize_inputs", iteration = %self.iteration, expr_id = %self.expr_id, expr = %expr);
         let next_child_expr = expr.children.get(self.iteration);
         if let None = next_child_expr {
             // TODO: If we want to support interrupting the optimizer, it might
@@ -136,10 +147,10 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
 
         //TODO(parallel): Task dependency
         //TODO: Should be able to add multiple tasks at once
-        optimizer.enqueue_task(Box::new(self.new_continue_iteration()));
+        optimizer.push_task(Box::new(self.new_continue_iteration()));
         // TODO updatecostbound (involves cost limit)
         let new_limit = None; // TODO: How do we update cost limit
-        optimizer.enqueue_task(Box::new(OptimizeGroupTask::new(
+        optimizer.push_task(Box::new(OptimizeGroupTask::new(
             *next_child_expr,
             new_limit,
         )));

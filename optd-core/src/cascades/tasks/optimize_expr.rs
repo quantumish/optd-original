@@ -64,11 +64,11 @@ impl<T: RelNodeTyp> Task<T> for OptimizeExprTask {
         for m in moves {
             // TODO: Add an optimized way to enqueue several tasks without
             // locking the tasks queue every time
-            optimizer.enqueue_task(m);
+            optimizer.push_task(m);
         }
         for child_group_id in expr.children.iter() {
             if !optimizer.is_group_explored(*child_group_id) {
-                optimizer.enqueue_task(Box::new(ExploreGroupTask::new(
+                optimizer.push_task(Box::new(ExploreGroupTask::new(
                     *child_group_id,
                     self.cost_limit,
                 )));

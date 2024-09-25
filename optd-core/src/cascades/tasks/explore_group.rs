@@ -36,7 +36,7 @@ impl<T: RelNodeTyp> Task<T> for ExploreGroupTask {
         trace!(event = "task_begin", task = "explore_group", group_id = %self.group_id);
         optimizer.mark_group_explored(self.group_id);
         for expr in optimizer.get_all_exprs_in_group(self.group_id) {
-            optimizer.enqueue_task(Box::new(ExploreExprTask::new(expr, self.cost_limit)));
+            optimizer.push_task(Box::new(ExploreExprTask::new(expr, self.cost_limit)));
         }
         trace!(event = "task_finish", task = "explore_group", group_id = %self.group_id);
     }

@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     fmt::Display,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -8,6 +8,7 @@ use std::{
 };
 
 use anyhow::Result;
+use tracing::trace;
 
 use crate::{
     cost::CostModel,
@@ -76,7 +77,7 @@ struct CascadesOptimizerState<T: RelNodeTyp> {
 /// TODO: Docs
 pub struct CascadesOptimizer<T: RelNodeTyp> {
     /// Tasks that are waiting to be executed
-    tasks: Mutex<VecDeque<Box<dyn Task<T>>>>,
+    tasks: Mutex<Vec<Box<dyn Task<T>>>>,
     /// Parts of the internal state of the optimizer, behind a RwLock
     state: RwLock<CascadesOptimizerState<T>>,
     /// Number of transformation rule applications that have ocurred thus far.
@@ -131,12 +132,12 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         }
     }
 
-    pub fn enqueue_task(&self, task: Box<dyn Task<T>>) {
-        self.tasks.lock().unwrap().push_back(task);
+    pub fn push_task(&self, task: Box<dyn Task<T>>) {
+        self.tasks.lock().unwrap().push(task);
     }
 
-    fn dequeue_task(&self) -> Option<Box<dyn Task<T>>> {
-        self.tasks.lock().unwrap().pop_front()
+    fn pop_task(&self) -> Option<Box<dyn Task<T>>> {
+        self.tasks.lock().unwrap().pop()
     }
 
     /// Returns if a given group ID has already been explored in this run
@@ -328,15 +329,15 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     }
 
     pub fn step_optimize_group(&self, root_group_id: GroupId) -> Result<()> {
-        {
-            let mut tasks = self.tasks.lock().unwrap();
-            if tasks.is_empty() {
-                tasks.push_back(get_initial_task(root_group_id));
-            }
+        let tasks_empty = self.tasks.lock().unwrap().is_empty();
+
+        if tasks_empty {
+            self.push_task(get_initial_task(root_group_id));
         }
 
         // Run single-threaded search
-        while let Some(task) = self.dequeue_task() {
+        while let Some(task) = self.pop_task() {
+            // print query plan
             task.execute(self);
             // execute_task(self, task);
         }
@@ -345,7 +346,9 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     }
 
     pub fn step_optimize_rel(&self, root_rel: RelNodeRef<T>) -> Result<GroupId> {
+        let root_rel_2 = root_rel.clone(); // todo remove
         let (root_group_id, _) = self.add_expr_to_new_group(root_rel);
+        trace!("Optimizing query plan {}", root_rel_2);
         self.step_optimize_group(root_group_id)?;
         Ok(root_group_id)
     }

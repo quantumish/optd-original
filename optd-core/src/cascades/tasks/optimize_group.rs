@@ -47,11 +47,11 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
         // implementation rules. (Task dependency enforced via stack push order)
         if !group_explored {
             // TODO(parallel): Task dependency here
-            optimizer.enqueue_task(Box::new(OptimizeGroupTask::new(
+            optimizer.push_task(Box::new(OptimizeGroupTask::new(
                 self.group_id,
                 self.cost_limit,
             )));
-            optimizer.enqueue_task(Box::new(ExploreGroupTask::new(
+            optimizer.push_task(Box::new(ExploreGroupTask::new(
                 self.group_id,
                 self.cost_limit,
             )));
@@ -59,7 +59,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
             // Optimize every expression in the group
             // (apply implementation rules)
             for expr in optimizer.get_all_exprs_in_group(self.group_id) {
-                optimizer.enqueue_task(Box::new(OptimizeExprTask::new(expr, self.cost_limit)));
+                optimizer.push_task(Box::new(OptimizeExprTask::new(expr, self.cost_limit)));
             }
         }
         trace!(event = "task_finish", task = "optimize_group", group_id = %self.group_id);
