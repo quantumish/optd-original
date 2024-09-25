@@ -88,7 +88,7 @@ fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T
     if let Some(winner) = &group_info.winner {
         if winner.impossible || winner.cost > total_cost {
             dbg!(
-                "updating cost",
+                "updating winner",
                 winner.impossible,
                 winner.cost.clone(),
                 total_cost.clone()
@@ -96,15 +96,16 @@ fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T
             update_cost = true;
         }
     } else {
-        dbg!("Updating cost, no winner.");
+        dbg!("Updating winner, no existing winner.");
         update_cost = true;
     }
     if !update_cost {
-        dbg!("Not updating cost.");
+        dbg!("Not updating winner.");
     }
     // TODO: Deciding the winner and constructing the struct should
     // be performed in the memotable
     if update_cost {
+        println!("Updating winner to cost: {:?}", total_cost.clone());
         optimizer.update_group_info(
             group_id,
             GroupInfo {
@@ -133,14 +134,15 @@ fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T
 impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
         let expr = optimizer.get_expr_memoed(self.expr_id);
+        let group_id = optimizer.get_group_id(self.expr_id);
         // TODO: add typ to more traces and iteration to traces below
-        trace!(event = "task_begin", task = "optimize_inputs", iteration = %self.iteration, expr_id = %self.expr_id, expr = %expr);
+        trace!(event = "task_begin", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
         let next_child_expr = expr.children.get(self.iteration);
         if let None = next_child_expr {
             // TODO: If we want to support interrupting the optimizer, it might
             // behoove us to update the winner more often than this.
             update_winner(self.expr_id, optimizer);
-            trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
+            trace!(event = "task_finish", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
             return;
         }
         let next_child_expr = next_child_expr.unwrap();
@@ -154,6 +156,6 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
             *next_child_expr,
             new_limit,
         )));
-        trace!(event = "task_finish", task = "optimize_inputs", expr_id = %self.expr_id);
+        trace!(event = "task_finish", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
     }
 }

@@ -212,8 +212,6 @@ impl<T: RelNodeTyp> Memo<T> {
 
     /// If group_id exists, it adds expr_id to the existing group
     /// Otherwise, it creates a new group of that group_id and insert expr_id into the new group
-    // TODO: better interface. Option indicates to me we should have two
-    // functions.
     fn add_expr_to_group(
         &mut self,
         expr_id: ExprId,
@@ -231,6 +229,12 @@ impl<T: RelNodeTyp> Memo<T> {
             properties: self.infer_properties(memo_node).into(),
         };
         group.group_exprs.insert(expr_id);
+        // set winner to newly added expression, since it is the only one in the group
+        group.info.winner = Some(Winner {
+            impossible: false,
+            expr_id,
+            cost: Cost::zero(),
+        });
         self.groups.insert(group_id, group);
     }
 

@@ -44,8 +44,9 @@ impl ExploreExprTask {
 ///             tasks.Push(ExplGrp(grp, limit))
 impl<T: RelNodeTyp> Task<T> for ExploreExprTask {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
-        trace!(event = "task_begin", task = "explore_expr", expr_id = %self.expr_id);
         let expr = optimizer.get_expr_memoed(self.expr_id);
+        let group_id = optimizer.get_group_id(self.expr_id);
+        trace!(event = "task_begin", task = "explore_expr", group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
 
         let mut moves = vec![];
         for (rule_id, rule) in optimizer.transformation_rules().iter() {
@@ -74,6 +75,6 @@ impl<T: RelNodeTyp> Task<T> for ExploreExprTask {
                 )));
             }
         }
-        trace!(event = "task_finish", task = "explore_expr", expr_id = %self.expr_id);
+        trace!(event = "task_finish", task = "explore_expr", group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
     }
 }

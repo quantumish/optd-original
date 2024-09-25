@@ -337,9 +337,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
 
         // Run single-threaded search
         while let Some(task) = self.pop_task() {
-            // print query plan
             task.execute(self);
-            // execute_task(self, task);
         }
 
         Ok(())
