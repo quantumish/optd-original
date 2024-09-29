@@ -229,12 +229,6 @@ impl<T: RelNodeTyp> Memo<T> {
             properties: self.infer_properties(memo_node).into(),
         };
         group.group_exprs.insert(expr_id);
-        // set winner to newly added expression, since it is the only one in the group
-        group.info.winner = Some(Winner {
-            impossible: false,
-            expr_id,
-            cost: Cost::zero(),
-        });
         self.groups.insert(group_id, group);
     }
 
