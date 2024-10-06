@@ -16,6 +16,11 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use arrow_schema::DataType;
+use expr::{
+    PhysicalBetweenExpr, PhysicalBinOpExpr, PhysicalCastExpr, PhysicalColumnRefExpr,
+    PhysicalConstantExpr, PhysicalDataTypeExpr, PhysicalFuncExpr, PhysicalInListExpr,
+    PhysicalLikeExpr, PhysicalLogOpExpr, PhysicalSortOrderExpr, PhysicalUnOpExpr,
+};
 use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
@@ -81,6 +86,19 @@ pub enum OptRelNodeTyp {
     Like,
     DataType(DataType),
     InList,
+    // Physical Expressions
+    PhysicalConstant(ConstantType),
+    PhysicalColumnRef,
+    PhysicalUnOp(UnOpType),
+    PhysicalBinOp(BinOpType),
+    PhysicalLogOp(LogOpType),
+    PhysicalFunc(FuncType),
+    PhysicalSortOrder(SortOrderType),
+    PhysicalBetween,
+    PhysicalCast,
+    PhysicalLike,
+    PhysicalDataType(DataType),
+    PhysicalInList,
 }
 
 impl OptRelNodeTyp {
@@ -483,6 +501,42 @@ pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pr
             .unwrap()
             .dispatch_explain(meta_map),
         OptRelNodeTyp::InList => InListExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalConstant(_) => PhysicalConstantExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalColumnRef => PhysicalColumnRefExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalUnOp(_) => PhysicalUnOpExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalBinOp(_) => PhysicalBinOpExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalLogOp(_) => PhysicalLogOpExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalFunc(_) => PhysicalFuncExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalSortOrder(_) => PhysicalSortOrderExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalBetween => PhysicalBetweenExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalCast => PhysicalCastExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalLike => PhysicalLikeExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalDataType(_) => PhysicalDataTypeExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalInList => PhysicalInListExpr::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
     }

@@ -8,6 +8,8 @@
 //! At a high level, filter pushdown is responsible for pushing the filter node
 //! further down the query plan whenever it is possible to do so.
 
+// TODO: Separate filter transpositions into several files like proj transpose
+
 use std::collections::{HashMap, HashSet};
 use std::vec;
 
