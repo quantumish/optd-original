@@ -109,14 +109,14 @@ impl OptdPlanContext<'_> {
 
     fn conv_from_optd_expr(expr: Expr, context: &SchemaRef) -> Result<Arc<dyn PhysicalExpr>> {
         match expr.typ() {
-            OptRelNodeTyp::ColumnRef => {
+            OptRelNodeTyp::PhysicalColumnRef => {
                 let expr = PhysicalColumnRefExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 let idx = expr.index();
                 Ok(Arc::new(
                     datafusion::physical_plan::expressions::Column::new("<expr>", idx),
                 ))
             }
-            OptRelNodeTyp::Constant(typ) => {
+            OptRelNodeTyp::PhysicalConstant(typ) => {
                 let expr = PhysicalConstantExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 let value = expr.value();
                 let value = match typ {
@@ -145,7 +145,7 @@ impl OptdPlanContext<'_> {
                     datafusion::physical_plan::expressions::Literal::new(value),
                 ))
             }
-            OptRelNodeTyp::Func(_) => {
+            OptRelNodeTyp::PhysicalFunc(_) => {
                 let expr = PhysicalFuncExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 let func = expr.func();
                 let args = expr
@@ -177,7 +177,7 @@ impl OptdPlanContext<'_> {
                 }
             }
             OptRelNodeTyp::Sort => unreachable!(),
-            OptRelNodeTyp::LogOp(typ) => {
+            OptRelNodeTyp::PhysicalLogOp(typ) => {
                 let expr = PhysicalLogOpExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 let mut children = expr.children().into_iter();
                 let first_expr = Self::conv_from_optd_expr(children.next().unwrap(), context)?;
@@ -194,7 +194,7 @@ impl OptdPlanContext<'_> {
                     )
                 })
             }
-            OptRelNodeTyp::BinOp(op) => {
+            OptRelNodeTyp::PhysicalBinOp(op) => {
                 let expr = PhysicalBinOpExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 let left = Self::conv_from_optd_expr(expr.left_child(), context)?;
                 let right = Self::conv_from_optd_expr(expr.right_child(), context)?;
@@ -217,7 +217,7 @@ impl OptdPlanContext<'_> {
                     )) as Arc<dyn PhysicalExpr>,
                 )
             }
-            OptRelNodeTyp::Between => {
+            OptRelNodeTyp::PhysicalBetween => {
                 // TODO: should we just convert between to x <= c1 and x >= c2?
                 let expr = PhysicalBetweenExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 Self::conv_from_optd_expr(
@@ -234,7 +234,7 @@ impl OptdPlanContext<'_> {
                     context,
                 )
             }
-            OptRelNodeTyp::Cast => {
+            OptRelNodeTyp::PhysicalCast => {
                 let expr = PhysicalCastExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 let child = Self::conv_from_optd_expr(expr.child(), context)?;
                 Ok(Arc::new(
@@ -245,7 +245,7 @@ impl OptdPlanContext<'_> {
                     ),
                 ))
             }
-            OptRelNodeTyp::Like => {
+            OptRelNodeTyp::PhysicalLike => {
                 let expr = PhysicalLikeExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 let child = Self::conv_from_optd_expr(expr.child(), context)?;
                 let pattern = Self::conv_from_optd_expr(expr.pattern(), context)?;
@@ -258,7 +258,7 @@ impl OptdPlanContext<'_> {
                     ),
                 ))
             }
-            OptRelNodeTyp::InList => {
+            OptRelNodeTyp::PhysicalInList => {
                 let expr = PhysicalInListExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 let child = Self::conv_from_optd_expr(expr.child(), context)?;
                 let list = expr

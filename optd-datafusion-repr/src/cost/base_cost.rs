@@ -5,7 +5,7 @@ mod limit;
 pub(crate) mod stats;
 
 use crate::{
-    plan_nodes::OptRelNodeTyp,
+    plan_nodes::{BinOpType, OptRelNodeTyp},
     properties::column_ref::{BaseTableColumnRef, ColumnRef},
 };
 use itertools::Itertools;
@@ -133,6 +133,7 @@ impl<
         context: Option<RelNodeContext>,
         optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
     ) -> Cost {
+        dbg!(node);
         match node {
             OptRelNodeTyp::PhysicalScan => {
                 let table = data.as_ref().unwrap().as_str();
@@ -172,7 +173,7 @@ impl<
                     .sum::<f64>();
                 Self::cost(1.0, compute_cost + 0.01, 0.0)
             }
-            OptRelNodeTyp::ColumnRef => Self::cost(1.0, 0.01, 0.0),
+            OptRelNodeTyp::PhysicalColumnRef => Self::cost(1.0, 0.01, 0.0),
             _ if node.is_expression() => {
                 let compute_cost = children
                     .iter()
@@ -183,7 +184,9 @@ impl<
                     .sum::<f64>();
                 Self::cost(1.0, compute_cost + 1.0, 0.0)
             }
-            x => unimplemented!("cannot compute cost for {}", x),
+            x => {
+                unimplemented!("cannot compute cost for {}", x)
+            }
         }
     }
 
