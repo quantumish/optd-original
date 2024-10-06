@@ -1,5 +1,6 @@
 use crate::rel_node::RelNodeTyp;
 
+//TODO: These aren't all meaningful names
 pub enum RuleMatcher<T: RelNodeTyp> {
     /// Match a node of type `typ`.
     MatchAndPickNode {
