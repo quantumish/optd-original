@@ -16,11 +16,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use arrow_schema::DataType;
-use expr::{
-    PhysicalBetweenExpr, PhysicalBinOpExpr, PhysicalCastExpr, PhysicalColumnRefExpr,
-    PhysicalConstantExpr, PhysicalDataTypeExpr, PhysicalFuncExpr, PhysicalInListExpr,
-    PhysicalLikeExpr, PhysicalLogOpExpr, PhysicalSortOrderExpr, PhysicalUnOpExpr,
-};
 use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
@@ -34,7 +29,10 @@ pub use empty_relation::{EmptyRelationData, LogicalEmptyRelation, PhysicalEmptyR
 pub use expr::{
     BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, ConstantType,
     DataTypeExpr, ExprList, FuncExpr, FuncType, InListExpr, LikeExpr, LogOpExpr, LogOpType,
-    SortOrderExpr, SortOrderType, UnOpExpr, UnOpType,
+    PhysicalBetweenExpr, PhysicalBinOpExpr, PhysicalCastExpr, PhysicalColumnRefExpr,
+    PhysicalConstantExpr, PhysicalDataTypeExpr, PhysicalExprList, PhysicalFuncExpr,
+    PhysicalInListExpr, PhysicalLikeExpr, PhysicalLogOpExpr, PhysicalSortOrderExpr,
+    PhysicalUnOpExpr, SortOrderExpr, SortOrderType, UnOpExpr, UnOpType,
 };
 pub use filter::{LogicalFilter, PhysicalFilter};
 pub use join::{JoinType, LogicalJoin, PhysicalHashJoin, PhysicalNestedLoopJoin};
