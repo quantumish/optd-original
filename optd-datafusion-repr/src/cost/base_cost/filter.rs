@@ -87,9 +87,9 @@ impl<
     ) -> f64 {
         assert!(expr_tree.typ.is_expression());
         match &expr_tree.typ {
-            OptRelNodeTyp::Constant(_) => Self::get_constant_selectivity(expr_tree),
-            OptRelNodeTyp::ColumnRef => unimplemented!("check bool type or else panic"),
-            OptRelNodeTyp::UnOp(un_op_typ) => {
+            OptRelNodeTyp::PhysicalConstant(_) => Self::get_constant_selectivity(expr_tree),
+            OptRelNodeTyp::PhysicalColumnRef => unimplemented!("check bool type or else panic"),
+            OptRelNodeTyp::PhysicalUnOp(un_op_typ) => {
                 assert!(expr_tree.children.len() == 1);
                 let child = expr_tree.child(0);
                 match un_op_typ {
@@ -101,7 +101,7 @@ impl<
                     ),
                 }
             }
-            OptRelNodeTyp::BinOp(bin_op_typ) => {
+            OptRelNodeTyp::PhysicalBinOp(bin_op_typ) => {
                 assert!(expr_tree.children.len() == 2);
                 let left_child = expr_tree.child(0);
                 let right_child = expr_tree.child(1);
@@ -122,29 +122,32 @@ impl<
                     unreachable!("all BinOpTypes should be true for at least one is_*() function")
                 }
             }
-            OptRelNodeTyp::LogOp(log_op_typ) => {
+            OptRelNodeTyp::PhysicalLogOp(log_op_typ) => {
                 self.get_log_op_selectivity(*log_op_typ, &expr_tree.children, schema, column_refs)
             }
-            OptRelNodeTyp::Func(_) => unimplemented!("check bool type or else panic"),
-            OptRelNodeTyp::SortOrder(_) => {
+            OptRelNodeTyp::PhysicalFunc(_) => unimplemented!("check bool type or else panic"),
+            OptRelNodeTyp::PhysicalSortOrder(_) => {
                 panic!("the selectivity of sort order expressions is undefined")
             }
-            OptRelNodeTyp::Between => UNIMPLEMENTED_SEL,
-            OptRelNodeTyp::Cast => unimplemented!("check bool type or else panic"),
-            OptRelNodeTyp::Like => {
+            OptRelNodeTyp::PhysicalBetween => UNIMPLEMENTED_SEL,
+            OptRelNodeTyp::PhysicalCast => unimplemented!("check bool type or else panic"),
+            OptRelNodeTyp::PhysicalLike => {
                 let like_expr = LikeExpr::from_rel_node(expr_tree).unwrap();
                 self.get_like_selectivity(&like_expr, column_refs)
             }
-            OptRelNodeTyp::DataType(_) => {
+            OptRelNodeTyp::PhysicalDataType(_) => {
                 panic!("the selectivity of a data type is not defined")
             }
-            OptRelNodeTyp::InList => {
+            OptRelNodeTyp::PhysicalInList => {
                 let in_list_expr = InListExpr::from_rel_node(expr_tree).unwrap();
                 self.get_in_list_selectivity(&in_list_expr, column_refs)
             }
-            _ => unreachable!(
-                "all expression OptRelNodeTyp were enumerated. this should be unreachable"
-            ),
+            _ => {
+                dbg!(&expr_tree.typ);
+                unreachable!(
+                    "all expression OptRelNodeTyp were enumerated. this should be unreachable"
+                )
+            }
         }
     }
 
@@ -399,11 +402,11 @@ impl<
                     );
 
                     match non_col_ref_expr.as_ref().typ {
-                        OptRelNodeTyp::BinOp(_) => {
+                        OptRelNodeTyp::PhysicalBinOp(_) => {
                             Self::get_default_comparison_op_selectivity(comp_bin_op_typ)
                         }
-                        OptRelNodeTyp::Cast => UNIMPLEMENTED_SEL,
-                        OptRelNodeTyp::Constant(_) => unreachable!(
+                        OptRelNodeTyp::PhysicalCast => UNIMPLEMENTED_SEL,
+                        OptRelNodeTyp::PhysicalConstant(_) => unreachable!(
                             "we should have handled this in the values.len() == 1 branch"
                         ),
                         _ => unimplemented!(

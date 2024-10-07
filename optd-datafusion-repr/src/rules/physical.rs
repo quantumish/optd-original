@@ -5,7 +5,7 @@ use optd_core::optimizer::Optimizer;
 use optd_core::rel_node::RelNode;
 use optd_core::rules::{Rule, RuleMatcher};
 
-use crate::plan_nodes::{JoinType, OptRelNodeTyp};
+use crate::plan_nodes::{BinOpType, JoinType, OptRelNodeTyp};
 
 pub struct PhysicalConversionRule {
     matcher: RuleMatcher<OptRelNodeTyp>,
@@ -26,7 +26,7 @@ impl PhysicalConversionRule {
 impl PhysicalConversionRule {
     pub fn all_conversions<O: Optimizer<OptRelNodeTyp>>() -> Vec<Arc<dyn Rule<OptRelNodeTyp, O>>> {
         // Define conversions below, and add them to this list!
-        vec![
+        let mut rules: Vec<Arc<dyn Rule<OptRelNodeTyp, O>>> = vec![
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Scan)),
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Projection)),
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Join(
@@ -44,7 +44,29 @@ impl PhysicalConversionRule {
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::EmptyRelation)),
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Limit)),
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::ColumnRef)),
-        ]
+            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::List)),
+        ];
+
+        static BIN_OP_TYPES: [BinOpType; 11] = [
+            BinOpType::Add,
+            BinOpType::Sub,
+            BinOpType::Mul,
+            BinOpType::Div,
+            BinOpType::Mod,
+            BinOpType::Eq,
+            BinOpType::Neq,
+            BinOpType::Gt,
+            BinOpType::Lt,
+            BinOpType::Geq,
+            BinOpType::Leq,
+        ];
+        for bin_op_type in BIN_OP_TYPES.into_iter() {
+            rules.push(Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::BinOp(
+                bin_op_type,
+            ))));
+        }
+
+        rules
     }
 }
 
@@ -140,6 +162,22 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
             OptRelNodeTyp::ColumnRef => {
                 let node = RelNode {
                     typ: OptRelNodeTyp::PhysicalColumnRef,
+                    children,
+                    data,
+                };
+                vec![node]
+            }
+            OptRelNodeTyp::BinOp(x) => {
+                let node = RelNode {
+                    typ: OptRelNodeTyp::PhysicalBinOp(x),
+                    children,
+                    data,
+                };
+                vec![node]
+            }
+            OptRelNodeTyp::List => {
+                let node = RelNode {
+                    typ: OptRelNodeTyp::PhysicalList,
                     children,
                     data,
                 };

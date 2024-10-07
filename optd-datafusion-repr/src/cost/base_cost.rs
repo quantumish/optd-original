@@ -162,7 +162,7 @@ impl<
                 Self::cost(row_cnt, row_cnt * row_cnt.ln_1p().max(1.0), 0.0)
             }
             OptRelNodeTyp::PhysicalAgg => self.get_agg_cost(children, context, optimizer),
-            OptRelNodeTyp::List => {
+            OptRelNodeTyp::PhysicalList => {
                 let compute_cost = children
                     .iter()
                     .map(|child| {

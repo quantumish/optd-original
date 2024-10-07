@@ -49,11 +49,9 @@ impl<
                 optimizer.get_property_by_group::<ColumnRefPropertyBuilder>(context.group_id, 1);
             let column_refs = column_refs.base_table_column_refs();
             let expr_group_id = context.children_group_ids[2];
-            let expr_trees = optimizer.get_all_group_bindings(expr_group_id, false);
+            // We expect that a winner will have already been chosen for the group holding the filter expression
+            let expr_tree = optimizer.step_get_winner(expr_group_id, &mut None).unwrap();
             let input_correlation = self.get_input_correlation(&context, optimizer);
-            // there may be more than one expression tree in a group.
-            // see comment in OptRelNodeTyp::PhysicalFilter(_) for more information
-            let expr_tree = expr_trees.first().expect("expression missing");
             self.get_join_selectivity_from_expr_tree(
                 join_typ,
                 expr_tree.clone(),

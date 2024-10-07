@@ -49,7 +49,6 @@ use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OptRelNodeTyp {
     Placeholder(GroupId),
-    List,
     // Plan nodes
     // Developers: update `is_plan_node` function after adding new elements
     Projection,
@@ -72,6 +71,7 @@ pub enum OptRelNodeTyp {
     PhysicalEmptyRelation,
     PhysicalLimit,
     // Expressions
+    List,
     Constant(ConstantType),
     ColumnRef,
     UnOp(UnOpType),
@@ -85,6 +85,7 @@ pub enum OptRelNodeTyp {
     DataType(DataType),
     InList,
     // Physical Expressions
+    PhysicalList,
     PhysicalConstant(ConstantType),
     PhysicalColumnRef,
     PhysicalUnOp(UnOpType),
@@ -139,6 +140,18 @@ impl OptRelNodeTyp {
                 | Self::Like
                 | Self::DataType(_)
                 | Self::InList
+                | Self::PhysicalConstant(_)
+                | Self::PhysicalColumnRef
+                | Self::PhysicalUnOp(_)
+                | Self::PhysicalBinOp(_)
+                | Self::PhysicalLogOp(_)
+                | Self::PhysicalFunc(_)
+                | Self::PhysicalSortOrder(_)
+                | Self::PhysicalBetween
+                | Self::PhysicalCast
+                | Self::PhysicalLike
+                | Self::PhysicalDataType(_)
+                | Self::PhysicalInList
         )
     }
 }
@@ -450,6 +463,11 @@ pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pr
         OptRelNodeTyp::Placeholder(_) => unreachable!("should not explain a placeholder"),
         OptRelNodeTyp::List => {
             ExprList::from_rel_node(rel_node) // ExprList is the only place that we will have list in the datafusion repr
+                .unwrap()
+                .dispatch_explain(meta_map)
+        }
+        OptRelNodeTyp::PhysicalList => {
+            PhysicalExprList::from_rel_node(rel_node) // ExprList is the only place that we will have list in the datafusion repr
                 .unwrap()
                 .dispatch_explain(meta_map)
         }

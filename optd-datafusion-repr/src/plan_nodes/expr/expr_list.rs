@@ -103,7 +103,7 @@ impl OptRelNode for PhysicalExprList {
     }
 
     fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if rel_node.typ != OptRelNodeTyp::List {
+        if rel_node.typ != OptRelNodeTyp::PhysicalList {
             return None;
         }
         Some(PhysicalExprList(rel_node))
