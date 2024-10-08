@@ -98,12 +98,13 @@ impl DatafusionOptimizer {
             Arc<dyn Rule<OptRelNodeTyp, CascadesOptimizer<OptRelNodeTyp>>>,
         > = vec![];
         // transformation_rules.push(Arc::new(ProjectFilterTransposeRule::new()));
-        // transformation_rules.push(Arc::new(FilterProjectTransposeRule::new()));
-        // transformation_rules.push(Arc::new(FilterCrossJoinTransposeRule::new()));
-        // transformation_rules.push(Arc::new(FilterInnerJoinTransposeRule::new()));
-        // transformation_rules.push(Arc::new(FilterSortTransposeRule::new()));
-        // transformation_rules.push(Arc::new(FilterAggTransposeRule::new()));
-        // transformation_rules.push(Arc::new(JoinAssocRule::new()));
+        transformation_rules.push(Arc::new(FilterProjectTransposeRule::new()));
+        transformation_rules.push(Arc::new(FilterCrossJoinTransposeRule::new()));
+        transformation_rules.push(Arc::new(FilterInnerJoinTransposeRule::new()));
+        transformation_rules.push(Arc::new(FilterSortTransposeRule::new()));
+        transformation_rules.push(Arc::new(FilterAggTransposeRule::new()));
+        transformation_rules.push(Arc::new(JoinAssocRule::new()));
+        transformation_rules.push(Arc::new(JoinCommuteRule::new()));
         // transformation_rules.push(Arc::new(ProjectionPullUpJoin::new()));
 
         let mut implementation_rules: Vec<
