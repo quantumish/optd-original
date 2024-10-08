@@ -612,7 +612,7 @@ impl OptdPlanContext<'_> {
         root_rel: OptRelNodeRef,
         meta: RelNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        dbg!(root_rel.clone());
+        // dbg!(root_rel.clone());
         self.conv_from_optd_plan_node(PlanNode::from_rel_node(root_rel).unwrap(), &meta)
             .await
     }

@@ -240,13 +240,11 @@ impl<
 
                 let cast_expr = PhysicalCastExpr::from_rel_node(cast_node)
                     .expect("we already checked that the type is Cast");
-                dbg!(cast_expr.clone());
                 let cast_expr_child = cast_expr.child().into_rel_node();
                 let cast_expr_cast_to = cast_expr.cast_to();
 
                 let should_break = match cast_expr_child.typ {
                     OptRelNodeTyp::PhysicalConstant(_) => {
-                        dbg!("A");
                         cast_node = PhysicalConstantExpr::new(
                             PhysicalConstantExpr::from_rel_node(cast_expr_child)
                                 .expect("we already checked that the type is Constant")
@@ -257,7 +255,6 @@ impl<
                         false
                     }
                     OptRelNodeTyp::PhysicalColumnRef => {
-                        dbg!("B");
                         let col_ref_expr = PhysicalColumnRefExpr::from_rel_node(cast_expr_child)
                             .expect("we already checked that the type is ColumnRef");
                         let col_ref_idx = col_ref_expr.index();

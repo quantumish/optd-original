@@ -86,25 +86,14 @@ fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T
     let mut update_cost = false;
     if let Some(winner) = &group_info.winner {
         if winner.impossible || winner.cost > total_cost {
-            dbg!(
-                "updating winner",
-                winner.impossible,
-                winner.cost.clone(),
-                total_cost.clone()
-            );
             update_cost = true;
         }
     } else {
-        dbg!("Updating winner, no existing winner.");
         update_cost = true;
-    }
-    if !update_cost {
-        dbg!("Not updating winner.");
     }
     // TODO: Deciding the winner and constructing the struct should
     // be performed in the memotable
     if update_cost {
-        println!("Updating winner to cost: {:?}", total_cost.clone());
         optimizer.update_group_info(
             group_id,
             GroupInfo {

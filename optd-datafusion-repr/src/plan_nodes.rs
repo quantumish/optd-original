@@ -175,6 +175,19 @@ impl RelNodeTyp for OptRelNodeTyp {
                 | Self::Agg
                 | Self::EmptyRelation
                 | Self::Limit
+                | Self::List
+                | Self::Constant(_)
+                | Self::ColumnRef
+                | Self::UnOp(_)
+                | Self::BinOp(_)
+                | Self::LogOp(_)
+                | Self::Func(_)
+                | Self::SortOrder(_)
+                | Self::Between
+                | Self::Cast
+                | Self::Like
+                | Self::DataType(_)
+                | Self::InList
         )
     }
 

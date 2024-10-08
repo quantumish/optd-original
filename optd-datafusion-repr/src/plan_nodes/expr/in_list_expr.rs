@@ -79,7 +79,6 @@ impl PhysicalInListExpr {
     }
 
     pub fn list(&self) -> PhysicalExprList {
-        dbg!(self.0.child(1));
         PhysicalExprList::from_rel_node(self.0.child(1)).unwrap()
     }
 
