@@ -490,8 +490,12 @@ impl OptdPlanContext<'_> {
             JoinType::Inner => datafusion::logical_expr::JoinType::Inner,
             _ => unimplemented!(),
         };
-        let left_exprs = node.left_keys().to_vec();
-        let right_exprs = node.right_keys().to_vec();
+        let left_exprs = PhysicalExprList::from_rel_node(node.left_keys().into_rel_node())
+            .unwrap()
+            .to_vec();
+        let right_exprs = PhysicalExprList::from_rel_node(node.right_keys().into_rel_node())
+            .unwrap()
+            .to_vec();
         assert_eq!(left_exprs.len(), right_exprs.len());
         let mut on = Vec::with_capacity(left_exprs.len());
         for (left_expr, right_expr) in left_exprs.into_iter().zip(right_exprs.into_iter()) {

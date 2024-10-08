@@ -22,6 +22,13 @@ use super::optimizer::{ExprId, GroupId};
 // Can we call this a MemoExprRef, and MemoExpr instead?
 pub type RelMemoNodeRef<T> = Arc<RelMemoNode<T>>;
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum BindingType {
+    Both,
+    Logical,
+    Physical,
+}
+
 /// Equivalent to MExpr in Columbia/Cascades.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RelMemoNode<T: RelNodeTyp> {
@@ -299,7 +306,7 @@ impl<T: RelNodeTyp> Memo<T> {
     pub fn get_all_group_bindings(
         &self,
         group_id: GroupId,
-        physical_only: bool,
+        binding_type: BindingType,
         exclude_placeholder: bool,
         level: Option<usize>,
     ) -> Vec<RelNodeRef<T>> {
@@ -308,9 +315,13 @@ impl<T: RelNodeTyp> Memo<T> {
         group
             .group_exprs
             .iter()
-            .filter(|x| !physical_only || !self.get_expr_memoed(**x).typ.is_logical())
+            .filter(|x| match binding_type {
+                BindingType::Both => true,
+                BindingType::Logical => self.get_expr_memoed(**x).typ.is_logical(),
+                BindingType::Physical => !self.get_expr_memoed(**x).typ.is_logical(),
+            })
             .map(|&expr_id| {
-                self.get_all_expr_bindings(expr_id, physical_only, exclude_placeholder, level)
+                self.get_all_expr_bindings(expr_id, binding_type, exclude_placeholder, level)
             })
             .concat()
     }
@@ -320,7 +331,7 @@ impl<T: RelNodeTyp> Memo<T> {
     pub fn get_all_expr_bindings(
         &self,
         expr_id: ExprId,
-        physical_only: bool,
+        binding_type: BindingType,
         exclude_placeholder: bool,
         level: Option<usize>,
     ) -> Vec<RelNodeRef<T>> {
@@ -348,7 +359,7 @@ impl<T: RelNodeTyp> Memo<T> {
         for child in &expr.children {
             let group_exprs = self.get_all_group_bindings(
                 *child,
-                physical_only,
+                binding_type,
                 exclude_placeholder,
                 level.map(|x| x - 1),
             );

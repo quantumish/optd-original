@@ -201,8 +201,8 @@ fn apply_hash_join(
                 let node = PhysicalHashJoin::new(
                     PlanNode::from_group(left.into()),
                     PlanNode::from_group(right.into()),
-                    PhysicalExprList::new(vec![left_expr.into_expr()]),
-                    PhysicalExprList::new(vec![right_expr.into_expr()]),
+                    ExprList::new(vec![left_expr.into_expr()]).into_expr(),
+                    ExprList::new(vec![right_expr.into_expr()]).into_expr(),
                     JoinType::Inner,
                 );
                 return vec![node.into_rel_node().as_ref().clone()];
@@ -262,8 +262,8 @@ fn apply_hash_join(
             let node = PhysicalHashJoin::new(
                 PlanNode::from_group(left.into()),
                 PlanNode::from_group(right.into()),
-                PhysicalExprList::new(left_exprs),
-                PhysicalExprList::new(right_exprs),
+                ExprList::new(left_exprs).into_expr(),
+                ExprList::new(right_exprs).into_expr(),
                 JoinType::Inner,
             );
             return vec![node.into_rel_node().as_ref().clone()];
@@ -300,8 +300,8 @@ fn apply_hash_join(
             let node = PhysicalHashJoin::new(
                 PlanNode::from_group(left.into()),
                 PlanNode::from_group(right.into()),
-                PhysicalExprList::new(vec![left_expr.into_expr()]),
-                PhysicalExprList::new(vec![right_expr.into_expr()]),
+                ExprList::new(vec![left_expr.into_expr()]).into_expr(),
+                ExprList::new(vec![right_expr.into_expr()]).into_expr(),
                 JoinType::Inner,
             );
             return vec![node.into_rel_node().as_ref().clone()];

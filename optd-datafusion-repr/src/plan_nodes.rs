@@ -140,6 +140,7 @@ impl OptRelNodeTyp {
                 | Self::Like
                 | Self::DataType(_)
                 | Self::InList
+                | Self::List
                 | Self::PhysicalConstant(_)
                 | Self::PhysicalColumnRef
                 | Self::PhysicalUnOp(_)
@@ -152,6 +153,7 @@ impl OptRelNodeTyp {
                 | Self::PhysicalLike
                 | Self::PhysicalDataType(_)
                 | Self::PhysicalInList
+                | Self::PhysicalList
         )
     }
 }

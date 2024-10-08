@@ -142,7 +142,6 @@ impl<
                 self.get_in_list_selectivity(&in_list_expr, column_refs)
             }
             _ => {
-                dbg!(&expr_tree.typ);
                 unreachable!(
                     "all expression OptRelNodeTyp were enumerated. this should be unreachable"
                 )

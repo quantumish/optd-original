@@ -5,7 +5,7 @@ use tracing::trace;
 
 use crate::{
     cascades::{
-        memo::RelMemoNodeRef,
+        memo::{BindingType, RelMemoNodeRef},
         optimizer::{rule_matches_expr, ExprId, RuleId},
         tasks::{explore_expr::ExploreExprTask, optimize_inputs::OptimizeInputsTask},
         CascadesOptimizer, GroupId,
@@ -47,10 +47,19 @@ fn match_node<T: RelNodeTyp>(
             RuleMatcher::PickOne { pick_to, expand } => {
                 let group_id = node.children[idx];
                 let node = if *expand {
-                    let mut exprs = optimizer.get_all_exprs_in_group(group_id);
-                    assert_eq!(exprs.len(), 1, "can only expand expression");
-                    let expr = exprs.remove(0);
-                    let mut bindings = optimizer.get_all_expr_bindings(expr, None);
+                    let exprs = optimizer.get_all_exprs_in_group(group_id);
+
+                    let mut bindings = exprs
+                        .into_iter()
+                        .map(|expr| {
+                            optimizer
+                                .get_all_expr_bindings(expr, BindingType::Logical, None)
+                                .into_iter()
+                                .filter(|y| y.typ.is_logical())
+                                .collect_vec()
+                        })
+                        .flatten()
+                        .collect_vec();
                     assert_eq!(bindings.len(), 1, "can only expand expression");
                     bindings.remove(0).as_ref().clone()
                 } else {
@@ -206,19 +215,16 @@ fn transform<T: RelNodeTyp>(
     expr_id: ExprId,
     rule: &Arc<dyn Rule<T, CascadesOptimizer<T>>>,
 ) -> Vec<RelNode<T>> {
-    // TODO(parallel): We may need memo lock for much of the matching process.
-    // There should be a way to get the necessary info out in a short critical
-    // section.
-    let mut picked_data = match_and_pick_expr(rule.matcher(), expr_id, optimizer);
-    assert!(
-        picked_data.len() <= 1,
-        "bad match count TODO(bowad) deal with this"
-    );
+    let picked_data = match_and_pick_expr(rule.matcher(), expr_id, optimizer);
 
     if picked_data.is_empty() {
         vec![]
     } else {
-        rule.apply(optimizer, picked_data.remove(0))
+        picked_data
+            .into_iter()
+            .map(|data| rule.apply(optimizer, data))
+            .flatten()
+            .collect()
     }
 }
 
@@ -229,6 +235,10 @@ fn update_memo<T: RelNodeTyp>(
 ) -> Vec<ExprId> {
     let mut expr_ids = vec![];
     for new_expr in new_exprs {
+        if let Some(_) = new_expr.typ.extract_group() {
+            // TODO: handle "merge group" case
+            todo!("merge group case");
+        }
         let (_, expr_id) = optimizer.add_expr_to_group(new_expr, group_id);
         expr_ids.push(expr_id);
     }
@@ -251,20 +261,23 @@ fn update_memo<T: RelNodeTyp>(
 ///             tasks.Push(OptInputs(newExpr, limit))
 impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
-        trace!(event = "task_begin", task = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id);
+        let expr = optimizer.get_expr_memoed(self.expr_id);
+
+        trace!(event = "task_begin", task = "apply_rule", rule_id = %self.rule_id, expr_id = %self.expr_id, expr = %expr);
         // TODO: Check transformation count and cancel invocation if we've hit
         // a limit
         debug_assert!(!optimizer.is_rule_applied(self.expr_id, self.rule_id));
 
-        let expr = optimizer.get_expr_memoed(self.expr_id);
         let group_id = optimizer.get_group_id(self.expr_id);
+
+        optimizer.mark_rule_applied(self.expr_id, self.rule_id);
 
         debug_assert!(rule_matches_expr(&self.rule, &expr));
 
         let new_exprs = transform(optimizer, self.expr_id, &self.rule);
         let new_exprs = new_exprs.into_iter().map(Arc::new).collect();
         let new_expr_ids = update_memo(optimizer, group_id, new_exprs);
-        // TODO sort exprs by promise (??)
+        // TODO sort exprs by promise
         for new_expr_id in new_expr_ids {
             let is_transformation_rule = !self.rule.is_impl_rule();
             if is_transformation_rule {
@@ -275,6 +288,6 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
                 optimizer.push_task(Box::new(OptimizeInputsTask::new(new_expr_id, new_limit)));
             }
         }
-        trace!(event = "task_finish", task = "apply_rule", expr_id = %self.expr_id, rule_id = %self.rule_id);
+        trace!(event = "task_finish", task = "apply_rule", rule_id = %self.rule_id, expr_id = %self.expr_id, expr = %expr);
     }
 }

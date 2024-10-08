@@ -58,8 +58,8 @@ define_plan_node!(
         { 0, left: PlanNode },
         { 1, right: PlanNode }
     ], [
-        { 2, left_keys: PhysicalExprList },
-        { 3, right_keys: PhysicalExprList }
+        { 2, left_keys: Expr },
+        { 3, right_keys: Expr }
     ], { join_type: JoinType }
 );
 

@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{
-    memo::{GroupInfo, Memo, RelMemoNodeRef},
+    memo::{BindingType, GroupInfo, Memo, RelMemoNodeRef},
     tasks::{get_initial_task, Task},
 };
 
@@ -157,16 +157,17 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     pub fn get_all_group_bindings(
         &self,
         group_id: GroupId,
-        physical_only: bool,
+        binding_type: BindingType,
     ) -> Vec<RelNodeRef<T>> {
         self.state.read().unwrap().memo.get_all_group_bindings(
             group_id,
-            physical_only,
+            binding_type,
             true,
             Some(10),
         )
     }
 
+    // TODO: Consider introducing a distinction between getting physical and logical exprs?
     pub fn get_all_exprs_in_group(&self, group_id: GroupId) -> Vec<ExprId> {
         self.state
             .read()
@@ -178,6 +179,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     pub fn get_all_expr_bindings(
         &self,
         expr_id: ExprId,
+        binding_type: BindingType,
         level: Option<usize>,
     ) -> Vec<RelNodeRef<T>> {
         // TODO: expr_bindings is not descriptive
@@ -186,7 +188,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
             .read()
             .unwrap()
             .memo
-            .get_all_expr_bindings(expr_id, false, false, level)
+            .get_all_expr_bindings(expr_id, binding_type, false, level)
     }
 
     pub fn get_expr_memoed(&self, expr_id: ExprId) -> RelMemoNodeRef<T> {

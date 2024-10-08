@@ -514,7 +514,6 @@ mod tests {
             ),
             negated,
         );
-        dbg!(x.clone());
         x
     }
 

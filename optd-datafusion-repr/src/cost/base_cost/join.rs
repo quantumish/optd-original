@@ -13,7 +13,7 @@ use crate::{
         DEFAULT_NUM_DISTINCT,
     },
     plan_nodes::{
-        BinOpType, Expr, JoinType, LogOpType, OptRelNode, OptRelNodeRef, OptRelNodeTyp,
+        BinOpType, Expr, ExprList, JoinType, LogOpType, OptRelNode, OptRelNodeRef, OptRelNodeTyp,
         PhysicalColumnRefExpr, PhysicalExprList, PhysicalLogOpExpr,
     },
     properties::{
@@ -92,12 +92,14 @@ impl<
                 .get_property_by_group::<ColumnRefPropertyBuilder>(context.children_group_ids[0], 1)
                 .base_table_column_refs()
                 .len();
-            let left_keys_list = optimizer.get_all_group_bindings(left_keys_group_id, false);
-            let right_keys_list = optimizer.get_all_group_bindings(right_keys_group_id, false);
+            let left_keys = optimizer
+                .step_get_winner(left_keys_group_id, &mut None)
+                .unwrap();
+            let right_keys = optimizer
+                .step_get_winner(right_keys_group_id, &mut None)
+                .unwrap();
             // there may be more than one expression tree in a group.
             // see comment in OptRelNodeTyp::PhysicalFilter(_) for more information
-            let left_keys = left_keys_list.first().expect("left keys missing");
-            let right_keys = right_keys_list.first().expect("right keys missing");
             let input_correlation = self.get_input_correlation(&context, optimizer);
             self.get_join_selectivity_from_keys(
                 join_typ,
