@@ -3,7 +3,7 @@ use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
 
-use super::ExprList;
+use super::{ExprList, PhysicalExprList};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum FuncType {
@@ -88,7 +88,7 @@ impl OptRelNode for FuncExpr {
 pub struct PhysicalFuncExpr(Expr);
 
 impl PhysicalFuncExpr {
-    pub fn new(func_id: FuncType, argv: ExprList) -> Self {
+    pub fn new(func_id: FuncType, argv: PhysicalExprList) -> Self {
         PhysicalFuncExpr(Expr(
             RelNode {
                 typ: OptRelNodeTyp::PhysicalFunc(func_id),
@@ -105,8 +105,8 @@ impl PhysicalFuncExpr {
     }
 
     /// Get all children.
-    pub fn children(&self) -> ExprList {
-        ExprList::from_rel_node(self.0.child(0)).unwrap()
+    pub fn children(&self) -> PhysicalExprList {
+        PhysicalExprList::from_rel_node(self.0.child(0)).unwrap()
     }
 
     /// Gets the function id.

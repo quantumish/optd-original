@@ -386,8 +386,15 @@ pub fn rule_matches_expr<T: RelNodeTyp>(
     let matcher = rule.matcher();
     let typ_to_match = &expr.typ;
     match matcher {
-        RuleMatcher::MatchAndPickNode { typ, .. } => typ == typ_to_match,
-        RuleMatcher::MatchNode { typ, .. } => typ == typ_to_match,
+        RuleMatcher::MatchAndPickNode { typ, .. } | RuleMatcher::MatchNode { typ, .. } => {
+            typ == typ_to_match
+        }
+        RuleMatcher::MatchDiscriminant {
+            typ_discriminant, ..
+        }
+        | RuleMatcher::MatchAndPickDiscriminant {
+            typ_discriminant, ..
+        } => *typ_discriminant == std::mem::discriminant(typ_to_match),
         _ => panic!("IR should have root node of match"), // TODO: what does this mean? replace text
     }
 }

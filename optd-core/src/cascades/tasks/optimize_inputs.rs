@@ -57,7 +57,6 @@ fn get_input_cost<T: RelNodeTyp>(
 }
 
 fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>) {
-    dbg!("Update winner invoked");
     let cost = optimizer.cost();
     let expr = optimizer.get_expr_memoed(expr_id);
     let group_id = optimizer.get_group_id(expr_id);

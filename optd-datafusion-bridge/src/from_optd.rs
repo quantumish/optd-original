@@ -23,9 +23,9 @@ use datafusion::{
 use optd_core::rel_node::RelNodeMetaMap;
 use optd_datafusion_repr::{
     plan_nodes::{
-        BinOpType, ConstantType, Expr, ExprList, FuncType, JoinType, LogOpType, OptRelNode,
-        OptRelNodeRef, OptRelNodeTyp, PhysicalAgg, PhysicalBetweenExpr, PhysicalBinOpExpr,
-        PhysicalCastExpr, PhysicalColumnRefExpr, PhysicalConstantExpr, PhysicalEmptyRelation,
+        BinOpType, ConstantType, Expr, FuncType, JoinType, LogOpType, OptRelNode, OptRelNodeRef,
+        OptRelNodeTyp, PhysicalAgg, PhysicalBetweenExpr, PhysicalBinOpExpr, PhysicalCastExpr,
+        PhysicalColumnRefExpr, PhysicalConstantExpr, PhysicalEmptyRelation, PhysicalExprList,
         PhysicalFilter, PhysicalFuncExpr, PhysicalHashJoin, PhysicalInListExpr, PhysicalLikeExpr,
         PhysicalLimit, PhysicalLogOpExpr, PhysicalNestedLoopJoin, PhysicalProjection, PhysicalScan,
         PhysicalSort, PhysicalSortOrderExpr, PlanNode, SortOrderType,
@@ -176,7 +176,6 @@ impl OptdPlanContext<'_> {
                     _ => unreachable!(),
                 }
             }
-            OptRelNodeTyp::Sort => unreachable!(),
             OptRelNodeTyp::PhysicalLogOp(typ) => {
                 let expr = PhysicalLogOpExpr::from_rel_node(expr.into_rel_node()).unwrap();
                 let mut children = expr.children().into_iter();
@@ -223,7 +222,7 @@ impl OptdPlanContext<'_> {
                 Self::conv_from_optd_expr(
                     PhysicalLogOpExpr::new(
                         LogOpType::And,
-                        ExprList::new(vec![
+                        PhysicalExprList::new(vec![
                             PhysicalBinOpExpr::new(expr.child(), expr.lower(), BinOpType::Geq)
                                 .into_expr(),
                             PhysicalBinOpExpr::new(expr.child(), expr.upper(), BinOpType::Leq)
@@ -329,7 +328,7 @@ impl OptdPlanContext<'_> {
         let child = self.conv_from_optd_plan_node(node.child(), meta).await?;
 
         // Limit skip/fetch expressions are only allowed to be constant int
-        assert!(node.skip().typ() == OptRelNodeTyp::Constant(ConstantType::UInt64));
+        assert!(node.skip().typ() == OptRelNodeTyp::PhysicalConstant(ConstantType::UInt64));
         // Conversion from u64 -> usize could fail (also the case in into_optd)
         let skip = PhysicalConstantExpr::from_rel_node(node.skip().into_rel_node())
             .unwrap()
@@ -338,7 +337,7 @@ impl OptdPlanContext<'_> {
             .try_into()
             .unwrap();
 
-        assert!(node.fetch().typ() == OptRelNodeTyp::Constant(ConstantType::UInt64));
+        assert!(node.fetch().typ() == OptRelNodeTyp::PhysicalConstant(ConstantType::UInt64));
         let fetch = PhysicalConstantExpr::from_rel_node(node.fetch().into_rel_node())
             .unwrap()
             .value()

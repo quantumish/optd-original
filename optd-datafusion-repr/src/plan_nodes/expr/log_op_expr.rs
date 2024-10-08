@@ -5,7 +5,7 @@ use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
 
-use super::ExprList;
+use super::{ExprList, PhysicalExprList};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum LogOpType {
@@ -111,7 +111,7 @@ impl OptRelNode for LogOpExpr {
 pub struct PhysicalLogOpExpr(pub Expr);
 
 impl PhysicalLogOpExpr {
-    pub fn new(op_type: LogOpType, expr_list: ExprList) -> Self {
+    pub fn new(op_type: LogOpType, expr_list: PhysicalExprList) -> Self {
         PhysicalLogOpExpr(Expr(
             RelNode {
                 typ: OptRelNodeTyp::PhysicalLogOp(op_type),
@@ -127,11 +127,11 @@ impl PhysicalLogOpExpr {
     }
 
     /// flatten_nested_logical is a helper function to flatten nested logical operators with same op type
-    /// eg. (a AND (b AND c)) => ExprList([a, b, c])
-    ///    (a OR (b OR c)) => ExprList([a, b, c])
+    /// eg. (a AND (b AND c)) => PhysicalExprList([a, b, c])
+    ///    (a OR (b OR c)) => PhysicalExprList([a, b, c])
     /// It assume the children of the input expr_list are already flattened
     ///  and can only be used in bottom up manner
-    pub fn new_flattened_nested_logical(op: LogOpType, expr_list: ExprList) -> Self {
+    pub fn new_flattened_nested_logical(op: LogOpType, expr_list: PhysicalExprList) -> Self {
         // Since we assume that we are building the children bottom up,
         // there is no need to call flatten_nested_logical recursively
         let mut new_expr_list = Vec::new();
@@ -146,7 +146,7 @@ impl PhysicalLogOpExpr {
             }
             new_expr_list.push(child.clone());
         }
-        PhysicalLogOpExpr::new(op, ExprList::new(new_expr_list))
+        PhysicalLogOpExpr::new(op, PhysicalExprList::new(new_expr_list))
     }
 
     pub fn children(&self) -> Vec<Expr> {

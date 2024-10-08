@@ -67,7 +67,12 @@ pub struct PhysicalExprList(OptRelNodeRef);
 impl PhysicalExprList {
     pub fn new(exprs: Vec<Expr>) -> Self {
         PhysicalExprList(
-            RelNode::new_list(exprs.into_iter().map(|x| x.into_rel_node()).collect_vec()).into(),
+            RelNode {
+                typ: OptRelNodeTyp::PhysicalList,
+                data: None,
+                children: exprs.into_iter().map(|x| x.into_rel_node()).collect_vec(),
+            }
+            .into(),
         )
     }
 

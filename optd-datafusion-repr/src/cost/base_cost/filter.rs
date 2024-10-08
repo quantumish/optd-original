@@ -13,8 +13,9 @@ use crate::{
         UNIMPLEMENTED_SEL,
     },
     plan_nodes::{
-        BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, ConstantType, Expr, InListExpr, LikeExpr,
-        LogOpType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, UnOpType,
+        BinOpType, ConstantType, Expr, LogOpType, OptRelNode, OptRelNodeRef, OptRelNodeTyp,
+        PhysicalCastExpr, PhysicalColumnRefExpr, PhysicalConstantExpr, PhysicalInListExpr,
+        PhysicalLikeExpr, UnOpType,
     },
     properties::{
         column_ref::{
@@ -51,10 +52,8 @@ impl<
                 optimizer.get_property_by_group::<ColumnRefPropertyBuilder>(context.group_id, 1);
             let column_refs = column_refs.base_table_column_refs();
             let expr_group_id = context.children_group_ids[1];
-            let expr_trees = optimizer.get_all_group_bindings(expr_group_id, false);
-            // there may be more than one expression tree in a group (you can see this trivially as you can just swap the order of two subtrees for commutative operators)
-            // however, we just take an arbitrary expression tree from the group to compute selectivity
-            let expr_tree = expr_trees.first().expect("expression missing");
+            // We expect that a winner will have already been chosen for the group holding the filter expression
+            let expr_tree = optimizer.step_get_winner(expr_group_id, &mut None).unwrap();
             self.get_filter_selectivity(expr_tree.clone(), &schema, column_refs)
         } else {
             DEFAULT_UNK_SEL
@@ -132,14 +131,14 @@ impl<
             OptRelNodeTyp::PhysicalBetween => UNIMPLEMENTED_SEL,
             OptRelNodeTyp::PhysicalCast => unimplemented!("check bool type or else panic"),
             OptRelNodeTyp::PhysicalLike => {
-                let like_expr = LikeExpr::from_rel_node(expr_tree).unwrap();
+                let like_expr = PhysicalLikeExpr::from_rel_node(expr_tree).unwrap();
                 self.get_like_selectivity(&like_expr, column_refs)
             }
             OptRelNodeTyp::PhysicalDataType(_) => {
                 panic!("the selectivity of a data type is not defined")
             }
             OptRelNodeTyp::PhysicalInList => {
-                let in_list_expr = InListExpr::from_rel_node(expr_tree).unwrap();
+                let in_list_expr = PhysicalInListExpr::from_rel_node(expr_tree).unwrap();
                 self.get_in_list_selectivity(&in_list_expr, column_refs)
             }
             _ => {
@@ -152,7 +151,7 @@ impl<
     }
 
     fn get_constant_selectivity(const_node: OptRelNodeRef) -> f64 {
-        if let OptRelNodeTyp::Constant(const_typ) = const_node.typ {
+        if let OptRelNodeTyp::PhysicalConstant(const_typ) = const_node.typ {
             if matches!(const_typ, ConstantType::Bool) {
                 let value = const_node
                     .as_ref()
@@ -203,7 +202,12 @@ impl<
         left: OptRelNodeRef,
         right: OptRelNodeRef,
         schema: &Schema,
-    ) -> (Vec<ColumnRefExpr>, Vec<Value>, Vec<OptRelNodeRef>, bool) {
+    ) -> (
+        Vec<PhysicalColumnRefExpr>,
+        Vec<Value>,
+        Vec<OptRelNodeRef>,
+        bool,
+    ) {
         let mut col_ref_exprs = vec![];
         let mut values = vec![];
         let mut non_col_ref_exprs = vec![];
@@ -214,35 +218,37 @@ impl<
         let mut uncasted_right = right;
         loop {
             // println!("loop {}, uncasted_left={:?}, uncasted_right={:?}", Local::now(), uncasted_left, uncasted_right);
-            if uncasted_left.as_ref().typ == OptRelNodeTyp::Cast
-                && uncasted_right.as_ref().typ == OptRelNodeTyp::Cast
+            if uncasted_left.as_ref().typ == OptRelNodeTyp::PhysicalCast
+                && uncasted_right.as_ref().typ == OptRelNodeTyp::PhysicalCast
             {
-                let left_cast_expr = CastExpr::from_rel_node(uncasted_left)
+                let left_cast_expr = PhysicalCastExpr::from_rel_node(uncasted_left)
                     .expect("we already checked that the type is Cast");
-                let right_cast_expr = CastExpr::from_rel_node(uncasted_right)
+                let right_cast_expr = PhysicalCastExpr::from_rel_node(uncasted_right)
                     .expect("we already checked that the type is Cast");
                 assert!(left_cast_expr.cast_to() == right_cast_expr.cast_to());
                 uncasted_left = left_cast_expr.child().into_rel_node();
                 uncasted_right = right_cast_expr.child().into_rel_node();
-            } else if uncasted_left.as_ref().typ == OptRelNodeTyp::Cast
-                || uncasted_right.as_ref().typ == OptRelNodeTyp::Cast
+            } else if uncasted_left.as_ref().typ == OptRelNodeTyp::PhysicalCast
+                || uncasted_right.as_ref().typ == OptRelNodeTyp::PhysicalCast
             {
-                let is_left_cast = uncasted_left.as_ref().typ == OptRelNodeTyp::Cast;
+                let is_left_cast = uncasted_left.as_ref().typ == OptRelNodeTyp::PhysicalCast;
                 let (mut cast_node, mut non_cast_node) = if is_left_cast {
                     (uncasted_left, uncasted_right)
                 } else {
                     (uncasted_right, uncasted_left)
                 };
 
-                let cast_expr = CastExpr::from_rel_node(cast_node)
+                let cast_expr = PhysicalCastExpr::from_rel_node(cast_node)
                     .expect("we already checked that the type is Cast");
+                dbg!(cast_expr.clone());
                 let cast_expr_child = cast_expr.child().into_rel_node();
                 let cast_expr_cast_to = cast_expr.cast_to();
 
                 let should_break = match cast_expr_child.typ {
-                    OptRelNodeTyp::Constant(_) => {
-                        cast_node = ConstantExpr::new(
-                            ConstantExpr::from_rel_node(cast_expr_child)
+                    OptRelNodeTyp::PhysicalConstant(_) => {
+                        dbg!("A");
+                        cast_node = PhysicalConstantExpr::new(
+                            PhysicalConstantExpr::from_rel_node(cast_expr_child)
                                 .expect("we already checked that the type is Constant")
                                 .value()
                                 .convert_to_type(cast_expr_cast_to),
@@ -250,8 +256,9 @@ impl<
                         .into_rel_node();
                         false
                     }
-                    OptRelNodeTyp::ColumnRef => {
-                        let col_ref_expr = ColumnRefExpr::from_rel_node(cast_expr_child)
+                    OptRelNodeTyp::PhysicalColumnRef => {
+                        dbg!("B");
+                        let col_ref_expr = PhysicalColumnRefExpr::from_rel_node(cast_expr_child)
                             .expect("we already checked that the type is ColumnRef");
                         let col_ref_idx = col_ref_expr.index();
                         cast_node = col_ref_expr.into_rel_node();
@@ -261,14 +268,14 @@ impl<
                             &schema.fields[col_ref_idx].typ.into_data_type();
 
                         match non_cast_node.typ {
-                            OptRelNodeTyp::ColumnRef => {
+                            OptRelNodeTyp::PhysicalColumnRef => {
                                 // In general, there's no way to remove the Cast here. We can't move the Cast to the
                                 // other ColumnRef because that would lead to an infinite loop. Thus, we just leave the
                                 // cast where it is and break.
                                 true
                             }
                             _ => {
-                                non_cast_node = CastExpr::new(
+                                non_cast_node = PhysicalCastExpr::new(
                                     Expr::from_rel_node(non_cast_node).unwrap(),
                                     invert_cast_data_type.clone(),
                                 )
@@ -296,17 +303,17 @@ impl<
 
         // Sort nodes into col_ref_exprs, values, and non_col_ref_exprs
         match uncasted_left.as_ref().typ {
-            OptRelNodeTyp::ColumnRef => {
+            OptRelNodeTyp::PhysicalColumnRef => {
                 is_left_col_ref = true;
                 col_ref_exprs.push(
-                    ColumnRefExpr::from_rel_node(uncasted_left)
+                    PhysicalColumnRefExpr::from_rel_node(uncasted_left)
                         .expect("we already checked that the type is ColumnRef"),
                 );
             }
-            OptRelNodeTyp::Constant(_) => {
+            OptRelNodeTyp::PhysicalConstant(_) => {
                 is_left_col_ref = false;
                 values.push(
-                    ConstantExpr::from_rel_node(uncasted_left)
+                    PhysicalConstantExpr::from_rel_node(uncasted_left)
                         .expect("we already checked that the type is Constant")
                         .value(),
                 )
@@ -317,14 +324,14 @@ impl<
             }
         }
         match uncasted_right.as_ref().typ {
-            OptRelNodeTyp::ColumnRef => {
+            OptRelNodeTyp::PhysicalColumnRef => {
                 col_ref_exprs.push(
-                    ColumnRefExpr::from_rel_node(uncasted_right)
+                    PhysicalColumnRefExpr::from_rel_node(uncasted_right)
                         .expect("we already checked that the type is ColumnRef"),
                 );
             }
-            OptRelNodeTyp::Constant(_) => values.push(
-                ConstantExpr::from_rel_node(uncasted_right)
+            OptRelNodeTyp::PhysicalConstant(_) => values.push(
+                PhysicalConstantExpr::from_rel_node(uncasted_right)
                     .expect("we already checked that the type is Constant")
                     .value(),
             ),

@@ -4,7 +4,7 @@ use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
 
-use super::DataTypeExpr;
+use super::{DataTypeExpr, PhysicalDataTypeExpr};
 
 #[derive(Clone, Debug)]
 pub struct CastExpr(pub Expr);
@@ -69,7 +69,7 @@ impl PhysicalCastExpr {
                 typ: OptRelNodeTyp::PhysicalCast,
                 children: vec![
                     expr.into_rel_node(),
-                    DataTypeExpr::new(cast_to).into_rel_node(),
+                    PhysicalDataTypeExpr::new(cast_to).into_rel_node(),
                 ],
                 data: None,
             }
@@ -82,7 +82,7 @@ impl PhysicalCastExpr {
     }
 
     pub fn cast_to(&self) -> DataType {
-        DataTypeExpr::from_rel_node(self.0.child(1))
+        PhysicalDataTypeExpr::from_rel_node(self.0.child(1))
             .unwrap()
             .data_type()
     }

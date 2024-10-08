@@ -3,7 +3,7 @@ use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
 
-use super::ExprList;
+use super::{ExprList, PhysicalExprList};
 
 #[derive(Clone, Debug)]
 pub struct InListExpr(pub Expr);
@@ -63,7 +63,7 @@ impl OptRelNode for InListExpr {
 pub struct PhysicalInListExpr(pub Expr);
 
 impl PhysicalInListExpr {
-    pub fn new(expr: Expr, list: ExprList, negated: bool) -> Self {
+    pub fn new(expr: Expr, list: PhysicalExprList, negated: bool) -> Self {
         PhysicalInListExpr(Expr(
             RelNode {
                 typ: OptRelNodeTyp::PhysicalInList,
@@ -78,8 +78,9 @@ impl PhysicalInListExpr {
         Expr(self.0.child(0))
     }
 
-    pub fn list(&self) -> ExprList {
-        ExprList::from_rel_node(self.0.child(1)).unwrap()
+    pub fn list(&self) -> PhysicalExprList {
+        dbg!(self.0.child(1));
+        PhysicalExprList::from_rel_node(self.0.child(1)).unwrap()
     }
 
     /// `true` for `NOT IN`.

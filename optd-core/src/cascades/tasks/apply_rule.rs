@@ -154,6 +154,25 @@ fn match_and_pick<T: RelNodeTyp>(
             }
             match_node(typ, children, None, node, optimizer)
         }
+        RuleMatcher::MatchDiscriminant {
+            typ_discriminant,
+            children,
+        } => {
+            if std::mem::discriminant(&node.typ) != *typ_discriminant {
+                return vec![];
+            }
+            match_node(&node.typ.clone(), children, None, node, optimizer)
+        }
+        RuleMatcher::MatchAndPickDiscriminant {
+            typ_discriminant,
+            children,
+            pick_to,
+        } => {
+            if std::mem::discriminant(&node.typ) != *typ_discriminant {
+                return vec![];
+            }
+            match_node(&node.typ.clone(), children, Some(*pick_to), node, optimizer)
+        }
         _ => panic!("top node should be match node"),
     }
 }
