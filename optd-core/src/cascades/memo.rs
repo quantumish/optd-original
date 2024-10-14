@@ -1,4 +1,4 @@
-mod disjoint_set;
+mod disjoint_group;
 
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use disjoint_set::{DisjointSet, UnionFind};
+use disjoint_group::set::{DisjointSet, UnionFind};
 use itertools::Itertools;
 use std::any::Any;
 
