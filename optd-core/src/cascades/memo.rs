@@ -1,3 +1,5 @@
+mod disjoint_set;
+
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt::Display,
@@ -5,6 +7,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
+use disjoint_set::{DisjointSet, UnionFind};
 use itertools::Itertools;
 use std::any::Any;
 
@@ -78,7 +81,7 @@ pub struct Memo<T: RelNodeTyp> {
     expr_node_to_expr_id: HashMap<RelMemoNode<T>, ExprId>,
     groups: HashMap<ReducedGroupId, Group>,
     group_expr_counter: usize,
-    merged_groups: HashMap<GroupId, GroupId>,
+    disjoint_groups: DisjointSet<GroupId>,
     property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>,
 }
 
@@ -90,7 +93,7 @@ impl<T: RelNodeTyp> Memo<T> {
             expr_node_to_expr_id: HashMap::new(),
             groups: HashMap::new(),
             group_expr_counter: 0,
-            merged_groups: HashMap::new(),
+            disjoint_groups: DisjointSet::new(),
             property_builders,
         }
     }
@@ -99,6 +102,7 @@ impl<T: RelNodeTyp> Memo<T> {
     fn next_group_id(&mut self) -> ReducedGroupId {
         let id = self.group_expr_counter;
         self.group_expr_counter += 1;
+        self.disjoint_groups.add(GroupId(id));
         ReducedGroupId(id)
     }
 
@@ -118,18 +122,20 @@ impl<T: RelNodeTyp> Memo<T> {
             return group_a;
         }
 
+        let [rep, other] = self
+            .disjoint_groups
+            .union(&group_a.as_group_id(), &group_b.as_group_id())
+            .unwrap();
+
         // Copy all expressions from group a to group b
-        let group_a_exprs = self.get_all_exprs_in_group(group_a.as_group_id());
-        for expr_id in group_a_exprs {
+        let other_exprs = self.get_all_exprs_in_group(other);
+        for expr_id in other_exprs {
             let expr_node = self.expr_id_to_expr_node.get(&expr_id).unwrap();
-            self.add_expr_to_group(expr_id, group_b, expr_node.as_ref().clone());
+            self.add_expr_to_group(expr_id, ReducedGroupId(rep.0), expr_node.as_ref().clone());
         }
 
-        self.merged_groups
-            .insert(group_a.as_group_id(), group_b.as_group_id());
-
         // Remove all expressions from group a (so we don't accidentally access it)
-        self.clear_exprs_in_group(group_a);
+        self.clear_exprs_in_group(ReducedGroupId(other.0));
 
         group_b
     }
@@ -145,11 +151,9 @@ impl<T: RelNodeTyp> Memo<T> {
         self.expr_id_to_group_id[&expr_id]
     }
 
-    fn get_reduced_group_id(&self, mut group_id: GroupId) -> ReducedGroupId {
-        while let Some(next_group_id) = self.merged_groups.get(&group_id) {
-            group_id = *next_group_id;
-        }
-        ReducedGroupId(group_id.0)
+    fn get_reduced_group_id(&self, group_id: GroupId) -> ReducedGroupId {
+        let reduced = self.disjoint_groups.find(&group_id).unwrap();
+        ReducedGroupId(reduced.0)
     }
 
     /// Add or get an expression into the memo, returns the group id and the expr id. If `GroupId` is `None`,
@@ -164,10 +168,8 @@ impl<T: RelNodeTyp> Memo<T> {
             self.merge_group(grp_a, grp_b);
         };
 
-        let (group_id, expr_id) = self.add_new_group_expr_inner(
-            rel_node,
-            add_to_group_id.map(|x| self.get_reduced_group_id(x)),
-        );
+        let add_to_group_id = add_to_group_id.map(|x| self.get_reduced_group_id(x));
+        let (group_id, expr_id) = self.add_new_group_expr_inner(rel_node, add_to_group_id);
         (group_id.as_group_id(), expr_id)
     }
 
