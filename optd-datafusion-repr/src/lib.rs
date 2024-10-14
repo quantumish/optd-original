@@ -105,7 +105,7 @@ impl DatafusionOptimizer {
         transformation_rules.push(Arc::new(FilterAggTransposeRule::new()));
         transformation_rules.push(Arc::new(JoinAssocRule::new()));
         transformation_rules.push(Arc::new(JoinCommuteRule::new()));
-        // transformation_rules.push(Arc::new(ProjectionPullUpJoin::new()));
+        transformation_rules.push(Arc::new(ProjectionPullUpJoin::new()));
 
         let mut implementation_rules: Vec<
             Arc<dyn Rule<OptRelNodeTyp, CascadesOptimizer<OptRelNodeTyp>>>,

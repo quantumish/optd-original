@@ -17,6 +17,7 @@ use crate::{
 use super::Task;
 
 // Pick/match logic, to get pieces of info to pass to the rule apply function
+// TODO: I would like to see this moved elsewhere
 
 fn match_node<T: RelNodeTyp>(
     typ: &T,
@@ -187,6 +188,8 @@ fn match_and_pick<T: RelNodeTyp>(
 }
 
 pub struct ApplyRuleTask<T: RelNodeTyp> {
+    parent_task_id: Option<usize>,
+    task_id: usize,
     expr_id: ExprId,
     rule_id: RuleId,
     rule: Arc<dyn Rule<T, CascadesOptimizer<T>>>,
@@ -196,12 +199,16 @@ pub struct ApplyRuleTask<T: RelNodeTyp> {
 
 impl<T: RelNodeTyp> ApplyRuleTask<T> {
     pub fn new(
+        parent_task_id: Option<usize>,
+        task_id: usize,
         expr_id: ExprId,
         rule_id: RuleId,
         rule: Arc<dyn Rule<T, CascadesOptimizer<T>>>,
         cost_limit: Option<isize>,
     ) -> Self {
         Self {
+            parent_task_id,
+            task_id,
             expr_id,
             rule_id,
             rule,
@@ -215,14 +222,14 @@ fn transform<T: RelNodeTyp>(
     expr_id: ExprId,
     rule: &Arc<dyn Rule<T, CascadesOptimizer<T>>>,
 ) -> Vec<RelNode<T>> {
-    let picked_data = match_and_pick_expr(rule.matcher(), expr_id, optimizer);
+    let picked_datas = match_and_pick_expr(rule.matcher(), expr_id, optimizer);
 
-    if picked_data.is_empty() {
+    if picked_datas.is_empty() {
         vec![]
     } else {
-        picked_data
+        picked_datas
             .into_iter()
-            .map(|data| rule.apply(optimizer, data))
+            .map(|picked_data| rule.apply(optimizer, picked_data))
             .flatten()
             .collect()
     }
@@ -263,14 +270,9 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
         let expr = optimizer.get_expr_memoed(self.expr_id);
 
-        trace!(event = "task_begin", task = "apply_rule", rule_id = %self.rule_id, expr_id = %self.expr_id, expr = %expr);
-        // TODO: Check transformation count and cancel invocation if we've hit
-        // a limit
-        debug_assert!(!optimizer.is_rule_applied(self.expr_id, self.rule_id));
+        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_begin", task = "apply_rule", rule_id = %self.rule_id, rule = %self.rule.name(), expr_id = %self.expr_id, expr = %expr);
 
         let group_id = optimizer.get_group_id(self.expr_id);
-
-        optimizer.mark_rule_applied(self.expr_id, self.rule_id);
 
         debug_assert!(rule_matches_expr(&self.rule, &expr));
 
@@ -282,12 +284,22 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
             let is_transformation_rule = !self.rule.is_impl_rule();
             if is_transformation_rule {
                 // TODO: Increment transformation count
-                optimizer.push_task(Box::new(ExploreExprTask::new(new_expr_id, self.cost_limit)));
+                optimizer.push_task(Box::new(ExploreExprTask::new(
+                    Some(self.task_id),
+                    optimizer.get_next_task_id(),
+                    new_expr_id,
+                    self.cost_limit,
+                )));
             } else {
                 let new_limit = None; // TODO: How do we update cost limit
-                optimizer.push_task(Box::new(OptimizeInputsTask::new(new_expr_id, new_limit)));
+                optimizer.push_task(Box::new(OptimizeInputsTask::new(
+                    Some(self.task_id),
+                    optimizer.get_next_task_id(),
+                    new_expr_id,
+                    new_limit,
+                )));
             }
         }
-        trace!(event = "task_finish", task = "apply_rule", rule_id = %self.rule_id, expr_id = %self.expr_id, expr = %expr);
+        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_finish", task = "apply_rule", rule_id = %self.rule_id, expr_id = %self.expr_id, expr = %expr);
     }
 }

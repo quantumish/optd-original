@@ -11,13 +11,22 @@ use crate::{
 use super::{apply_rule::ApplyRuleTask, explore_group::ExploreGroupTask, Task};
 
 pub struct OptimizeExprTask {
+    parent_task_id: Option<usize>,
+    task_id: usize,
     expr_id: ExprId,
     cost_limit: Option<isize>,
 }
 
 impl OptimizeExprTask {
-    pub fn new(expr_id: ExprId, cost_limit: Option<isize>) -> Self {
+    pub fn new(
+        parent_task_id: Option<usize>,
+        task_id: usize,
+        expr_id: ExprId,
+        cost_limit: Option<isize>,
+    ) -> Self {
         Self {
+            parent_task_id,
+            task_id,
             expr_id,
             cost_limit,
         }
@@ -46,7 +55,7 @@ impl<T: RelNodeTyp> Task<T> for OptimizeExprTask {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
         let expr = optimizer.get_expr_memoed(self.expr_id);
         let group_id = optimizer.get_group_id(self.expr_id);
-        trace!(event = "task_begin", task = "optimize_expr", group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
+        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_begin", task = "optimize_expr", group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
 
         let mut moves = vec![];
         for (rule_id, rule) in optimizer.implementation_rules().iter() {
@@ -54,6 +63,8 @@ impl<T: RelNodeTyp> Task<T> for OptimizeExprTask {
             let rule_matches_expr = rule_matches_expr(rule, &expr);
             if !is_rule_applied && rule_matches_expr {
                 moves.push(Box::new(ApplyRuleTask::new(
+                    Some(self.task_id),
+                    optimizer.get_next_task_id(),
                     self.expr_id,
                     *rule_id,
                     rule.clone(),
@@ -70,11 +81,13 @@ impl<T: RelNodeTyp> Task<T> for OptimizeExprTask {
         for child_group_id in expr.children.iter() {
             if !optimizer.is_group_explored(*child_group_id) {
                 optimizer.push_task(Box::new(ExploreGroupTask::new(
+                    Some(self.task_id),
+                    optimizer.get_next_task_id(),
                     *child_group_id,
                     self.cost_limit,
                 )));
             }
         }
-        trace!(event = "task_finish", task = "optimize_expr", group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
+        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_finish", task = "optimize_expr", group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
     }
 }

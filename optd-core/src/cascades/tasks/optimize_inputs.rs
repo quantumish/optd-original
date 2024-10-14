@@ -13,22 +13,33 @@ use crate::{
 use super::{optimize_group::OptimizeGroupTask, Task};
 
 pub struct OptimizeInputsTask {
+    parent_task_id: Option<usize>,
+    task_id: usize,
     expr_id: ExprId,
     cost_limit: Option<isize>,
     iteration: usize,
 }
 
 impl OptimizeInputsTask {
-    pub fn new(expr_id: ExprId, cost_limit: Option<isize>) -> Self {
+    pub fn new(
+        parent_task_id: Option<usize>,
+        task_id: usize,
+        expr_id: ExprId,
+        cost_limit: Option<isize>,
+    ) -> Self {
         Self {
+            parent_task_id,
+            task_id,
             expr_id,
             cost_limit,
             iteration: 0,
         }
     }
 
-    fn new_continue_iteration(&self) -> Self {
+    fn new_continue_iteration(&self, optimizer: &CascadesOptimizer<impl RelNodeTyp>) -> Self {
         Self {
+            parent_task_id: Some(self.task_id),
+            task_id: optimizer.get_next_task_id(),
             expr_id: self.expr_id,
             cost_limit: self.cost_limit,
             iteration: self.iteration + 1,
@@ -124,26 +135,28 @@ impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
         let expr = optimizer.get_expr_memoed(self.expr_id);
         let group_id = optimizer.get_group_id(self.expr_id);
         // TODO: add typ to more traces and iteration to traces below
-        trace!(event = "task_begin", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
+        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_begin", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
         let next_child_expr = expr.children.get(self.iteration);
         if let None = next_child_expr {
             // TODO: If we want to support interrupting the optimizer, it might
             // behoove us to update the winner more often than this.
             update_winner(self.expr_id, optimizer);
-            trace!(event = "task_finish", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
+            trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_finish", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
             return;
         }
         let next_child_expr = next_child_expr.unwrap();
 
         //TODO(parallel): Task dependency
         //TODO: Should be able to add multiple tasks at once
-        optimizer.push_task(Box::new(self.new_continue_iteration()));
+        optimizer.push_task(Box::new(self.new_continue_iteration(optimizer)));
         // TODO updatecostbound (involves cost limit)
         let new_limit = None; // TODO: How do we update cost limit
         optimizer.push_task(Box::new(OptimizeGroupTask::new(
+            Some(self.task_id),
+            optimizer.get_next_task_id(),
             *next_child_expr,
             new_limit,
         )));
-        trace!(event = "task_finish", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
+        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_finish", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
     }
 }

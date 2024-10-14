@@ -8,13 +8,22 @@ use crate::{
 use super::{explore_group::ExploreGroupTask, optimize_expr::OptimizeExprTask, Task};
 
 pub struct OptimizeGroupTask {
+    parent_task_id: Option<usize>,
+    task_id: usize,
     group_id: GroupId,
     cost_limit: Option<isize>,
 }
 
 impl OptimizeGroupTask {
-    pub fn new(group_id: GroupId, cost_limit: Option<isize>) -> Self {
+    pub fn new(
+        parent_task_id: Option<usize>,
+        task_id: usize,
+        group_id: GroupId,
+        cost_limit: Option<isize>,
+    ) -> Self {
         Self {
+            parent_task_id,
+            task_id,
             group_id,
             cost_limit,
         }
@@ -40,7 +49,7 @@ impl OptimizeGroupTask {
 ///         tasks.Push(OptExpr(expr, limit))
 impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
-        trace!(event = "task_begin", task = "optimize_group", group_id = %self.group_id);
+        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_begin", task = "optimize_group", group_id = %self.group_id);
         let group_explored = optimizer.is_group_explored(self.group_id);
 
         // Apply transformation rules *before* trying to apply our
@@ -48,10 +57,14 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
         if !group_explored {
             // TODO(parallel): Task dependency here
             optimizer.push_task(Box::new(OptimizeGroupTask::new(
+                Some(self.task_id),
+                optimizer.get_next_task_id(),
                 self.group_id,
                 self.cost_limit,
             )));
             optimizer.push_task(Box::new(ExploreGroupTask::new(
+                Some(self.task_id),
+                optimizer.get_next_task_id(),
                 self.group_id,
                 self.cost_limit,
             )));
@@ -59,9 +72,14 @@ impl<T: RelNodeTyp> Task<T> for OptimizeGroupTask {
             // Optimize every expression in the group
             // (apply implementation rules)
             for expr in optimizer.get_all_exprs_in_group(self.group_id) {
-                optimizer.push_task(Box::new(OptimizeExprTask::new(expr, self.cost_limit)));
+                optimizer.push_task(Box::new(OptimizeExprTask::new(
+                    Some(self.task_id),
+                    optimizer.get_next_task_id(),
+                    expr,
+                    self.cost_limit,
+                )));
             }
         }
-        trace!(event = "task_finish", task = "optimize_group", group_id = %self.group_id);
+        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_finish", task = "optimize_group", group_id = %self.group_id);
     }
 }

@@ -15,6 +15,14 @@ pub trait Task<T: RelNodeTyp>: 'static + Send + Sync {
     fn execute(&self, optimizer: &CascadesOptimizer<T>);
 }
 
-pub fn get_initial_task<T: RelNodeTyp>(root_group_id: GroupId) -> Box<dyn Task<T>> {
-    Box::new(OptimizeGroupTask::new(root_group_id, None))
+pub fn get_initial_task<T: RelNodeTyp>(
+    initial_task_id: usize,
+    root_group_id: GroupId,
+) -> Box<dyn Task<T>> {
+    Box::new(OptimizeGroupTask::new(
+        None,
+        initial_task_id,
+        root_group_id,
+        None,
+    ))
 }

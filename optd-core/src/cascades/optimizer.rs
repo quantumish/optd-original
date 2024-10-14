@@ -34,7 +34,7 @@ pub struct RelNodeContext {
 
 // TODO: can these be somewhere else?
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
-pub struct GroupId(pub(super) usize);
+pub struct GroupId(pub usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
 pub struct ExprId(pub usize);
@@ -78,11 +78,13 @@ struct CascadesOptimizerState<T: RelNodeTyp> {
 pub struct CascadesOptimizer<T: RelNodeTyp> {
     /// Tasks that are waiting to be executed
     tasks: Mutex<Vec<Box<dyn Task<T>>>>,
+    /// Monotonically increasing counter for task invocations
+    task_counter: AtomicUsize,
     /// Parts of the internal state of the optimizer, behind a RwLock
     state: RwLock<CascadesOptimizerState<T>>,
     /// Number of transformation rule applications that have ocurred thus far.
     /// We can use this to terminate exploration early.
-    transformation_count: AtomicUsize,
+    transformation_counter: AtomicUsize,
     /// Transformation rules that may be used while exploring
     /// (logical -> logical)
     transformation_rules: Arc<[(RuleId, Arc<dyn Rule<T, Self>>)]>,
@@ -118,13 +120,14 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         // Create struct instance
         Self {
             tasks: Mutex::default(),
+            task_counter: AtomicUsize::new(0),
             state: RwLock::new(CascadesOptimizerState {
                 memo: Memo::new(property_builders.clone()),
                 explored_groups: HashSet::new(),
                 applied_rules: HashMap::new(),
                 disabled_rules: HashSet::new(),
             }),
-            transformation_count: AtomicUsize::new(0),
+            transformation_counter: AtomicUsize::new(0),
             transformation_rules,
             implementation_rules,
             property_builders,
@@ -223,6 +226,14 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
             .insert(rule_id);
     }
 
+    pub fn get_next_task_id(&self) -> usize {
+        self.task_counter.fetch_add(1, Ordering::AcqRel) // TODO: think about ordering
+    }
+
+    pub fn reset_task_id(&self) {
+        self.task_counter.store(0, Ordering::Release); // TODO: think about ordering
+    }
+
     pub fn add_expr_to_new_group(&self, expr: RelNodeRef<T>) -> (GroupId, ExprId) {
         self.state
             .write()
@@ -291,8 +302,8 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
         &self.cost
     }
 
-    pub fn incr_transformation_count(&self) {
-        self.transformation_count.fetch_add(1, Ordering::Relaxed);
+    pub fn incr_transformation_counter(&self) {
+        self.transformation_counter.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn disable_rule(&mut self, rule_id: RuleId) {
@@ -333,8 +344,10 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     pub fn step_optimize_group(&self, root_group_id: GroupId) -> Result<()> {
         let tasks_empty = self.tasks.lock().unwrap().is_empty();
 
+        self.reset_task_id();
+
         if tasks_empty {
-            self.push_task(get_initial_task(root_group_id));
+            self.push_task(get_initial_task(self.get_next_task_id(), root_group_id));
         }
 
         // Run single-threaded search
