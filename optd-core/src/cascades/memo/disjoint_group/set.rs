@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{
+    collections::{hash_map, HashMap},
+    fmt::Debug,
+    hash::Hash,
+};
 
 /// A data structure for efficiently maintaining disjoint sets of `T`.
 pub struct DisjointSet<T> {
@@ -37,7 +41,7 @@ where
 
 impl<T> DisjointSet<T>
 where
-    T: Ord + Hash + Copy,
+    T: Ord + Hash + Copy + Debug,
 {
     pub fn new() -> Self {
         DisjointSet {
@@ -98,6 +102,11 @@ where
         }
 
         Some(parent)
+    }
+
+    /// Gets the given node corresponding entry in `node_parents` map for in-place manipulation.
+    pub(super) fn entry(&mut self, node: T) -> hash_map::Entry<'_, T, T> {
+        self.node_parents.entry(node)
     }
 }
 

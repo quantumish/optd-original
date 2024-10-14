@@ -6,7 +6,10 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use disjoint_group::set::{DisjointSet, UnionFind};
+use disjoint_group::{
+    set::{DisjointSet, UnionFind},
+    DisjointGroupMap,
+};
 use itertools::Itertools;
 use std::any::Any;
 
@@ -195,6 +198,7 @@ impl<T: RelNodeTyp> Memo<T> {
         props
     }
 
+    // TODO(yuchen): make internal to disjoint group
     fn clear_exprs_in_group(&mut self, group_id: GroupId) {
         self.groups.remove(&group_id);
     }
@@ -202,6 +206,7 @@ impl<T: RelNodeTyp> Memo<T> {
     /// If group_id exists, it adds expr_id to the existing group
     /// Otherwise, it creates a new group of that group_id and insert expr_id into the new group
     fn add_expr_to_group(&mut self, expr_id: ExprId, group_id: GroupId, memo_node: RelMemoNode<T>) {
+        // TODO(yuchen): use entry API
         if let Entry::Occupied(mut entry) = self.groups.entry(group_id) {
             let group = entry.get_mut();
             group.group_exprs.insert(expr_id);
@@ -214,6 +219,7 @@ impl<T: RelNodeTyp> Memo<T> {
         };
         group.group_exprs.insert(expr_id);
         self.disjoint_group_ids.add(group_id);
+        // TODO(yuchen): use insert
         self.groups.insert(group_id, group);
     }
 
@@ -228,6 +234,7 @@ impl<T: RelNodeTyp> Memo<T> {
     ) -> bool {
         let replace_group_id = self.get_reduced_group_id(replace_group_id);
 
+        // TODO(yuchen): use disjoint group entry API
         if let Entry::Occupied(mut entry) = self.groups.entry(replace_group_id) {
             let group = entry.get_mut();
             if !group.group_exprs.contains(&expr_id) {
