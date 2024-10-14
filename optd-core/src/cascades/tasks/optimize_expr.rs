@@ -62,6 +62,8 @@ impl<T: RelNodeTyp> Task<T> for OptimizeExprTask {
             let is_rule_applied = optimizer.is_rule_applied(self.expr_id, *rule_id);
             let rule_matches_expr = rule_matches_expr(rule, &expr);
             if !is_rule_applied && rule_matches_expr {
+                debug_assert!(!optimizer.is_rule_applied(self.expr_id, *rule_id));
+                optimizer.mark_rule_applied(self.expr_id, *rule_id);
                 moves.push(Box::new(ApplyRuleTask::new(
                     Some(self.task_id),
                     optimizer.get_next_task_id(),

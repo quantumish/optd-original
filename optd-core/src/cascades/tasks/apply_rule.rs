@@ -291,6 +291,7 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
                     self.cost_limit,
                 )));
             } else {
+                // TODO: Also, make cost limit optional with parameters struct like before
                 let new_limit = None; // TODO: How do we update cost limit
                 optimizer.push_task(Box::new(OptimizeInputsTask::new(
                     Some(self.task_id),
@@ -300,6 +301,6 @@ impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
                 )));
             }
         }
-        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_finish", task = "apply_rule", rule_id = %self.rule_id, expr_id = %self.expr_id, expr = %expr);
+        trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_finish", task = "apply_rule", rule_id = %self.rule_id, rule = %self.rule.name(), expr_id = %self.expr_id, expr = %expr);
     }
 }
