@@ -118,7 +118,7 @@ impl<T: RelNodeTyp> Memo<T> {
         // Remove all expressions from group other (so we don't accidentally access it)
         self.clear_exprs_in_group(other);
 
-        group_b
+        rep
     }
 
     fn get_group_id_of_expr_id(&self, expr_id: ExprId) -> GroupId {

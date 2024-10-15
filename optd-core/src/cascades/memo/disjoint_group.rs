@@ -3,11 +3,15 @@ use std::{
     ops::Index,
 };
 
+use itertools::Itertools;
 use set::{DisjointSet, UnionFind};
 
-use crate::cascades::GroupId;
+use crate::{
+    cascades::{optimizer::ExprId, GroupId},
+    rel_node::RelNodeTyp,
+};
 
-use super::Group;
+use super::{Group, RelMemoNodeRef};
 
 pub mod set;
 
@@ -42,6 +46,30 @@ impl DisjointGroupMap {
     unsafe fn insert_new(&mut self, id: GroupId, group: Group) {
         self.id_map.add(id);
         self.groups.insert(id, group);
+    }
+
+    /// Merge the group `a` and group `b`. Returns the merged representative group id.
+    pub fn merge(&mut self, a: GroupId, b: GroupId) -> GroupId {
+        if a == b {
+            return a;
+        }
+
+        let [rep, other] = self.id_map.union(&a, &b).unwrap();
+
+        // Drain all expressions from group other, copy to its representative
+        let other_exprs = self.drain_all_exprs_in(&other);
+        let rep_group = self.get_mut(&rep).expect("group not found");
+        for expr_id in other_exprs {
+            rep_group.group_exprs.insert(expr_id);
+        }
+
+        rep
+    }
+
+    /// Drain all expressions from the group, returns an iterator of the expressions.
+    fn drain_all_exprs_in(&mut self, id: &GroupId) -> impl Iterator<Item = ExprId> {
+        let group = self.groups.remove(&id).expect("group not found");
+        group.group_exprs.into_iter().sorted()
     }
 
     pub fn entry(&mut self, id: GroupId) -> GroupEntry<'_> {
