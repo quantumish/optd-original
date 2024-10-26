@@ -3,13 +3,13 @@ use std::sync::Arc;
 
 use super::macros::define_rule;
 use crate::plan_nodes::{
-    ConstantExpr, ConstantType, Expr, ExprList, JoinType, LogOpExpr, LogOpType,
-    LogicalEmptyRelation, LogicalJoin, OptRelNode, OptRelNodeTyp, PlanNode,
+    ConstantExpr, ConstantType, DfPlanNode, Expr, ExprList, JoinType, LogOpExpr, LogOpType,
+    LogicalEmptyRelation, LogicalJoin, OptRelNode, OptRelNodeTyp,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 use crate::OptRelNodeRef;
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{optimizer::Optimizer, rel_node::RelNode};
+use optd_core::{node::PlanNode, optimizer::Optimizer};
 
 define_rule!(
     SimplifyFilterRule,
@@ -99,13 +99,13 @@ fn simplify_log_expr(log_expr: OptRelNodeRef, changed: &mut bool) -> OptRelNodeR
 fn apply_simplify_filter(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
     SimplifyFilterRulePicks { child, cond }: SimplifyFilterRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     match cond.typ {
         OptRelNodeTyp::LogOp(_) => {
             let mut changed = false;
             let new_log_expr = simplify_log_expr(Arc::new(cond), &mut changed);
             if changed {
-                let filter_node = RelNode {
+                let filter_node = PlanNode {
                     typ: OptRelNodeTyp::Filter,
                     children: vec![child.into(), new_log_expr],
                     data: None,
@@ -130,15 +130,15 @@ define_rule!(
 fn apply_simplify_join_cond(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
     SimplifyJoinCondRulePicks { left, right, cond }: SimplifyJoinCondRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     match cond.typ {
         OptRelNodeTyp::LogOp(_) => {
             let mut changed = false;
             let new_log_expr = simplify_log_expr(Arc::new(cond), &mut changed);
             if changed {
                 let join_node = LogicalJoin::new(
-                    PlanNode::from_group(left.into()),
-                    PlanNode::from_group(right.into()),
+                    DfPlanNode::from_group(left.into()),
+                    DfPlanNode::from_group(right.into()),
                     Expr::from_rel_node(new_log_expr).unwrap(),
                     JoinType::Inner,
                 );
@@ -164,7 +164,7 @@ define_rule!(
 fn apply_eliminate_filter(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     EliminateFilterRulePicks { child, cond }: EliminateFilterRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     if let OptRelNodeTyp::Constant(ConstantType::Bool) = cond.typ {
         if let Some(data) = cond.data {
             if data.as_bool() {

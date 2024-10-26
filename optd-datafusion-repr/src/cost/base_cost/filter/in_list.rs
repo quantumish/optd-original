@@ -77,7 +77,7 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use optd_core::rel_node::Value;
+    use optd_core::node::Value;
 
     use crate::{
         cost::base_cost::tests::{

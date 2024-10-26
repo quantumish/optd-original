@@ -1,5 +1,5 @@
 use arrow_schema::DataType;
-use optd_core::rel_node::{RelNode, RelNodeMetaMap};
+use optd_core::node::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -10,7 +10,7 @@ pub struct DataTypeExpr(pub Expr);
 impl DataTypeExpr {
     pub fn new(typ: DataType) -> Self {
         DataTypeExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::DataType(typ),
                 children: vec![],
                 data: None,
@@ -40,7 +40,7 @@ impl OptRelNode for DataTypeExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, _meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::display(&self.data_type().to_string())
     }
 }

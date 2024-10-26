@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use optd_core::rel_node::{RelNode, RelNodeMetaMap};
+use optd_core::node::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -10,7 +10,7 @@ pub struct ExprList(OptRelNodeRef);
 impl ExprList {
     pub fn new(exprs: Vec<Expr>) -> Self {
         ExprList(
-            RelNode::new_list(exprs.into_iter().map(|x| x.into_rel_node()).collect_vec()).into(),
+            PlanNode::new_list(exprs.into_iter().map(|x| x.into_rel_node()).collect_vec()).into(),
         )
     }
 
@@ -52,7 +52,7 @@ impl OptRelNode for ExprList {
         Some(ExprList(rel_node))
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::Array(
             (0..self.len())
                 .map(|x| self.child(x).explain(meta_map))

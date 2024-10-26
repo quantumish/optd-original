@@ -21,7 +21,7 @@ use optd_core::cascades::BindingType;
 use optd_datafusion_repr::{
     plan_nodes::{
         ConstantType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PhysicalHashJoin,
-        PhysicalNestedLoopJoin, PlanNode,
+        PhysicalNestedLoopJoin, DfPlanNode,
     },
     properties::schema::Catalog,
     DatafusionOptimizer,
@@ -225,7 +225,7 @@ impl OptdQueryPlanner {
                 PlanType::OptimizedLogicalPlan {
                     optimizer_name: "optd".to_string(),
                 },
-                PlanNode::from_rel_node(optd_rel.clone())
+                DfPlanNode::from_rel_node(optd_rel.clone())
                     .unwrap()
                     .explain_to_string(None),
             ));
@@ -239,7 +239,7 @@ impl OptdQueryPlanner {
                     PlanType::OptimizedLogicalPlan {
                         optimizer_name: "optd-heuristic".to_string(),
                     },
-                    PlanNode::from_rel_node(optd_rel.clone())
+                    DfPlanNode::from_rel_node(optd_rel.clone())
                         .unwrap()
                         .explain_to_string(None),
                 ))
@@ -253,7 +253,7 @@ impl OptdQueryPlanner {
                 PlanType::OptimizedPhysicalPlan {
                     optimizer_name: "optd".to_string(),
                 },
-                PlanNode::from_rel_node(optimized_rel.clone())
+                DfPlanNode::from_rel_node(optimized_rel.clone())
                     .unwrap()
                     .explain_to_string(if verbose { Some(&meta) } else { None }),
             ));

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use optd_core::rel_node::RelNode;
+use optd_core::node::RelNode;
 use optd_core::rules::{Rule, RuleMatcher};
 
 use crate::plan_nodes::{JoinType, OptRelNodeTyp};

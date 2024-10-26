@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::DataType;
+use optd_core::node::PlanNode;
 use optd_core::optimizer::Optimizer;
-use optd_core::rel_node::RelNode;
 use optd_core::rules::{Rule, RuleMatcher};
 
 use crate::plan_nodes::{
@@ -56,9 +56,9 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
     fn apply(
         &self,
         _optimizer: &O,
-        mut input: HashMap<usize, RelNode<OptRelNodeTyp>>,
-    ) -> Vec<RelNode<OptRelNodeTyp>> {
-        let RelNode {
+        mut input: HashMap<usize, PlanNode<OptRelNodeTyp>>,
+    ) -> Vec<PlanNode<OptRelNodeTyp>> {
+        let PlanNode {
             typ,
             data,
             children,
@@ -66,7 +66,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
 
         match typ {
             OptRelNodeTyp::Apply(x) => {
-                let node = RelNode {
+                let node = PlanNode {
                     typ: OptRelNodeTyp::PhysicalNestedLoopJoin(x.to_join_type()),
                     children,
                     data,
@@ -74,7 +74,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 vec![node]
             }
             OptRelNodeTyp::Join(x) => {
-                let node = RelNode {
+                let node = PlanNode {
                     typ: OptRelNodeTyp::PhysicalNestedLoopJoin(x),
                     children,
                     data,
@@ -82,7 +82,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 vec![node]
             }
             OptRelNodeTyp::Scan => {
-                let node = RelNode {
+                let node = PlanNode {
                     typ: OptRelNodeTyp::PhysicalScan,
                     children,
                     data,
@@ -90,7 +90,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 vec![node]
             }
             OptRelNodeTyp::Filter => {
-                let node = RelNode {
+                let node = PlanNode {
                     typ: OptRelNodeTyp::PhysicalFilter,
                     children,
                     data,
@@ -98,7 +98,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 vec![node]
             }
             OptRelNodeTyp::Projection => {
-                let node = RelNode {
+                let node = PlanNode {
                     typ: OptRelNodeTyp::PhysicalProjection,
                     children,
                     data,
@@ -106,7 +106,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 vec![node]
             }
             OptRelNodeTyp::Sort => {
-                let node = RelNode {
+                let node = PlanNode {
                     typ: OptRelNodeTyp::PhysicalSort,
                     children,
                     data,
@@ -114,7 +114,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 vec![node]
             }
             OptRelNodeTyp::Agg => {
-                let node = RelNode {
+                let node = PlanNode {
                     typ: OptRelNodeTyp::PhysicalAgg,
                     children,
                     data,
@@ -122,7 +122,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 vec![node]
             }
             OptRelNodeTyp::EmptyRelation => {
-                let node = RelNode {
+                let node = PlanNode {
                     typ: OptRelNodeTyp::PhysicalEmptyRelation,
                     children,
                     data,
@@ -130,7 +130,7 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 vec![node]
             }
             OptRelNodeTyp::Limit => {
-                let node = RelNode {
+                let node = PlanNode {
                     typ: OptRelNodeTyp::PhysicalLimit,
                     children,
                     data,

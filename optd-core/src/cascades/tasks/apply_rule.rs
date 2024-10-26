@@ -10,7 +10,7 @@ use crate::{
         tasks::{explore_expr::ExploreExprTask, optimize_inputs::OptimizeInputsTask},
         CascadesOptimizer, GroupId,
     },
-    rel_node::{RelNode, RelNodeTyp},
+    node::{NodeType, PlanNode},
     rules::{Rule, RuleMatcher},
 };
 
@@ -19,13 +19,13 @@ use super::Task;
 // Pick/match logic, to get pieces of info to pass to the rule apply function
 // TODO: I would like to see this moved elsewhere
 
-fn match_node<T: RelNodeTyp>(
+fn match_node<T: NodeType>(
     typ: &T,
     children: &[RuleMatcher<T>],
     pick_to: Option<usize>,
     node: RelMemoNodeRef<T>,
     optimizer: &CascadesOptimizer<T>,
-) -> Vec<HashMap<usize, RelNode<T>>> {
+) -> Vec<HashMap<usize, PlanNode<T>>> {
     if let RuleMatcher::PickMany { .. } | RuleMatcher::IgnoreMany = children.last().unwrap() {
     } else {
         assert_eq!(
@@ -64,7 +64,7 @@ fn match_node<T: RelNodeTyp>(
                     assert_eq!(bindings.len(), 1, "can only expand expression");
                     bindings.remove(0).as_ref().clone()
                 } else {
-                    RelNode::new_group(group_id)
+                    PlanNode::new_group(group_id)
                 };
                 for pick in &mut picks {
                     let res = pick.insert(*pick_to, node.clone());
@@ -75,10 +75,10 @@ fn match_node<T: RelNodeTyp>(
                 for pick in &mut picks {
                     let res = pick.insert(
                         *pick_to,
-                        RelNode::new_list(
+                        PlanNode::new_list(
                             node.children[idx..]
                                 .iter()
-                                .map(|x| Arc::new(RelNode::new_group(*x)))
+                                .map(|x| Arc::new(PlanNode::new_group(*x)))
                                 .collect_vec(),
                         ),
                     );
@@ -102,14 +102,14 @@ fn match_node<T: RelNodeTyp>(
     }
     if let Some(pick_to) = pick_to {
         for pick in &mut picks {
-            let res: Option<RelNode<T>> = pick.insert(
+            let res: Option<PlanNode<T>> = pick.insert(
                 pick_to,
-                RelNode {
+                PlanNode {
                     typ: typ.clone(),
                     children: node
                         .children
                         .iter()
-                        .map(|x| RelNode::new_group(*x).into())
+                        .map(|x| PlanNode::new_group(*x).into())
                         .collect_vec(),
                     data: node.data.clone(),
                 },
@@ -120,20 +120,20 @@ fn match_node<T: RelNodeTyp>(
     picks
 }
 
-fn match_and_pick_expr<T: RelNodeTyp>(
+fn match_and_pick_expr<T: NodeType>(
     matcher: &RuleMatcher<T>,
     expr_id: ExprId,
     optimizer: &CascadesOptimizer<T>,
-) -> Vec<HashMap<usize, RelNode<T>>> {
+) -> Vec<HashMap<usize, PlanNode<T>>> {
     let node = optimizer.get_expr_memoed(expr_id);
     match_and_pick(matcher, node, optimizer)
 }
 
-fn match_and_pick_group<T: RelNodeTyp>(
+fn match_and_pick_group<T: NodeType>(
     matcher: &RuleMatcher<T>,
     group_id: GroupId,
     optimizer: &CascadesOptimizer<T>,
-) -> Vec<HashMap<usize, RelNode<T>>> {
+) -> Vec<HashMap<usize, PlanNode<T>>> {
     let mut matches = vec![];
     for expr_id in optimizer.get_all_exprs_in_group(group_id) {
         let node = optimizer.get_expr_memoed(expr_id);
@@ -142,11 +142,11 @@ fn match_and_pick_group<T: RelNodeTyp>(
     matches
 }
 
-fn match_and_pick<T: RelNodeTyp>(
+fn match_and_pick<T: NodeType>(
     matcher: &RuleMatcher<T>,
     node: RelMemoNodeRef<T>,
     optimizer: &CascadesOptimizer<T>,
-) -> Vec<HashMap<usize, RelNode<T>>> {
+) -> Vec<HashMap<usize, PlanNode<T>>> {
     match matcher {
         RuleMatcher::MatchAndPickNode {
             typ,
@@ -187,7 +187,7 @@ fn match_and_pick<T: RelNodeTyp>(
     }
 }
 
-pub struct ApplyRuleTask<T: RelNodeTyp> {
+pub struct ApplyRuleTask<T: NodeType> {
     parent_task_id: Option<usize>,
     task_id: usize,
     expr_id: ExprId,
@@ -197,7 +197,7 @@ pub struct ApplyRuleTask<T: RelNodeTyp> {
     cost_limit: Option<isize>,
 }
 
-impl<T: RelNodeTyp> ApplyRuleTask<T> {
+impl<T: NodeType> ApplyRuleTask<T> {
     pub fn new(
         parent_task_id: Option<usize>,
         task_id: usize,
@@ -217,11 +217,11 @@ impl<T: RelNodeTyp> ApplyRuleTask<T> {
     }
 }
 
-fn transform<T: RelNodeTyp>(
+fn transform<T: NodeType>(
     optimizer: &CascadesOptimizer<T>,
     expr_id: ExprId,
     rule: &Arc<dyn Rule<T, CascadesOptimizer<T>>>,
-) -> Vec<RelNode<T>> {
+) -> Vec<PlanNode<T>> {
     let picked_datas = match_and_pick_expr(rule.matcher(), expr_id, optimizer);
 
     if picked_datas.is_empty() {
@@ -235,10 +235,10 @@ fn transform<T: RelNodeTyp>(
     }
 }
 
-fn update_memo<T: RelNodeTyp>(
+fn update_memo<T: NodeType>(
     optimizer: &CascadesOptimizer<T>,
     group_id: GroupId,
-    new_exprs: Vec<Arc<RelNode<T>>>,
+    new_exprs: Vec<Arc<PlanNode<T>>>,
 ) -> Vec<ExprId> {
     let mut expr_ids = vec![];
     for new_expr in new_exprs {
@@ -266,7 +266,7 @@ fn update_memo<T: RelNodeTyp>(
 ///             // Can fail if the cost limit becomes 0 or negative
 ///             limit ← UpdateCostLimit(newExpr, limit)
 ///             tasks.Push(OptInputs(newExpr, limit))
-impl<T: RelNodeTyp> Task<T> for ApplyRuleTask<T> {
+impl<T: NodeType> Task<T> for ApplyRuleTask<T> {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
         let expr = optimizer.get_expr_memoed(self.expr_id);
 

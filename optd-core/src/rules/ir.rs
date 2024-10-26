@@ -1,7 +1,7 @@
-use crate::rel_node::RelNodeTyp;
+use crate::node::NodeType;
 
 // TODO: Documentation
-pub enum RuleMatcher<T: RelNodeTyp> {
+pub enum RuleMatcher<T: NodeType> {
     /// Match a node of type `typ`.
     MatchAndPickNode {
         typ: T,

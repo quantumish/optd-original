@@ -16,17 +16,19 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{cascades::GroupId, cost::Cost};
 
 // TODO: Can we change this to RelNodeArc?
-pub type RelNodeRef<T> = Arc<RelNode<T>>;
+pub type RelNodeRef<T> = Arc<PlanNode<T>>;
 
-pub trait RelNodeTyp:
+pub trait NodeType:
     PartialEq + Eq + Hash + Clone + 'static + Display + Debug + Send + Sync
 {
     fn is_logical(&self) -> bool;
 
+    // TODO: Design this better
     fn group_typ(group_id: GroupId) -> Self;
 
     fn extract_group(&self) -> Option<GroupId>;
 
+    // TODO: Design this better
     fn list_typ() -> Self;
 }
 
@@ -54,6 +56,7 @@ impl<'de> Deserialize<'de> for SerializableOrderedF64 {
     }
 }
 
+// TODO: why not use arrow types here?
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum Value {
     UInt8(u8),
@@ -214,15 +217,19 @@ impl Value {
     }
 }
 
-/// A RelNode is consisted of a plan node type and some children.
+// TODO: Handle materialized/unmaterialized plan nodes better (current system
+// w/ Placeholder and `group_typ` is weird)
+
+/// A PlanNode is a node in a query plan. It has children, which may or may
+/// not be materialized
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RelNode<T: RelNodeTyp> {
+pub struct PlanNode<T: NodeType> {
     pub typ: T,
     pub children: Vec<RelNodeRef<T>>,
     pub data: Option<Value>,
 }
 
-impl<T: RelNodeTyp> std::fmt::Display for RelNode<T> {
+impl<T: NodeType> std::fmt::Display for PlanNode<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}", self.typ)?;
         if let Some(ref data) = self.data {
@@ -235,7 +242,7 @@ impl<T: RelNodeTyp> std::fmt::Display for RelNode<T> {
     }
 }
 
-impl<T: RelNodeTyp> RelNode<T> {
+impl<T: NodeType> PlanNode<T> {
     pub fn child(&self, idx: usize) -> RelNodeRef<T> {
         if idx >= self.children.len() {
             panic!("child index {} out of range: {}", idx, self);
@@ -266,18 +273,18 @@ impl<T: RelNodeTyp> RelNode<T> {
 
 /// Metadata for a rel node.
 #[derive(Clone, Debug, PartialEq)]
-pub struct RelNodeMeta {
+pub struct PlanNodeMeta {
     /// The group (id) of the `RelNode`
     pub group_id: GroupId,
     /// Cost of the `RelNode`
     pub cost: Cost,
 }
 
-impl RelNodeMeta {
+impl PlanNodeMeta {
     pub fn new(group_id: GroupId, cost: Cost) -> Self {
-        RelNodeMeta { group_id, cost }
+        PlanNodeMeta { group_id, cost }
     }
 }
 
 /// A hash table storing `RelNode` (memory address, metadata) pairs.
-pub type RelNodeMetaMap = HashMap<usize, RelNodeMeta>;
+pub type PlanNodeMetaMap = HashMap<usize, PlanNodeMeta>;

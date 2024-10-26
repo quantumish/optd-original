@@ -1,5 +1,5 @@
 use arrow_schema::DataType;
-use optd_core::rel_node::{RelNode, RelNodeMetaMap};
+use optd_core::node::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -12,7 +12,7 @@ pub struct CastExpr(pub Expr);
 impl CastExpr {
     pub fn new(expr: Expr, cast_to: DataType) -> Self {
         CastExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::Cast,
                 children: vec![
                     expr.into_rel_node(),
@@ -47,7 +47,7 @@ impl OptRelNode for CastExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "Cast",
             vec![

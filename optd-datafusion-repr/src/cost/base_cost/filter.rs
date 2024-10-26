@@ -3,7 +3,7 @@ use std::ops::Bound;
 use optd_core::{
     cascades::{BindingType, CascadesOptimizer, RelNodeContext},
     cost::Cost,
-    rel_node::Value,
+    node::Value,
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -569,7 +569,7 @@ impl<
 #[cfg(test)]
 mod tests {
     use arrow_schema::DataType;
-    use optd_core::rel_node::Value;
+    use optd_core::node::Value;
 
     use crate::{
         cost::base_cost::{tests::*, DEFAULT_EQ_SEL},

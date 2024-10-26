@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{optimizer::Optimizer, rel_node::RelNode};
+use optd_core::{node::PlanNode, optimizer::Optimizer};
 
-use crate::plan_nodes::{ExprList, LogicalProjection, OptRelNode, OptRelNodeTyp, PlanNode};
+use crate::plan_nodes::{DfPlanNode, ExprList, LogicalProjection, OptRelNode, OptRelNodeTyp};
 use crate::rules::macros::define_rule;
 
 use super::project_transpose_common::ProjectionMapping;
@@ -23,8 +23,8 @@ fn apply_projection_merge(
         exprs1,
         exprs2,
     }: ProjectMergeRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
-    let child = PlanNode::from_group(child.into());
+) -> Vec<PlanNode<OptRelNodeTyp>> {
+    let child = DfPlanNode::from_group(child.into());
     let exprs1 = ExprList::from_rel_node(exprs1.into()).unwrap();
     let exprs2 = ExprList::from_rel_node(exprs2.into()).unwrap();
 

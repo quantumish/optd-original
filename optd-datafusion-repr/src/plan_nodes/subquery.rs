@@ -1,17 +1,17 @@
-use optd_core::rel_node::{RelNode, RelNodeMetaMap, Value};
+use optd_core::node::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
 use super::macros::define_plan_node;
-use super::{Expr, ExprList, JoinType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode};
+use super::{DfPlanNode, Expr, ExprList, JoinType, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
 
 #[derive(Clone, Debug)]
-pub struct RawDependentJoin(pub PlanNode);
+pub struct RawDependentJoin(pub DfPlanNode);
 
 define_plan_node!(
-    RawDependentJoin : PlanNode,
+    RawDependentJoin : DfPlanNode,
     RawDepJoin, [
-        { 0, left: PlanNode },
-        { 1, right: PlanNode }
+        { 0, left: DfPlanNode },
+        { 1, right: DfPlanNode }
     ], [
         { 2, cond: Expr },
         { 3, extern_cols: ExprList }
@@ -19,13 +19,13 @@ define_plan_node!(
 );
 
 #[derive(Clone, Debug)]
-pub struct DependentJoin(pub PlanNode);
+pub struct DependentJoin(pub DfPlanNode);
 
 define_plan_node!(
-    DependentJoin : PlanNode,
+    DependentJoin : DfPlanNode,
     DepJoin, [
-        { 0, left: PlanNode },
-        { 1, right: PlanNode }
+        { 0, left: DfPlanNode },
+        { 1, right: DfPlanNode }
     ], [
         { 2, cond: Expr },
         { 3, extern_cols: ExprList }
@@ -41,7 +41,7 @@ impl ExternColumnRefExpr {
         // this conversion is always safe since usize is at most u64
         let u64_column_idx = column_idx as u64;
         ExternColumnRefExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::ExternColumnRef,
                 children: vec![],
                 data: Some(Value::UInt64(u64_column_idx)),
@@ -72,7 +72,7 @@ impl OptRelNode for ExternColumnRefExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, _meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::display(&format!("Extern(#{})", self.index()))
     }
 }

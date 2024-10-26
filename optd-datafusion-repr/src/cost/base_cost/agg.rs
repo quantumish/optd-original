@@ -3,7 +3,7 @@ use std::sync::Arc;
 use optd_core::{
     cascades::{BindingType, CascadesOptimizer, RelNodeContext},
     cost::Cost,
-    rel_node::RelNode,
+    node::PlanNode,
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -48,7 +48,7 @@ impl<
     ) -> f64 {
         if let (Some(context), Some(optimizer)) = (context, optimizer) {
             let group_by_id = context.children_group_ids[2];
-            let mut group_by_exprs: Vec<Arc<RelNode<OptRelNodeTyp>>> =
+            let mut group_by_exprs: Vec<Arc<PlanNode<OptRelNodeTyp>>> =
                 optimizer.get_all_group_bindings(group_by_id, BindingType::Both);
             assert!(
                 group_by_exprs.len() == 1,

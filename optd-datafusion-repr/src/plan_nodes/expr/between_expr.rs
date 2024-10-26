@@ -1,4 +1,4 @@
-use optd_core::rel_node::{RelNode, RelNodeMetaMap};
+use optd_core::node::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -9,7 +9,7 @@ pub struct BetweenExpr(pub Expr);
 impl BetweenExpr {
     pub fn new(expr: Expr, lower: Expr, upper: Expr) -> Self {
         BetweenExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::Between,
                 children: vec![
                     expr.into_rel_node(),
@@ -47,7 +47,7 @@ impl OptRelNode for BetweenExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "Between",
             vec![

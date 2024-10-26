@@ -20,14 +20,14 @@ use datafusion::{
     },
     scalar::ScalarValue,
 };
-use optd_core::rel_node::RelNodeMetaMap;
+use optd_core::node::PlanNodeMetaMap;
 use optd_datafusion_repr::{
     plan_nodes::{
         BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, ConstantType,
-        Expr, ExprList, FuncExpr, FuncType, InListExpr, JoinType, LikeExpr, LogOpExpr, LogOpType,
-        OptRelNode, OptRelNodeRef, OptRelNodeTyp, PhysicalAgg, PhysicalEmptyRelation,
+        DfPlanNode, Expr, ExprList, FuncExpr, FuncType, InListExpr, JoinType, LikeExpr, LogOpExpr,
+        LogOpType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PhysicalAgg, PhysicalEmptyRelation,
         PhysicalFilter, PhysicalHashJoin, PhysicalLimit, PhysicalNestedLoopJoin,
-        PhysicalProjection, PhysicalScan, PhysicalSort, PlanNode, SortOrderExpr, SortOrderType,
+        PhysicalProjection, PhysicalScan, PhysicalSort, SortOrderExpr, SortOrderType,
     },
     properties::schema::Schema as OptdSchema,
 };
@@ -279,7 +279,7 @@ impl OptdPlanContext<'_> {
     async fn conv_from_optd_projection(
         &mut self,
         node: PhysicalProjection,
-        meta: &RelNodeMetaMap,
+        meta: &PlanNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
         let input_exec = self.conv_from_optd_plan_node(node.child(), meta).await?;
         let physical_exprs = node
@@ -305,7 +305,7 @@ impl OptdPlanContext<'_> {
     async fn conv_from_optd_filter(
         &mut self,
         node: PhysicalFilter,
-        meta: &RelNodeMetaMap,
+        meta: &PlanNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
         let input_exec = self.conv_from_optd_plan_node(node.child(), meta).await?;
         let physical_expr = Self::conv_from_optd_expr(node.cond(), &input_exec.schema())?;
@@ -321,7 +321,7 @@ impl OptdPlanContext<'_> {
     async fn conv_from_optd_limit(
         &mut self,
         node: PhysicalLimit,
-        meta: &RelNodeMetaMap,
+        meta: &PlanNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
         let child = self.conv_from_optd_plan_node(node.child(), meta).await?;
 
@@ -357,7 +357,7 @@ impl OptdPlanContext<'_> {
     async fn conv_from_optd_sort(
         &mut self,
         node: PhysicalSort,
-        meta: &RelNodeMetaMap,
+        meta: &PlanNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
         let input_exec = self.conv_from_optd_plan_node(node.child(), meta).await?;
         let physical_exprs = node
@@ -383,7 +383,7 @@ impl OptdPlanContext<'_> {
     async fn conv_from_optd_agg(
         &mut self,
         node: PhysicalAgg,
-        meta: &RelNodeMetaMap,
+        meta: &PlanNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
         let input_exec = self.conv_from_optd_plan_node(node.child(), meta).await?;
         let agg_exprs = node
@@ -423,7 +423,7 @@ impl OptdPlanContext<'_> {
     async fn conv_from_optd_nested_loop_join(
         &mut self,
         node: PhysicalNestedLoopJoin,
-        meta: &RelNodeMetaMap,
+        meta: &PlanNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
         let left_exec = self.conv_from_optd_plan_node(node.left(), meta).await?;
         let right_exec = self.conv_from_optd_plan_node(node.right(), meta).await?;
@@ -480,7 +480,7 @@ impl OptdPlanContext<'_> {
     async fn conv_from_optd_hash_join(
         &mut self,
         node: PhysicalHashJoin,
-        meta: &RelNodeMetaMap,
+        meta: &PlanNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
         let left_exec = self.conv_from_optd_plan_node(node.left(), meta).await?;
         let right_exec = self.conv_from_optd_plan_node(node.right(), meta).await?;
@@ -525,8 +525,8 @@ impl OptdPlanContext<'_> {
 
     async fn conv_from_optd_plan_node(
         &mut self,
-        node: PlanNode,
-        meta: &RelNodeMetaMap,
+        node: DfPlanNode,
+        meta: &PlanNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         let rel_node = node.into_rel_node();
 
@@ -606,9 +606,9 @@ impl OptdPlanContext<'_> {
     pub async fn conv_from_optd(
         &mut self,
         root_rel: OptRelNodeRef,
-        meta: RelNodeMetaMap,
+        meta: PlanNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        self.conv_from_optd_plan_node(PlanNode::from_rel_node(root_rel).unwrap(), &meta)
+        self.conv_from_optd_plan_node(DfPlanNode::from_rel_node(root_rel).unwrap(), &meta)
             .await
     }
 }

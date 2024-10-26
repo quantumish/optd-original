@@ -1,15 +1,15 @@
-use optd_core::rel_node::RelNodeMeta;
+use optd_core::node::PlanNodeMeta;
 use pretty_xmlish::Pretty;
 
 use crate::cost::{COMPUTE_COST, IO_COST, ROW_COUNT};
 
 pub trait Insertable<'a> {
-    fn with_meta(self, meta: &RelNodeMeta) -> Self;
+    fn with_meta(self, meta: &PlanNodeMeta) -> Self;
 }
 
 impl<'a> Insertable<'a> for Vec<(&'a str, Pretty<'a>)> {
     // FIXME: this assumes we are using OptCostModel
-    fn with_meta(mut self, meta: &RelNodeMeta) -> Self {
+    fn with_meta(mut self, meta: &PlanNodeMeta) -> Self {
         self.push((
             "cost",
             Pretty::display(&format!(

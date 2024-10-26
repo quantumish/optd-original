@@ -12,9 +12,9 @@ use tracing::trace;
 
 use crate::{
     cost::CostModel,
+    node::{NodeType, PlanNodeMeta, RelNodeRef},
     optimizer::Optimizer,
     property::{PropertyBuilder, PropertyBuilderAny},
-    rel_node::{RelNodeMeta, RelNodeRef, RelNodeTyp},
     rules::{Rule, RuleMatcher},
 };
 
@@ -23,6 +23,7 @@ use super::{
     tasks::{get_initial_task, Task},
 };
 
+// todo rename
 /// `RelNode` only contains the representation of the plan nodes. Sometimes, we need more context, i.e., group id and
 /// expr id, during the optimization phase. All these information are collected in this struct.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
@@ -67,7 +68,7 @@ impl From<usize> for RuleId {
 }
 
 /// TODO: Docs
-struct CascadesOptimizerState<T: RelNodeTyp> {
+struct CascadesOptimizerState<T: NodeType> {
     pub memo: Memo<T>,
     pub explored_groups: HashSet<GroupId>, // TODO: Should we move this information into the memo groupinfo?? (I think yes)
     pub applied_rules: HashMap<ExprId, HashSet<RuleId>>, // TODO: Should this info be in the memo also?
@@ -75,7 +76,7 @@ struct CascadesOptimizerState<T: RelNodeTyp> {
 }
 
 /// TODO: Docs
-pub struct CascadesOptimizer<T: RelNodeTyp> {
+pub struct CascadesOptimizer<T: NodeType> {
     /// Tasks that are waiting to be executed
     tasks: Mutex<Vec<Box<dyn Task<T>>>>,
     /// Monotonically increasing counter for task invocations
@@ -97,7 +98,7 @@ pub struct CascadesOptimizer<T: RelNodeTyp> {
     cost: Arc<dyn CostModel<T>>,
 }
 
-impl<T: RelNodeTyp> CascadesOptimizer<T> {
+impl<T: NodeType> CascadesOptimizer<T> {
     /// Create a new CascadesOptimizer object
     pub fn new(
         transformation_rules: Arc<[Arc<dyn Rule<T, Self>>]>,
@@ -332,7 +333,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     pub fn step_get_winner(
         &self,
         group_id: GroupId,
-        meta: &mut Option<HashMap<usize, RelNodeMeta>>,
+        meta: &mut Option<HashMap<usize, PlanNodeMeta>>,
     ) -> Result<RelNodeRef<T>> {
         self.state
             .read()
@@ -376,7 +377,7 @@ impl<T: RelNodeTyp> CascadesOptimizer<T> {
     }
 }
 
-impl<T: RelNodeTyp> Optimizer<T> for CascadesOptimizer<T> {
+impl<T: NodeType> Optimizer<T> for CascadesOptimizer<T> {
     fn optimize(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
         self.optimize_inner(root_rel)
     }
@@ -394,7 +395,7 @@ impl<T: RelNodeTyp> Optimizer<T> for CascadesOptimizer<T> {
 //     });
 // }
 
-pub fn rule_matches_expr<T: RelNodeTyp>(
+pub fn rule_matches_expr<T: NodeType>(
     rule: &Arc<dyn Rule<T, CascadesOptimizer<T>>>,
     expr: &RelMemoNodeRef<T>,
 ) -> bool {

@@ -1,5 +1,5 @@
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{optimizer::Optimizer, rel_node::RelNode};
+use optd_core::{node::PlanNode, optimizer::Optimizer};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -22,7 +22,7 @@ define_rule!(
 fn apply_eliminate_limit(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     EliminateLimitRulePicks { child, skip, fetch }: EliminateLimitRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     if let OptRelNodeTyp::Constant(ConstantType::UInt64) = skip.typ {
         if let OptRelNodeTyp::Constant(ConstantType::UInt64) = fetch.typ {
             let skip_val = ConstantExpr::from_rel_node(skip.into())

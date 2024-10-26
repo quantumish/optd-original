@@ -1,4 +1,4 @@
-use optd_core::rel_node::{RelNode, RelNodeMetaMap};
+use optd_core::node::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -34,7 +34,7 @@ pub struct FuncExpr(Expr);
 impl FuncExpr {
     pub fn new(func_id: FuncType, argv: ExprList) -> Self {
         FuncExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::Func(func_id),
                 children: vec![argv.into_rel_node()],
                 data: None,
@@ -75,7 +75,7 @@ impl OptRelNode for FuncExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             self.func().to_string(),
             vec![],

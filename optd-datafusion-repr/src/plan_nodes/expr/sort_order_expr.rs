@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use optd_core::rel_node::{RelNode, RelNodeMetaMap};
+use optd_core::node::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -23,7 +23,7 @@ pub struct SortOrderExpr(Expr);
 impl SortOrderExpr {
     pub fn new(order: SortOrderType, child: Expr) -> Self {
         SortOrderExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::SortOrder(order),
                 children: vec![child.into_rel_node()],
                 data: None,
@@ -57,7 +57,7 @@ impl OptRelNode for SortOrderExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "SortOrder",
             vec![("order", self.order().to_string().into())],

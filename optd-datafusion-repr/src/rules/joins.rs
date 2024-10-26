@@ -2,15 +2,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
+use optd_core::node::PlanNode;
 use optd_core::optimizer::Optimizer;
-use optd_core::rel_node::RelNode;
 use optd_core::rules::{Rule, RuleMatcher};
 
 use super::macros::{define_impl_rule, define_rule};
 use crate::plan_nodes::{
-    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ConstantType, Expr, ExprList, JoinType,
-    LogOpType, LogicalEmptyRelation, LogicalJoin, LogicalProjection, OptRelNode, OptRelNodeTyp,
-    PhysicalHashJoin, PlanNode,
+    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ConstantType, DfPlanNode, Expr, ExprList,
+    JoinType, LogOpType, LogicalEmptyRelation, LogicalJoin, LogicalProjection, OptRelNode,
+    OptRelNodeTyp, PhysicalHashJoin,
 };
 use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 
@@ -24,7 +24,7 @@ define_rule!(
 fn apply_join_commute(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     JoinCommuteRulePicks { left, right, cond }: JoinCommuteRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     let left_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(left.clone()), 0);
     let right_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(right.clone()), 0);
     let cond = Expr::from_rel_node(cond.into())
@@ -37,8 +37,8 @@ fn apply_join_commute(
             })
         });
     let node = LogicalJoin::new(
-        PlanNode::from_group(right.into()),
-        PlanNode::from_group(left.into()),
+        DfPlanNode::from_group(right.into()),
+        DfPlanNode::from_group(left.into()),
         cond.unwrap(),
         JoinType::Inner,
     );
@@ -66,15 +66,15 @@ define_rule!(
 fn apply_eliminate_join(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     EliminateJoinRulePicks { left, right, cond }: EliminateJoinRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     if let OptRelNodeTyp::Constant(const_type) = cond.typ {
         if const_type == ConstantType::Bool {
             if let Some(data) = cond.data {
                 if data.as_bool() {
                     // change it to cross join if filter is always true
                     let node = LogicalJoin::new(
-                        PlanNode::from_group(left.into()),
-                        PlanNode::from_group(right.into()),
+                        DfPlanNode::from_group(left.into()),
+                        DfPlanNode::from_group(right.into()),
                         ConstantExpr::bool(true).into_expr(),
                         JoinType::Cross,
                     );
@@ -122,7 +122,7 @@ fn apply_join_assoc(
         cond1,
         cond2,
     }: JoinAssocRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     let a_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(a.clone()), 0);
     let _b_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(b.clone()), 0);
     let _c_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(c.clone()), 0);
@@ -139,11 +139,11 @@ fn apply_join_assoc(
         return vec![];
     };
 
-    let node = RelNode {
+    let node = PlanNode {
         typ: OptRelNodeTyp::Join(JoinType::Inner),
         children: vec![
             a.into(),
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::Join(JoinType::Inner),
                 children: vec![b.into(), c.into(), cond2.into_rel_node()],
                 data: None,
@@ -165,7 +165,7 @@ define_impl_rule!(
 fn apply_hash_join(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     HashJoinRulePicks { left, right, cond }: HashJoinRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     match cond.typ {
         OptRelNodeTyp::BinOp(BinOpType::Eq) => {
             let left_schema =
@@ -199,8 +199,8 @@ fn apply_hash_join(
             if can_convert {
                 let right_expr = ColumnRefExpr::new(right_expr.index() - left_schema.len());
                 let node = PhysicalHashJoin::new(
-                    PlanNode::from_group(left.into()),
-                    PlanNode::from_group(right.into()),
+                    DfPlanNode::from_group(left.into()),
+                    DfPlanNode::from_group(right.into()),
                     ExprList::new(vec![left_expr.into_expr()]),
                     ExprList::new(vec![right_expr.into_expr()]),
                     JoinType::Inner,
@@ -260,8 +260,8 @@ fn apply_hash_join(
             }
 
             let node = PhysicalHashJoin::new(
-                PlanNode::from_group(left.into()),
-                PlanNode::from_group(right.into()),
+                DfPlanNode::from_group(left.into()),
+                DfPlanNode::from_group(right.into()),
                 ExprList::new(left_exprs),
                 ExprList::new(right_exprs),
                 JoinType::Inner,
@@ -298,8 +298,8 @@ fn apply_hash_join(
         if can_convert {
             let right_expr = ColumnRefExpr::new(right_expr.index() - left_schema.len());
             let node = PhysicalHashJoin::new(
-                PlanNode::from_group(left.into()),
-                PlanNode::from_group(right.into()),
+                DfPlanNode::from_group(left.into()),
+                DfPlanNode::from_group(right.into()),
                 ExprList::new(vec![left_expr.into_expr()]),
                 ExprList::new(vec![right_expr.into_expr()]),
                 JoinType::Inner,

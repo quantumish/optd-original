@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use optd_core::rel_node::{RelNode, RelNodeMetaMap};
+use optd_core::node::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -25,7 +25,7 @@ pub struct LogOpExpr(pub Expr);
 impl LogOpExpr {
     pub fn new(op_type: LogOpType, expr_list: ExprList) -> Self {
         LogOpExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::LogOp(op_type),
                 children: expr_list
                     .to_vec()
@@ -95,7 +95,7 @@ impl OptRelNode for LogOpExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             self.op_type().to_string(),
             vec![],

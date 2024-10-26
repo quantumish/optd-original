@@ -1,4 +1,4 @@
-use optd_core::rel_node::{RelNode, RelNodeMetaMap, Value};
+use optd_core::node::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -11,7 +11,7 @@ pub struct InListExpr(pub Expr);
 impl InListExpr {
     pub fn new(expr: Expr, list: ExprList, negated: bool) -> Self {
         InListExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::InList,
                 children: vec![expr.into_rel_node(), list.into_rel_node()],
                 data: Some(Value::Bool(negated)),
@@ -46,7 +46,7 @@ impl OptRelNode for InListExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "InList",
             vec![

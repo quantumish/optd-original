@@ -2,7 +2,7 @@ use crate::plan_nodes::OptRelNodeTyp;
 use optd_core::{
     cascades::{CascadesOptimizer, RelNodeContext},
     cost::{Cost, CostModel},
-    rel_node::{RelNode, Value},
+    node::{PlanNode, Value},
 };
 
 /// Dummy cost model that returns a 0 cost in all cases.
@@ -21,7 +21,7 @@ impl CostModel<OptRelNodeTyp> for DummyCostModel {
         Cost(vec![0.0])
     }
 
-    fn compute_plan_node_cost(&self, _node: &RelNode<OptRelNodeTyp>) -> Cost {
+    fn compute_plan_node_cost(&self, _node: &PlanNode<OptRelNodeTyp>) -> Cost {
         Cost(vec![0.0])
     }
 

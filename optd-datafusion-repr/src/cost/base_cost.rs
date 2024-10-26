@@ -12,7 +12,7 @@ use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, RelNodeContext},
     cost::{Cost, CostModel},
-    rel_node::{RelNode, RelNodeTyp, Value},
+    node::{NodeType, PlanNode, Value},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -20,9 +20,9 @@ use super::base_cost::stats::{
     BaseTableStats, ColumnCombValueStats, Distribution, MostCommonValues,
 };
 
-fn compute_plan_node_cost<T: RelNodeTyp, C: CostModel<T>>(
+fn compute_plan_node_cost<T: NodeType, C: CostModel<T>>(
     model: &C,
-    node: &RelNode<T>,
+    node: &PlanNode<T>,
     total_cost: &mut Cost,
 ) -> Cost {
     let children = node
@@ -187,7 +187,7 @@ impl<
         }
     }
 
-    fn compute_plan_node_cost(&self, node: &RelNode<OptRelNodeTyp>) -> Cost {
+    fn compute_plan_node_cost(&self, node: &PlanNode<OptRelNodeTyp>) -> Cost {
         let mut cost = self.zero();
         let top = compute_plan_node_cost(self, node, &mut cost);
         cost.0[ROW_COUNT] = top.0[ROW_COUNT];
@@ -235,7 +235,7 @@ impl<
 mod tests {
     use arrow_schema::DataType;
     use itertools::Itertools;
-    use optd_core::rel_node::Value;
+    use optd_core::node::Value;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
 

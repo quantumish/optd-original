@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use optd_core::rel_node::{RelNode, RelNodeMetaMap};
+use optd_core::node::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -55,7 +55,7 @@ pub struct BinOpExpr(pub Expr);
 impl BinOpExpr {
     pub fn new(left: Expr, right: Expr, op_type: BinOpType) -> Self {
         BinOpExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::BinOp(op_type),
                 children: vec![left.into_rel_node(), right.into_rel_node()],
                 data: None,
@@ -93,7 +93,7 @@ impl OptRelNode for BinOpExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             self.op_type().to_string(),
             vec![],

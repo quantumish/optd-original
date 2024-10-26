@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::vec;
 
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{optimizer::Optimizer, rel_node::RelNode};
+use optd_core::{node::PlanNode, optimizer::Optimizer};
 
 use super::project_transpose_common::ProjectionMapping;
 use crate::plan_nodes::{
-    Expr, ExprList, LogicalFilter, LogicalProjection, OptRelNode, OptRelNodeTyp, PlanNode,
+    DfPlanNode, Expr, ExprList, LogicalFilter, LogicalProjection, OptRelNode, OptRelNodeTyp,
 };
 use crate::rules::macros::define_rule;
 
@@ -28,7 +28,7 @@ define_rule!(
 fn apply_projection_filter_transpose(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
     ProjectFilterTransposeRulePicks { child, cond, exprs }: ProjectFilterTransposeRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     // get columns out of cond
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
     let exprs_vec = exprs.clone().to_vec();
@@ -49,7 +49,7 @@ fn apply_projection_filter_transpose(
         return vec![];
     };
 
-    let child: PlanNode = PlanNode::from_group(child.into());
+    let child: DfPlanNode = DfPlanNode::from_group(child.into());
     let new_filter_cond: Expr = mapping.rewrite_filter_cond(cond_as_expr.clone(), true);
     let bottom_proj_node = LogicalProjection::new(child, bottom_proj_exprs);
     let new_filter_node = LogicalFilter::new(bottom_proj_node.into_plan_node(), new_filter_cond);
@@ -81,8 +81,8 @@ define_rule!(
 fn apply_filter_project_transpose(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
     FilterProjectTransposeRulePicks { child, exprs, cond }: FilterProjectTransposeRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
-    let child = PlanNode::from_group(child.into());
+) -> Vec<PlanNode<OptRelNodeTyp>> {
+    let child = DfPlanNode::from_group(child.into());
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
 
@@ -171,7 +171,7 @@ mod tests {
 
         let proj_exprs = ExprList::new(vec![ColumnRefExpr::new(1).into_expr()]);
 
-        let res_filter_expr: Arc<optd_core::rel_node::RelNode<OptRelNodeTyp>> = BinOpExpr::new(
+        let res_filter_expr: Arc<optd_core::node::PlanNode<OptRelNodeTyp>> = BinOpExpr::new(
             ColumnRefExpr::new(1).into_expr(),
             ConstantExpr::int32(5).into_expr(),
             BinOpType::Eq,
@@ -179,7 +179,7 @@ mod tests {
         .into_expr()
         .into_rel_node();
 
-        let res_top_proj_exprs: Arc<optd_core::rel_node::RelNode<OptRelNodeTyp>> =
+        let res_top_proj_exprs: Arc<optd_core::node::PlanNode<OptRelNodeTyp>> =
             ExprList::new(vec![ColumnRefExpr::new(0).into_expr()]).into_rel_node();
 
         let res_bot_proj_exprs = ExprList::new(vec![

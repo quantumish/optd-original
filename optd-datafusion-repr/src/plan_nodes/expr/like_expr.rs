@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use optd_core::rel_node::{RelNode, RelNodeMetaMap, Value};
+use optd_core::node::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
@@ -14,7 +14,7 @@ impl LikeExpr {
         let negated = if negated { 1 } else { 0 };
         let case_insensitive = if case_insensitive { 1 } else { 0 };
         LikeExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::Like,
                 children: vec![expr.into_rel_node(), pattern.into_rel_node()],
                 data: Some(Value::Serialized(Arc::new([negated, case_insensitive]))),
@@ -59,7 +59,7 @@ impl OptRelNode for LikeExpr {
         Expr::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "Like",
             vec![

@@ -1,26 +1,26 @@
 use super::macros::define_plan_node;
 
-use super::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode};
+use super::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp, DfPlanNode};
 
 #[derive(Clone, Debug)]
-pub struct LogicalFilter(pub PlanNode);
+pub struct LogicalFilter(pub DfPlanNode);
 
 define_plan_node!(
-    LogicalFilter : PlanNode,
+    LogicalFilter : DfPlanNode,
     Filter, [
-        { 0, child: PlanNode }
+        { 0, child: DfPlanNode }
     ], [
         { 1, cond: Expr }
     ]
 );
 
 #[derive(Clone, Debug)]
-pub struct PhysicalFilter(pub PlanNode);
+pub struct PhysicalFilter(pub DfPlanNode);
 
 define_plan_node!(
-    PhysicalFilter : PlanNode,
+    PhysicalFilter : DfPlanNode,
     PhysicalFilter, [
-        { 0, child: PlanNode }
+        { 0, child: DfPlanNode }
     ], [
         { 1, cond: Expr }
     ]

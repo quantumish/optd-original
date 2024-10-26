@@ -3,9 +3,9 @@ use std::fmt::Display;
 
 use pretty_xmlish::Pretty;
 
-use optd_core::rel_node::{RelNode, RelNodeMetaMap};
+use optd_core::node::{PlanNode, PlanNodeMetaMap};
 
-use super::{Expr, JoinType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode};
+use super::{DfPlanNode, Expr, JoinType, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ApplyType {
@@ -33,7 +33,7 @@ impl Display for ApplyType {
 }
 
 #[derive(Clone, Debug)]
-pub struct LogicalApply(pub PlanNode);
+pub struct LogicalApply(pub DfPlanNode);
 
 impl OptRelNode for LogicalApply {
     fn into_rel_node(self) -> OptRelNodeRef {
@@ -42,13 +42,13 @@ impl OptRelNode for LogicalApply {
 
     fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
         if let OptRelNodeTyp::Apply(_) = rel_node.typ {
-            PlanNode::from_rel_node(rel_node).map(Self)
+            DfPlanNode::from_rel_node(rel_node).map(Self)
         } else {
             None
         }
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "LogicalApply",
             vec![
@@ -64,9 +64,14 @@ impl OptRelNode for LogicalApply {
 }
 
 impl LogicalApply {
-    pub fn new(left: PlanNode, right: PlanNode, cond: Expr, apply_type: ApplyType) -> LogicalApply {
-        LogicalApply(PlanNode(
-            RelNode {
+    pub fn new(
+        left: DfPlanNode,
+        right: DfPlanNode,
+        cond: Expr,
+        apply_type: ApplyType,
+    ) -> LogicalApply {
+        LogicalApply(DfPlanNode(
+            PlanNode {
                 typ: OptRelNodeTyp::Apply(apply_type),
                 children: vec![
                     left.into_rel_node(),
@@ -79,12 +84,12 @@ impl LogicalApply {
         ))
     }
 
-    pub fn left_child(&self) -> PlanNode {
-        PlanNode::from_rel_node(self.clone().into_rel_node().child(0)).unwrap()
+    pub fn left_child(&self) -> DfPlanNode {
+        DfPlanNode::from_rel_node(self.clone().into_rel_node().child(0)).unwrap()
     }
 
-    pub fn right_child(&self) -> PlanNode {
-        PlanNode::from_rel_node(self.clone().into_rel_node().child(1)).unwrap()
+    pub fn right_child(&self) -> DfPlanNode {
+        DfPlanNode::from_rel_node(self.clone().into_rel_node().child(1)).unwrap()
     }
 
     pub fn cond(&self) -> Expr {

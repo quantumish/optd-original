@@ -13,8 +13,8 @@ use tracing::trace;
 
 use crate::{
     cost::Cost,
+    node::{NodeType, PlanNode, PlanNodeMeta, PlanNodeMetaMap, RelNodeRef, Value},
     property::PropertyBuilderAny,
-    rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp, Value},
 };
 
 use super::optimizer::{ExprId, GroupId};
@@ -32,13 +32,13 @@ pub enum BindingType {
 
 /// Equivalent to MExpr in Columbia/Cascades.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RelMemoNode<T: RelNodeTyp> {
+pub struct RelMemoNode<T: NodeType> {
     pub typ: T,
     pub children: Vec<GroupId>,
     pub data: Option<Value>,
 }
 
-impl<T: RelNodeTyp> std::fmt::Display for RelMemoNode<T> {
+impl<T: NodeType> std::fmt::Display for RelMemoNode<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}", self.typ)?;
         if let Some(ref data) = self.data {
@@ -84,7 +84,7 @@ impl Display for ReducedGroupId {
     }
 }
 
-pub struct Memo<T: RelNodeTyp> {
+pub struct Memo<T: NodeType> {
     expr_id_to_group_id: HashMap<ExprId, GroupId>,
     expr_id_to_expr_node: HashMap<ExprId, RelMemoNodeRef<T>>,
     expr_node_to_expr_id: HashMap<RelMemoNode<T>, ExprId>,
@@ -94,7 +94,7 @@ pub struct Memo<T: RelNodeTyp> {
     property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>,
 }
 
-impl<T: RelNodeTyp> Memo<T> {
+impl<T: NodeType> Memo<T> {
     pub fn new(property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>) -> Self {
         Self {
             expr_id_to_group_id: HashMap::new(),
@@ -343,12 +343,12 @@ impl<T: RelNodeTyp> Memo<T> {
                 if exclude_placeholder {
                     return vec![];
                 } else {
-                    let node = Arc::new(RelNode {
+                    let node = Arc::new(PlanNode {
                         typ: expr.typ.clone(),
                         children: expr
                             .children
                             .iter()
-                            .map(|x| Arc::new(RelNode::new_group(*x)))
+                            .map(|x| Arc::new(PlanNode::new_group(*x)))
                             .collect_vec(),
                         data: expr.data.clone(),
                     });
@@ -378,7 +378,7 @@ impl<T: RelNodeTyp> Memo<T> {
                 selected_nodes.push(child[idx].clone());
             }
             selected_nodes.reverse();
-            let node = Arc::new(RelNode {
+            let node = Arc::new(PlanNode {
                 typ: expr.typ.clone(),
                 children: selected_nodes,
                 data: expr.data.clone(),
@@ -442,7 +442,7 @@ impl<T: RelNodeTyp> Memo<T> {
     pub fn get_best_group_binding(
         &self,
         group_id: GroupId,
-        meta: &mut Option<RelNodeMetaMap>, // TODO: Document this?!
+        meta: &mut Option<PlanNodeMetaMap>, // TODO: Document this?!
     ) -> Result<RelNodeRef<T>> {
         let info = self.get_group_info(group_id);
         if let Some(winner) = info.winner {
@@ -453,7 +453,7 @@ impl<T: RelNodeTyp> Memo<T> {
                 for child in &expr.children {
                     children.push(self.get_best_group_binding(*child, meta)?);
                 }
-                let node = Arc::new(RelNode {
+                let node = Arc::new(PlanNode {
                     typ: expr.typ.clone(),
                     children,
                     data: expr.data.clone(),
@@ -462,7 +462,7 @@ impl<T: RelNodeTyp> Memo<T> {
                 if let Some(meta) = meta {
                     meta.insert(
                         node.as_ref() as *const _ as usize,
-                        RelNodeMeta::new(group_id, winner.cost),
+                        PlanNodeMeta::new(group_id, winner.cost),
                     );
                 }
                 return Ok(node);

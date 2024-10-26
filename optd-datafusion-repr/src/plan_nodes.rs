@@ -20,8 +20,8 @@ use arrow_schema::DataType;
 use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
+    node::{NodeType, PlanNode, PlanNodeMeta, PlanNodeMetaMap, RelNodeRef},
     optimizer::Optimizer,
-    rel_node::{RelNode, RelNodeMeta, RelNodeMetaMap, RelNodeRef, RelNodeTyp},
 };
 
 pub use agg::{LogicalAgg, PhysicalAgg};
@@ -142,7 +142,7 @@ impl std::fmt::Display for OptRelNodeTyp {
     }
 }
 
-impl RelNodeTyp for OptRelNodeTyp {
+impl NodeType for OptRelNodeTyp {
     fn is_logical(&self) -> bool {
         matches!(
             self,
@@ -184,13 +184,13 @@ pub trait OptRelNode: 'static + Clone {
     where
         Self: Sized;
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static>;
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static>;
 
-    fn explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         explain(self.clone().into_rel_node(), meta_map)
     }
 
-    fn explain_to_string(&self, meta_map: Option<&RelNodeMetaMap>) -> String {
+    fn explain_to_string(&self, meta_map: Option<&PlanNodeMetaMap>) -> String {
         let mut config = PrettyConfig {
             need_boundaries: false,
             reduced_spaces: false,
@@ -202,10 +202,10 @@ pub trait OptRelNode: 'static + Clone {
         out
     }
 
-    fn into_plan_node(self) -> PlanNode {
+    fn into_plan_node(self) -> DfPlanNode {
         let rel_node = self.into_rel_node();
         let typ = rel_node.typ.clone();
-        let Some(p) = PlanNode::from_rel_node(rel_node) else {
+        let Some(p) = DfPlanNode::from_rel_node(rel_node) else {
             panic!("expect plan node, found {}", typ)
         };
         p
@@ -233,9 +233,9 @@ pub trait ExplainData<T>: OptRelNode {
 }
 
 #[derive(Clone, Debug)]
-pub struct PlanNode(pub(crate) OptRelNodeRef);
+pub struct DfPlanNode(pub(crate) OptRelNodeRef);
 
-impl PlanNode {
+impl DfPlanNode {
     pub fn typ(&self) -> OptRelNodeTyp {
         self.0.typ.clone()
     }
@@ -248,14 +248,14 @@ impl PlanNode {
         Self(rel_node)
     }
 
-    pub fn get_meta<'a>(&self, meta_map: &'a RelNodeMetaMap) -> &'a RelNodeMeta {
+    pub fn get_meta<'a>(&self, meta_map: &'a PlanNodeMetaMap) -> &'a PlanNodeMeta {
         meta_map
             .get(&(self.0.as_ref() as *const _ as usize))
             .unwrap()
     }
 }
 
-impl OptRelNode for PlanNode {
+impl OptRelNode for DfPlanNode {
     fn into_rel_node(self) -> OptRelNodeRef {
         self.0
     }
@@ -267,7 +267,7 @@ impl OptRelNode for PlanNode {
         Some(Self(rel_node))
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "<PlanNode>",
             vec![(
@@ -343,7 +343,7 @@ impl Expr {
             .collect::<Option<Vec<_>>>()?;
         Some(
             Expr::from_rel_node(
-                RelNode {
+                PlanNode {
                     typ: self.0.typ.clone(),
                     children: children.into_iter().collect_vec(),
                     data: self.0.data.clone(),
@@ -389,7 +389,7 @@ impl OptRelNode for Expr {
         }
         Some(Self(rel_node))
     }
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "<Expr>",
             vec![(
@@ -405,7 +405,7 @@ impl OptRelNode for Expr {
     }
 }
 
-pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
     match rel_node.typ {
         OptRelNodeTyp::ColumnRef => ColumnRefExpr::from_rel_node(rel_node)
             .unwrap()
@@ -516,7 +516,7 @@ pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pr
 }
 
 fn replace_typ(node: OptRelNodeRef, target_type: OptRelNodeTyp) -> OptRelNodeRef {
-    Arc::new(RelNode {
+    Arc::new(PlanNode {
         typ: target_type,
         children: node.children.clone(),
         data: node.data.clone(),

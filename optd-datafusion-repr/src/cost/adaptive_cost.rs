@@ -7,7 +7,7 @@ use crate::{cost::OptCostModel, plan_nodes::OptRelNodeTyp};
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId, RelNodeContext},
     cost::{Cost, CostModel},
-    rel_node::{RelNode, Value},
+    node::{PlanNode, Value},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -90,7 +90,7 @@ impl<
         OptCostModel::<M, D>::cost(row_cnt, compute_cost, io_cost)
     }
 
-    fn compute_plan_node_cost(&self, node: &RelNode<OptRelNodeTyp>) -> Cost {
+    fn compute_plan_node_cost(&self, node: &PlanNode<OptRelNodeTyp>) -> Cost {
         self.base_model.compute_plan_node_cost(node)
     }
 }

@@ -1,5 +1,5 @@
 use arrow_schema::{DataType, IntervalUnit};
-use optd_core::rel_node::{RelNode, RelNodeMetaMap, SerializableOrderedF64, Value};
+use optd_core::node::{PlanNode, PlanNodeMetaMap, SerializableOrderedF64, Value};
 use pretty_xmlish::Pretty;
 use serde::{Deserialize, Serialize};
 
@@ -98,7 +98,7 @@ impl ConstantExpr {
 
     pub fn new_with_type(value: Value, typ: ConstantType) -> Self {
         ConstantExpr(Expr(
-            RelNode {
+            PlanNode {
                 typ: OptRelNodeTyp::Constant(typ),
                 children: vec![],
                 data: Some(value),
@@ -198,7 +198,7 @@ impl OptRelNode for ConstantExpr {
         None
     }
 
-    fn dispatch_explain(&self, _meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         if self.constant_type() == ConstantType::IntervalMonthDateNano {
             let value = self.value().as_i128();
             let month = (value >> 96) as u32;

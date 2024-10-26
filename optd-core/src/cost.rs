@@ -1,12 +1,12 @@
 use crate::{
     cascades::{CascadesOptimizer, RelNodeContext},
-    rel_node::{RelNode, RelNodeTyp, Value},
+    node::{NodeType, PlanNode, Value},
 };
 
 #[derive(Default, Clone, Debug, PartialOrd, PartialEq)]
 pub struct Cost(pub Vec<f64>);
 
-pub trait CostModel<T: RelNodeTyp>: 'static + Send + Sync {
+pub trait CostModel<T: NodeType>: 'static + Send + Sync {
     fn compute_cost(
         &self,
         node: &T,
@@ -17,7 +17,7 @@ pub trait CostModel<T: RelNodeTyp>: 'static + Send + Sync {
         optimizer: Option<&CascadesOptimizer<T>>,
     ) -> Cost;
 
-    fn compute_plan_node_cost(&self, node: &RelNode<T>) -> Cost;
+    fn compute_plan_node_cost(&self, node: &PlanNode<T>) -> Cost;
 
     fn explain(&self, cost: &Cost) -> String;
 

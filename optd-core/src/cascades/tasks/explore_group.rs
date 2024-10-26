@@ -2,7 +2,7 @@ use tracing::trace;
 
 use crate::{
     cascades::{CascadesOptimizer, GroupId},
-    rel_node::RelNodeTyp,
+    node::NodeType,
 };
 
 use super::{explore_expr::ExploreExprTask, Task};
@@ -40,7 +40,7 @@ impl ExploreGroupTask {
 ///     grp.Explored ← true
 ///     for expr ∈ grp.Expressions do
 ///         tasks.Push(ExplExpr(expr, limit))
-impl<T: RelNodeTyp> Task<T> for ExploreGroupTask {
+impl<T: NodeType> Task<T> for ExploreGroupTask {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
         trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_begin", task = "explore_group", group_id = %self.group_id);
         optimizer.mark_group_explored(self.group_id);

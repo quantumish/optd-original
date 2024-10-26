@@ -281,7 +281,7 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
     fn derive(
         &self,
         typ: OptRelNodeTyp,
-        data: Option<optd_core::rel_node::Value>,
+        data: Option<optd_core::node::Value>,
         children: &[&Self::Prop],
     ) -> Self::Prop {
         match typ {

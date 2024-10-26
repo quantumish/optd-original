@@ -15,11 +15,11 @@ use std::collections::{HashMap, HashSet};
 use std::vec;
 
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{optimizer::Optimizer, rel_node::RelNode};
+use optd_core::{node::PlanNode, optimizer::Optimizer};
 
 use crate::plan_nodes::{
-    ColumnRefExpr, Expr, ExprList, JoinType, LogOpExpr, LogOpType, LogicalAgg, LogicalFilter,
-    LogicalJoin, LogicalSort, OptRelNode, OptRelNodeTyp, PlanNode,
+    ColumnRefExpr, DfPlanNode, Expr, ExprList, JoinType, LogOpExpr, LogOpType, LogicalAgg,
+    LogicalFilter, LogicalJoin, LogicalSort, OptRelNode, OptRelNodeTyp,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
@@ -138,8 +138,8 @@ define_rule!(
 fn apply_filter_merge(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
     FilterMergeRulePicks { child, cond1, cond }: FilterMergeRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
-    let child = PlanNode::from_group(child.into());
+) -> Vec<PlanNode<OptRelNodeTyp>> {
+    let child = DfPlanNode::from_group(child.into());
     let curr_cond = Expr::from_rel_node(cond.into()).unwrap();
     let child_cond = Expr::from_rel_node(cond1.into()).unwrap();
 
@@ -168,7 +168,7 @@ fn apply_filter_cross_join_transpose(
         join_cond,
         cond,
     }: FilterCrossJoinTransposeRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     filter_join_transpose(
         optimizer,
         JoinType::Cross,
@@ -197,7 +197,7 @@ fn apply_filter_inner_join_transpose(
         join_cond,
         cond,
     }: FilterInnerJoinTransposeRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     filter_join_transpose(
         optimizer,
         JoinType::Inner,
@@ -217,11 +217,11 @@ fn apply_filter_inner_join_transpose(
 fn filter_join_transpose(
     optimizer: &impl Optimizer<OptRelNodeTyp>,
     join_typ: JoinType,
-    join_child_a: RelNode<OptRelNodeTyp>,
-    join_child_b: RelNode<OptRelNodeTyp>,
-    join_cond: RelNode<OptRelNodeTyp>,
-    filter_cond: RelNode<OptRelNodeTyp>,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+    join_child_a: PlanNode<OptRelNodeTyp>,
+    join_child_b: PlanNode<OptRelNodeTyp>,
+    join_cond: PlanNode<OptRelNodeTyp>,
+    filter_cond: PlanNode<OptRelNodeTyp>,
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     let left_schema_size = optimizer
         .get_property::<SchemaPropertyBuilder>(join_child_a.clone().into(), 0)
         .len();
@@ -229,8 +229,8 @@ fn filter_join_transpose(
         .get_property::<SchemaPropertyBuilder>(join_child_b.clone().into(), 0)
         .len();
 
-    let join_child_a = PlanNode::from_group(join_child_a.into());
-    let join_child_b = PlanNode::from_group(join_child_b.into());
+    let join_child_a = DfPlanNode::from_group(join_child_a.into());
+    let join_child_b = DfPlanNode::from_group(join_child_b.into());
     let join_cond = Expr::from_rel_node(join_cond.into()).unwrap();
     let filter_cond = Expr::from_rel_node(filter_cond.into()).unwrap();
     // TODO: Push existing join conditions down as well
@@ -319,8 +319,8 @@ define_rule!(
 fn apply_filter_sort_transpose(
     _optimizer: &impl Optimizer<OptRelNodeTyp>,
     FilterSortTransposeRulePicks { child, exprs, cond }: FilterSortTransposeRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
-    let child = PlanNode::from_group(child.into());
+) -> Vec<PlanNode<OptRelNodeTyp>> {
+    let child = DfPlanNode::from_group(child.into());
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
 
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
@@ -347,10 +347,10 @@ fn apply_filter_agg_transpose(
         groups,
         cond,
     }: FilterAggTransposeRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<OptRelNodeTyp>> {
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
     let groups = ExprList::from_rel_node(groups.into()).unwrap();
-    let child = PlanNode::from_group(child.into());
+    let child = DfPlanNode::from_group(child.into());
 
     // Get top-level group-by columns. Does not cover cases where group-by exprs
     // are more complex than a top-level column reference.

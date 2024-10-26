@@ -1,14 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use optd_core::{
-    cascades::CascadesOptimizer, heuristics::HeuristicsOptimizer, optimizer::Optimizer,
-    rel_node::Value, rules::Rule,
+    cascades::CascadesOptimizer, heuristics::HeuristicsOptimizer, node::Value,
+    optimizer::Optimizer, rules::Rule,
 };
 use optd_datafusion_repr::{
     cost::{DataFusionPerTableStats, OptCostModel},
     plan_nodes::{
-        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, JoinType, LogicalFilter, LogicalJoin,
-        LogicalScan, OptRelNode, OptRelNodeTyp, PlanNode,
+        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DfPlanNode, JoinType, LogicalFilter,
+        LogicalJoin, LogicalScan, OptRelNode, OptRelNodeTyp,
     },
     rules::{HashJoinRule, JoinAssocRule, JoinCommuteRule, PhysicalConversionRule},
 };
@@ -67,7 +67,7 @@ pub fn main() {
     let fnal = LogicalJoin::new(scan3.0, join_filter.0, join_cond.0, JoinType::Inner);
     let node = optimizer.optimize(fnal.0.clone().into_rel_node());
     // optimizer.dump(None); TODO: implement this function
-    let node: Arc<optd_core::rel_node::RelNode<OptRelNodeTyp>> = node.unwrap();
+    let node: Arc<optd_core::node::PlanNode<OptRelNodeTyp>> = node.unwrap();
     println!(
         "cost={}",
         optimizer
@@ -76,7 +76,7 @@ pub fn main() {
     );
     println!(
         "{}",
-        PlanNode::from_rel_node(node)
+        DfPlanNode::from_rel_node(node)
             .unwrap()
             .explain_to_string(None)
     );
@@ -98,7 +98,7 @@ pub fn main() {
     let node = optimizer.optimize(fnal.0.into_rel_node()).unwrap();
     println!(
         "{}",
-        PlanNode::from_rel_node(node)
+        DfPlanNode::from_rel_node(node)
             .unwrap()
             .explain_to_string(None)
     );

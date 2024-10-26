@@ -7,9 +7,9 @@ use cost::{AdaptiveCostModel, DataFusionBaseTableStats, RuntimeAdaptionStorage, 
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
     heuristics::{ApplyOrder, HeuristicsOptimizer},
+    node::PlanNodeMetaMap,
     optimizer::Optimizer,
     property::PropertyBuilderAny,
-    rel_node::RelNodeMetaMap,
     rules::Rule,
 };
 
@@ -27,7 +27,7 @@ use rules::{
     SimplifyJoinCondRule,
 };
 
-pub use optd_core::rel_node::Value;
+pub use optd_core::node::Value;
 
 use crate::rules::{
     DepInitialDistinct, DepJoinEliminateAtScan, DepJoinPastAgg, DepJoinPastFilter, DepJoinPastProj,
@@ -212,7 +212,7 @@ impl DatafusionOptimizer {
     pub fn cascades_optimize(
         &mut self,
         root_rel: OptRelNodeRef,
-    ) -> Result<(GroupId, OptRelNodeRef, RelNodeMetaMap)> {
+    ) -> Result<(GroupId, OptRelNodeRef, PlanNodeMetaMap)> {
         if self.enable_adaptive {
             self.runtime_statistics.lock().unwrap().iter_cnt += 1;
             self.cascades_optimizer.step_clear_winner();

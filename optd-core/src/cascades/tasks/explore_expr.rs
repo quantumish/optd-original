@@ -5,7 +5,7 @@ use crate::{
         optimizer::{rule_matches_expr, ExprId},
         CascadesOptimizer,
     },
-    rel_node::RelNodeTyp,
+    node::NodeType,
 };
 
 use super::{apply_rule::ApplyRuleTask, explore_group::ExploreGroupTask, Task};
@@ -51,7 +51,7 @@ impl ExploreExprTask {
 ///         grp ← GetGroup(childExpr)
 ///         if !grp.Explored then
 ///             tasks.Push(ExplGrp(grp, limit))
-impl<T: RelNodeTyp> Task<T> for ExploreExprTask {
+impl<T: NodeType> Task<T> for ExploreExprTask {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
         let expr = optimizer.get_expr_memoed(self.expr_id);
         let group_id = optimizer.get_group_id(self.expr_id);

@@ -1,18 +1,18 @@
 use pretty_xmlish::Pretty;
 
 use bincode;
-use optd_core::rel_node::{RelNode, RelNodeMetaMap, Value};
+use optd_core::node::{PlanNode, PlanNodeMetaMap, Value};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::explain::Insertable;
 
-use super::{replace_typ, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode};
+use super::{replace_typ, DfPlanNode, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
 
 use crate::properties::schema::Schema;
 
 #[derive(Clone, Debug)]
-pub struct LogicalEmptyRelation(pub PlanNode);
+pub struct LogicalEmptyRelation(pub DfPlanNode);
 
 impl OptRelNode for LogicalEmptyRelation {
     fn into_rel_node(self) -> OptRelNodeRef {
@@ -23,10 +23,10 @@ impl OptRelNode for LogicalEmptyRelation {
         if rel_node.typ != OptRelNodeTyp::EmptyRelation {
             return None;
         }
-        PlanNode::from_rel_node(rel_node).map(Self)
+        DfPlanNode::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, _meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::childless_record(
             "LogicalEmptyRelation",
             vec![("produce_one_row", self.produce_one_row().to_string().into())],
@@ -47,8 +47,8 @@ impl LogicalEmptyRelation {
             schema,
         };
         let serialized_data: Arc<[u8]> = bincode::serialize(&data).unwrap().into_iter().collect();
-        LogicalEmptyRelation(PlanNode(
-            RelNode {
+        LogicalEmptyRelation(DfPlanNode(
+            PlanNode {
                 typ: OptRelNodeTyp::EmptyRelation,
                 children: vec![],
                 data: Some(Value::Serialized(serialized_data)),
@@ -81,7 +81,7 @@ impl LogicalEmptyRelation {
 }
 
 #[derive(Clone, Debug)]
-pub struct PhysicalEmptyRelation(pub PlanNode);
+pub struct PhysicalEmptyRelation(pub DfPlanNode);
 
 impl OptRelNode for PhysicalEmptyRelation {
     fn into_rel_node(self) -> OptRelNodeRef {
@@ -92,10 +92,10 @@ impl OptRelNode for PhysicalEmptyRelation {
         if rel_node.typ != OptRelNodeTyp::PhysicalEmptyRelation {
             return None;
         }
-        PlanNode::from_rel_node(rel_node).map(Self)
+        DfPlanNode::from_rel_node(rel_node).map(Self)
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&RelNodeMetaMap>) -> Pretty<'static> {
+    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         let mut fields = vec![("produce_one_row", self.produce_one_row().to_string().into())];
         if let Some(meta_map) = meta_map {
             fields = fields.with_meta(self.0.get_meta(meta_map));
@@ -105,7 +105,7 @@ impl OptRelNode for PhysicalEmptyRelation {
 }
 
 impl PhysicalEmptyRelation {
-    pub fn new(node: PlanNode) -> PhysicalEmptyRelation {
+    pub fn new(node: DfPlanNode) -> PhysicalEmptyRelation {
         Self(node)
     }
 

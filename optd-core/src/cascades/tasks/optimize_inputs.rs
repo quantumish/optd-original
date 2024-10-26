@@ -7,7 +7,7 @@ use crate::{
         CascadesOptimizer, GroupId,
     },
     cost::Cost,
-    rel_node::RelNodeTyp,
+    node::NodeType,
 };
 
 use super::{optimize_group::OptimizeGroupTask, Task};
@@ -36,7 +36,7 @@ impl OptimizeInputsTask {
         }
     }
 
-    fn new_continue_iteration(&self, optimizer: &CascadesOptimizer<impl RelNodeTyp>) -> Self {
+    fn new_continue_iteration(&self, optimizer: &CascadesOptimizer<impl NodeType>) -> Self {
         Self {
             parent_task_id: Some(self.task_id),
             task_id: optimizer.get_next_task_id(),
@@ -47,7 +47,7 @@ impl OptimizeInputsTask {
     }
 }
 
-fn get_input_cost<T: RelNodeTyp>(
+fn get_input_cost<T: NodeType>(
     children: &[GroupId],
     optimizer: &CascadesOptimizer<T>,
 ) -> Vec<Cost> {
@@ -67,7 +67,7 @@ fn get_input_cost<T: RelNodeTyp>(
     input_cost
 }
 
-fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>) {
+fn update_winner<T: NodeType>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>) {
     let cost = optimizer.cost();
     let expr = optimizer.get_expr_memoed(expr_id);
     let group_id = optimizer.get_group_id(expr_id);
@@ -130,7 +130,7 @@ fn update_winner<T: RelNodeTyp>(expr_id: ExprId, optimizer: &CascadesOptimizer<T
 ///     UpdateCostBound(expr)
 ///     limit ← UpdateCostLimit(expr, limit)
 ///     tasks.Push(OptGrp(GetGroup(childExpr), limit))
-impl<T: RelNodeTyp> Task<T> for OptimizeInputsTask {
+impl<T: NodeType> Task<T> for OptimizeInputsTask {
     fn execute(&self, optimizer: &CascadesOptimizer<T>) {
         let expr = optimizer.get_expr_memoed(self.expr_id);
         let group_id = optimizer.get_group_id(self.expr_id);

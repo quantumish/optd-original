@@ -21,7 +21,7 @@ macro_rules! define_plan_node {
                 }
             }
 
-            fn dispatch_explain(&self, meta_map: Option<&crate::RelNodeMetaMap>) -> pretty_xmlish::Pretty<'static> {
+            fn dispatch_explain(&self, meta_map: Option<&crate::PlanNodeMetaMap>) -> pretty_xmlish::Pretty<'static> {
                 use crate::explain::Insertable;
 
                 let mut fields = vec![
@@ -56,7 +56,7 @@ macro_rules! define_plan_node {
                     data = Some($data_name.into());
                 )*
                 $struct_name($meta_typ(
-                    optd_core::rel_node::RelNode {
+                    optd_core::node::PlanNode {
                         typ: OptRelNodeTyp::$variant $( ($inner_name) )?,
                         children: vec![
                             $($child_name.into_rel_node(),)*
@@ -106,7 +106,7 @@ pub(crate) use define_plan_node;
 #[cfg(test)]
 mod test {
     use crate::plan_nodes::*;
-    use optd_core::rel_node::Value;
+    use optd_core::node::Value;
     use serde::{Deserialize, Serialize};
 
     fn get_explain_str(pretty: &Pretty) -> String {
@@ -131,7 +131,7 @@ mod test {
         }
 
         #[derive(Clone, Debug)]
-        struct PhysicalComplexDummy(PlanNode);
+        struct PhysicalComplexDummy(DfPlanNode);
 
         impl From<ComplexData> for Value {
             fn from(data: ComplexData) -> Self {
@@ -159,9 +159,9 @@ mod test {
         }
 
         define_plan_node!(
-            PhysicalComplexDummy: PlanNode,
+            PhysicalComplexDummy: DfPlanNode,
             PhysicalScan, [
-                { 0, child: PlanNode }
+                { 0, child: DfPlanNode }
             ], [
             ],
             complex_data: ComplexData
