@@ -9,6 +9,7 @@ use std::{
 use anyhow::{bail, Result};
 use itertools::Itertools;
 use std::any::Any;
+use tracing::trace;
 
 use crate::{
     cost::Cost,
@@ -225,6 +226,7 @@ impl<T: RelNodeTyp> Memo<T> {
         group_id: ReducedGroupId,
         memo_node: RelMemoNode<T>,
     ) {
+        trace!(event = "add_expr_to_group", group_id = %group_id, expr_id = %expr_id, memo_node = %memo_node);
         if let Entry::Occupied(mut entry) = self.groups.entry(group_id) {
             let group = entry.get_mut();
             group.group_exprs.insert(expr_id);
