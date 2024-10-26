@@ -29,6 +29,10 @@ use rules::{
 
 pub use optd_core::rel_node::Value;
 
+use crate::rules::{
+    DepInitialDistinct, DepJoinEliminateAtScan, DepJoinPastAgg, DepJoinPastFilter, DepJoinPastProj,
+};
+
 pub mod cost;
 mod explain;
 pub mod plan_nodes;
@@ -85,6 +89,11 @@ impl DatafusionOptimizer {
             Arc::new(EliminateLimitRule::new()),
             Arc::new(EliminateDuplicatedSortExprRule::new()),
             Arc::new(EliminateDuplicatedAggExprRule::new()),
+            Arc::new(DepJoinEliminateAtScan::new()),
+            Arc::new(DepInitialDistinct::new()),
+            Arc::new(DepJoinPastProj::new()),
+            Arc::new(DepJoinPastFilter::new()),
+            Arc::new(DepJoinPastAgg::new()),
             Arc::new(ProjectMergeRule::new()),
             Arc::new(FilterMergeRule::new()),
         ]
@@ -139,8 +148,8 @@ impl DatafusionOptimizer {
             ),
             hueristic_optimizer: HeuristicsOptimizer::new_with_rules(
                 heuristic_rules,
-                ApplyOrder::BottomUp,
-                property_builders,
+                ApplyOrder::TopDown, // uhh TODO reconsider
+                property_builders.clone(),
             ),
             enable_adaptive,
             enable_heuristic: true,

@@ -10,6 +10,7 @@
 
 // TODO: Separate filter transpositions into several files like proj transpose
 
+use core::panic;
 use std::collections::{HashMap, HashSet};
 use std::vec;
 
@@ -66,6 +67,10 @@ fn determine_join_cond_dep(
                 left_col = true;
             } else if index >= left_schema_size && index < left_schema_size + right_schema_size {
                 right_col = true;
+            } else {
+                panic!(
+                    "Column index {index} out of bounds {left_schema_size} + {right_schema_size}"
+                );
             }
         }
     }
@@ -240,7 +245,7 @@ fn filter_join_transpose(
         match location {
             JoinCondDependency::Left => left_conds.push(expr),
             JoinCondDependency::Right => right_conds.push(
-                expr.rewrite_column_refs(&|idx| {
+                expr.rewrite_column_refs(&mut |idx| {
                     Some(LogicalJoin::map_through_join(
                         idx,
                         left_schema_size,

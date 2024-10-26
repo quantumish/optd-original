@@ -11,6 +11,7 @@ pub(super) mod macros;
 mod projection;
 mod scan;
 mod sort;
+mod subquery;
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -38,6 +39,7 @@ use pretty_xmlish::{Pretty, PrettyConfig};
 pub use projection::{LogicalProjection, PhysicalProjection};
 pub use scan::{LogicalScan, PhysicalScan};
 pub use sort::{LogicalSort, PhysicalSort};
+pub use subquery::{DependentJoin, ExternColumnRefExpr, RawDependentJoin}; // Add missing import
 
 use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 
@@ -52,6 +54,8 @@ pub enum OptRelNodeTyp {
     Filter,
     Scan,
     Join(JoinType),
+    RawDepJoin(JoinType),
+    DepJoin(JoinType),
     Sort,
     Agg,
     Apply(ApplyType),
@@ -71,6 +75,7 @@ pub enum OptRelNodeTyp {
     List,
     Constant(ConstantType),
     ColumnRef,
+    ExternColumnRef,
     UnOp(UnOpType),
     BinOp(BinOpType),
     LogOp(LogOpType),
@@ -91,6 +96,8 @@ impl OptRelNodeTyp {
                 | Self::Filter
                 | Self::Scan
                 | Self::Join(_)
+                | Self::RawDepJoin(_)
+                | Self::DepJoin(_)
                 | Self::Apply(_)
                 | Self::Sort
                 | Self::Agg
@@ -113,6 +120,7 @@ impl OptRelNodeTyp {
             self,
             Self::Constant(_)
                 | Self::ColumnRef
+                | Self::ExternColumnRef
                 | Self::UnOp(_)
                 | Self::BinOp(_)
                 | Self::LogOp(_)
@@ -296,7 +304,7 @@ impl Expr {
     /// the call stack, and no expression will be returned.
     pub fn rewrite_column_refs(
         &self,
-        rewrite_fn: &impl Fn(usize) -> Option<usize>,
+        rewrite_fn: &mut impl FnMut(usize) -> Option<usize>,
     ) -> Option<Self> {
         assert!(self.typ().is_expression());
         if let OptRelNodeTyp::ColumnRef = self.typ() {
@@ -315,8 +323,17 @@ impl Expr {
             .into_iter()
             .map(|child| {
                 if child.typ == OptRelNodeTyp::List {
-                    // TODO: What should we do with List?
-                    return Some(child);
+                    return Some(
+                        ExprList::new(
+                            ExprList::from_rel_node(child.clone())
+                                .unwrap()
+                                .to_vec()
+                                .into_iter()
+                                .map(|x| x.rewrite_column_refs(rewrite_fn).unwrap())
+                                .collect(),
+                        )
+                        .into_rel_node(),
+                    );
                 }
                 Expr::from_rel_node(child.clone())
                     .unwrap()
@@ -393,6 +410,9 @@ pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pr
         OptRelNodeTyp::ColumnRef => ColumnRefExpr::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
+        OptRelNodeTyp::ExternColumnRef => ExternColumnRefExpr::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
         OptRelNodeTyp::Constant(_) => ConstantExpr::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
@@ -406,6 +426,12 @@ pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pr
             .unwrap()
             .dispatch_explain(meta_map),
         OptRelNodeTyp::Join(_) => LogicalJoin::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::RawDepJoin(_) => RawDependentJoin::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::DepJoin(_) => DependentJoin::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
         OptRelNodeTyp::Scan => LogicalScan::from_rel_node(rel_node)
