@@ -162,7 +162,7 @@ impl<
                 Self::cost(row_cnt, row_cnt * row_cnt.ln_1p().max(1.0), 0.0)
             }
             OptRelNodeTyp::PhysicalAgg => self.get_agg_cost(children, context, optimizer),
-            OptRelNodeTyp::PhysicalList => {
+            OptRelNodeTyp::List => {
                 let compute_cost = children
                     .iter()
                     .map(|child| {
@@ -242,9 +242,9 @@ mod tests {
     use crate::{
         cost::base_cost::stats::*,
         plan_nodes::{
-            BinOpType, Expr, LogOpType, OptRelNode, OptRelNodeRef, PhysicalBinOpExpr,
-            PhysicalCastExpr, PhysicalColumnRefExpr, PhysicalConstantExpr, PhysicalExprList,
-            PhysicalInListExpr, PhysicalLikeExpr, PhysicalLogOpExpr, PhysicalUnOpExpr, UnOpType,
+            BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, Expr, ExprList,
+            InListExpr, LikeExpr, LogOpExpr, LogOpType, OptRelNode, OptRelNodeRef, UnOpExpr,
+            UnOpType,
         },
     };
 
@@ -457,15 +457,15 @@ mod tests {
     pub fn col_ref(idx: u64) -> OptRelNodeRef {
         // this conversion is always safe because idx was originally a usize
         let idx_as_usize = idx as usize;
-        PhysicalColumnRefExpr::new(idx_as_usize).into_rel_node()
+        ColumnRefExpr::new(idx_as_usize).into_rel_node()
     }
 
     pub fn cnst(value: Value) -> OptRelNodeRef {
-        PhysicalConstantExpr::new(value).into_rel_node()
+        ConstantExpr::new(value).into_rel_node()
     }
 
     pub fn cast(child: OptRelNodeRef, cast_type: DataType) -> OptRelNodeRef {
-        PhysicalCastExpr::new(
+        CastExpr::new(
             Expr::from_rel_node(child).expect("child should be an Expr"),
             cast_type,
         )
@@ -473,7 +473,7 @@ mod tests {
     }
 
     pub fn bin_op(op_type: BinOpType, left: OptRelNodeRef, right: OptRelNodeRef) -> OptRelNodeRef {
-        PhysicalBinOpExpr::new(
+        BinOpExpr::new(
             Expr::from_rel_node(left).expect("left should be an Expr"),
             Expr::from_rel_node(right).expect("right should be an Expr"),
             op_type,
@@ -482,9 +482,9 @@ mod tests {
     }
 
     pub fn log_op(op_type: LogOpType, children: Vec<OptRelNodeRef>) -> OptRelNodeRef {
-        PhysicalLogOpExpr::new(
+        LogOpExpr::new(
             op_type,
-            PhysicalExprList::new(
+            ExprList::new(
                 children
                     .into_iter()
                     .map(|opt_rel_node_ref| {
@@ -497,28 +497,27 @@ mod tests {
     }
 
     pub fn un_op(op_type: UnOpType, child: OptRelNodeRef) -> OptRelNodeRef {
-        PhysicalUnOpExpr::new(
+        UnOpExpr::new(
             Expr::from_rel_node(child).expect("child should be an Expr"),
             op_type,
         )
         .into_rel_node()
     }
 
-    pub fn in_list(col_ref_idx: u64, list: Vec<Value>, negated: bool) -> PhysicalInListExpr {
-        let x = PhysicalInListExpr::new(
+    pub fn in_list(col_ref_idx: u64, list: Vec<Value>, negated: bool) -> InListExpr {
+        InListExpr::new(
             Expr::from_rel_node(col_ref(col_ref_idx)).unwrap(),
-            PhysicalExprList::new(
+            ExprList::new(
                 list.into_iter()
                     .map(|v| Expr::from_rel_node(cnst(v)).unwrap())
                     .collect_vec(),
             ),
             negated,
-        );
-        x
+        )
     }
 
-    pub fn like(col_ref_idx: u64, pattern: &str, negated: bool) -> PhysicalLikeExpr {
-        PhysicalLikeExpr::new(
+    pub fn like(col_ref_idx: u64, pattern: &str, negated: bool) -> LikeExpr {
+        LikeExpr::new(
             negated,
             false,
             Expr::from_rel_node(col_ref(col_ref_idx)).unwrap(),

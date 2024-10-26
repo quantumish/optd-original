@@ -94,8 +94,7 @@ fn categorize_conds(mut categorization_fn: impl FnMut(Expr, &Vec<Expr>), cond: E
             }
             _ => {
                 for child in &cond.clone().into_rel_node().children {
-                    if child.typ == OptRelNodeTyp::List || child.typ == OptRelNodeTyp::PhysicalList
-                    {
+                    if child.typ == OptRelNodeTyp::List {
                         // TODO: What should we do when we encounter a List?
                         continue;
                     }

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use itertools::Itertools;
 use optd_core::{
-    cascades::{CascadesOptimizer, RelNodeContext},
+    cascades::{BindingType, CascadesOptimizer, RelNodeContext},
     cost::Cost,
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -13,8 +13,8 @@ use crate::{
         DEFAULT_NUM_DISTINCT,
     },
     plan_nodes::{
-        BinOpType, Expr, ExprList, JoinType, LogOpType, OptRelNode, OptRelNodeRef, OptRelNodeTyp,
-        PhysicalColumnRefExpr, PhysicalExprList, PhysicalLogOpExpr,
+        BinOpType, ColumnRefExpr, Expr, ExprList, JoinType, LogOpExpr, LogOpType, OptRelNode,
+        OptRelNodeRef, OptRelNodeTyp,
     },
     properties::{
         column_ref::{
@@ -49,9 +49,11 @@ impl<
                 optimizer.get_property_by_group::<ColumnRefPropertyBuilder>(context.group_id, 1);
             let column_refs = column_refs.base_table_column_refs();
             let expr_group_id = context.children_group_ids[2];
-            // We expect that a winner will have already been chosen for the group holding the filter expression
-            let expr_tree = optimizer.step_get_winner(expr_group_id, &mut None).unwrap();
+            let expr_trees = optimizer.get_all_group_bindings(expr_group_id, BindingType::Both);
             let input_correlation = self.get_input_correlation(&context, optimizer);
+            // there may be more than one expression tree in a group.
+            // see comment in OptRelNodeTyp::PhysicalFilter(_) for more information
+            let expr_tree = expr_trees.first().expect("expression missing");
             self.get_join_selectivity_from_expr_tree(
                 join_typ,
                 expr_tree.clone(),
@@ -92,20 +94,20 @@ impl<
                 .get_property_by_group::<ColumnRefPropertyBuilder>(context.children_group_ids[0], 1)
                 .base_table_column_refs()
                 .len();
-            let left_keys = optimizer
-                .step_get_winner(left_keys_group_id, &mut None)
-                .unwrap();
-            let right_keys = optimizer
-                .step_get_winner(right_keys_group_id, &mut None)
-                .unwrap();
+            let left_keys_list =
+                optimizer.get_all_group_bindings(left_keys_group_id, BindingType::Both);
+            let right_keys_list =
+                optimizer.get_all_group_bindings(right_keys_group_id, BindingType::Both);
             // there may be more than one expression tree in a group.
             // see comment in OptRelNodeTyp::PhysicalFilter(_) for more information
+            let left_keys = left_keys_list.first().expect("left keys missing");
+            let right_keys = right_keys_list.first().expect("right keys missing");
             let input_correlation = self.get_input_correlation(&context, optimizer);
             self.get_join_selectivity_from_keys(
                 join_typ,
-                PhysicalExprList::from_rel_node(left_keys.clone())
+                ExprList::from_rel_node(left_keys.clone())
                     .expect("left_keys should be an ExprList"),
-                PhysicalExprList::from_rel_node(right_keys.clone())
+                ExprList::from_rel_node(right_keys.clone())
                     .expect("right_keys should be an ExprList"),
                 &schema,
                 column_refs,
@@ -147,8 +149,8 @@ impl<
     fn get_join_selectivity_from_keys(
         &self,
         join_typ: JoinType,
-        left_keys: PhysicalExprList,
-        right_keys: PhysicalExprList,
+        left_keys: ExprList,
+        right_keys: ExprList,
         schema: &Schema,
         column_refs: &BaseTableColumnRefs,
         input_correlation: Option<SemanticCorrelation>,
@@ -165,9 +167,9 @@ impl<
             .zip(right_keys.to_vec())
             .map(|(left_key, right_key)| {
                 (
-                    PhysicalColumnRefExpr::from_rel_node(left_key.into_rel_node())
+                    ColumnRefExpr::from_rel_node(left_key.into_rel_node())
                         .expect("keys should be ColumnRefExprs"),
-                    PhysicalColumnRefExpr::from_rel_node(right_key.into_rel_node())
+                    ColumnRefExpr::from_rel_node(right_key.into_rel_node())
                         .expect("keys should be ColumnRefExprs"),
                 )
             })
@@ -201,7 +203,7 @@ impl<
     fn get_join_selectivity_core(
         &self,
         join_typ: JoinType,
-        on_col_ref_pairs: Vec<(PhysicalColumnRefExpr, PhysicalColumnRefExpr)>,
+        on_col_ref_pairs: Vec<(ColumnRefExpr, ColumnRefExpr)>,
         filter_expr_tree: Option<OptRelNodeRef>,
         schema: &Schema,
         column_refs: &BaseTableColumnRefs,
@@ -260,7 +262,7 @@ impl<
         right_row_cnt: f64,
     ) -> f64 {
         assert!(expr_tree.typ.is_expression());
-        if expr_tree.typ == OptRelNodeTyp::PhysicalLogOp(LogOpType::And) {
+        if expr_tree.typ == OptRelNodeTyp::LogOp(LogOpType::And) {
             let mut on_col_ref_pairs = vec![];
             let mut filter_expr_trees = vec![];
             for child_expr_tree in &expr_tree.children {
@@ -280,11 +282,8 @@ impl<
                 None
             } else {
                 Some(
-                    PhysicalLogOpExpr::new(
-                        LogOpType::And,
-                        PhysicalExprList::new(filter_expr_trees),
-                    )
-                    .into_rel_node(),
+                    LogOpExpr::new(LogOpType::And, ExprList::new(filter_expr_trees))
+                        .into_rel_node(),
                 )
             };
             self.get_join_selectivity_core(
@@ -335,19 +334,19 @@ impl<
     fn get_on_col_ref_pair(
         expr_tree: OptRelNodeRef,
         column_refs: &BaseTableColumnRefs,
-    ) -> Option<(PhysicalColumnRefExpr, PhysicalColumnRefExpr)> {
+    ) -> Option<(ColumnRefExpr, ColumnRefExpr)> {
         // 1. Check that it's equality
-        if expr_tree.typ == OptRelNodeTyp::PhysicalBinOp(BinOpType::Eq) {
+        if expr_tree.typ == OptRelNodeTyp::BinOp(BinOpType::Eq) {
             let left_child = expr_tree.child(0);
             let right_child = expr_tree.child(1);
             // 2. Check that both sides are column refs
-            if left_child.typ == OptRelNodeTyp::PhysicalColumnRef
-                && right_child.typ == OptRelNodeTyp::PhysicalColumnRef
+            if left_child.typ == OptRelNodeTyp::ColumnRef
+                && right_child.typ == OptRelNodeTyp::ColumnRef
             {
                 // 3. Check that both sides don't belong to the same table (if we don't know, that means they don't belong)
-                let left_col_ref_expr = PhysicalColumnRefExpr::from_rel_node(left_child)
+                let left_col_ref_expr = ColumnRefExpr::from_rel_node(left_child)
                     .expect("we already checked that the type is ColumnRef");
-                let right_col_ref_expr = PhysicalColumnRefExpr::from_rel_node(right_child)
+                let right_col_ref_expr = ColumnRefExpr::from_rel_node(right_child)
                     .expect("we already checked that the type is ColumnRef");
                 let left_col_ref = &column_refs[left_col_ref_expr.index()];
                 let right_col_ref = &column_refs[right_col_ref_expr.index()];
@@ -507,7 +506,7 @@ impl<
     /// For details on how we do this, see `get_join_selectivity_from_redundant_predicates`.
     fn get_join_on_selectivity(
         &self,
-        on_col_ref_pairs: &[(PhysicalColumnRefExpr, PhysicalColumnRefExpr)],
+        on_col_ref_pairs: &[(ColumnRefExpr, ColumnRefExpr)],
         column_refs: &BaseTableColumnRefs,
         input_correlation: Option<SemanticCorrelation>,
         right_col_ref_offset: usize,

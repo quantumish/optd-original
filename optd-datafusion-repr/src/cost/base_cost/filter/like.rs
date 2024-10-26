@@ -9,9 +9,7 @@ use crate::{
         },
         OptCostModel,
     },
-    plan_nodes::{
-        OptRelNode, OptRelNodeTyp, PhysicalColumnRefExpr, PhysicalConstantExpr, PhysicalLikeExpr,
-    },
+    plan_nodes::{ColumnRefExpr, ConstantExpr, LikeExpr, OptRelNode, OptRelNodeTyp},
     properties::column_ref::{BaseTableColumnRef, BaseTableColumnRefs, ColumnRef},
 };
 
@@ -41,30 +39,30 @@ impl<
     /// part of the pattern.
     pub(super) fn get_like_selectivity(
         &self,
-        like_expr: &PhysicalLikeExpr,
+        like_expr: &LikeExpr,
         column_refs: &BaseTableColumnRefs,
     ) -> f64 {
         let child = like_expr.child();
 
         // Check child is a column ref.
-        if !matches!(child.typ(), OptRelNodeTyp::PhysicalColumnRef) {
+        if !matches!(child.typ(), OptRelNodeTyp::ColumnRef) {
             return UNIMPLEMENTED_SEL;
         }
 
         // Check pattern is a constant.
         let pattern = like_expr.pattern();
-        if !matches!(pattern.typ(), OptRelNodeTyp::PhysicalConstant(_)) {
+        if !matches!(pattern.typ(), OptRelNodeTyp::Constant(_)) {
             return UNIMPLEMENTED_SEL;
         }
 
-        let col_ref_idx = PhysicalColumnRefExpr::from_rel_node(child.into_rel_node())
+        let col_ref_idx = ColumnRefExpr::from_rel_node(child.into_rel_node())
             .unwrap()
             .index();
 
         if let ColumnRef::BaseTableColumnRef(BaseTableColumnRef { table, col_idx }) =
             &column_refs[col_ref_idx]
         {
-            let pattern = PhysicalConstantExpr::from_rel_node(pattern.into_rel_node())
+            let pattern = ConstantExpr::from_rel_node(pattern.into_rel_node())
                 .expect("we already checked pattern is a constant")
                 .value()
                 .as_str();
