@@ -12,14 +12,14 @@ use tracing::trace;
 
 use crate::{
     cost::CostModel,
-    node::{NodeType, PlanNodeMeta, RelNodeRef},
+    node::{ArcPlanNode, ArcPredNode, NodeType, PlanNodeMeta, PredNode},
     optimizer::Optimizer,
     property::{PropertyBuilder, PropertyBuilderAny},
     rules::{Rule, RuleMatcher},
 };
 
 use super::{
-    memo::{BindingType, GroupInfo, Memo, RelMemoNodeRef},
+    memo::{BindingType, GroupInfo, Memo, PredId, RelMemoNodeRef},
     tasks::{get_initial_task, Task},
 };
 
@@ -162,7 +162,7 @@ impl<T: NodeType> CascadesOptimizer<T> {
         &self,
         group_id: GroupId,
         binding_type: BindingType,
-    ) -> Vec<RelNodeRef<T>> {
+    ) -> Vec<ArcPlanNode<T>> {
         self.state.read().unwrap().memo.get_all_group_bindings(
             group_id,
             binding_type,
@@ -185,7 +185,7 @@ impl<T: NodeType> CascadesOptimizer<T> {
         expr_id: ExprId,
         binding_type: BindingType,
         level: Option<usize>,
-    ) -> Vec<RelNodeRef<T>> {
+    ) -> Vec<ArcPlanNode<T>> {
         // TODO: expr_bindings is not descriptive
         // Additionally, arguments (to this and memo table) are not easy to understand
         self.state
@@ -235,7 +235,7 @@ impl<T: NodeType> CascadesOptimizer<T> {
         self.task_counter.store(0, Ordering::Release); // TODO: think about ordering
     }
 
-    pub fn add_expr_to_new_group(&self, expr: RelNodeRef<T>) -> (GroupId, ExprId) {
+    pub fn add_expr_to_new_group(&self, expr: ArcPlanNode<T>) -> (GroupId, ExprId) {
         self.state
             .write()
             .unwrap()
@@ -243,7 +243,7 @@ impl<T: NodeType> CascadesOptimizer<T> {
             .add_new_group_expr(expr, None)
     }
 
-    pub fn add_expr_to_group(&self, expr: RelNodeRef<T>, group_id: GroupId) -> (GroupId, ExprId) {
+    pub fn add_expr_to_group(&self, expr: ArcPlanNode<T>, group_id: GroupId) -> (GroupId, ExprId) {
         self.state
             .write()
             .unwrap()
@@ -251,14 +251,19 @@ impl<T: NodeType> CascadesOptimizer<T> {
             .add_new_group_expr(expr, Some(group_id))
     }
 
-    pub fn get_expr_info(&self, expr: RelNodeRef<T>) -> (GroupId, ExprId) {
+    pub fn get_expr_info(&self, expr: ArcPlanNode<T>) -> (GroupId, ExprId) {
         self.state.read().unwrap().memo.get_expr_info(expr)
     }
 
-    pub fn resolve_group_id(&self, root_rel: RelNodeRef<T>) -> GroupId {
-        if let Some(group_id) = T::extract_group(&root_rel.typ) {
-            return group_id;
-        }
+    pub fn get_pred_node(&self, pred_id: PredId) -> ArcPredNode<T> {
+        self.state
+            .read()
+            .unwrap()
+            .memo
+            .get_pred_from_pred_id(pred_id)
+    }
+
+    pub fn resolve_group_id(&self, root_rel: ArcPlanNode<T>) -> GroupId {
         let (group_id, _) = self.get_expr_info(root_rel);
         group_id
     }
@@ -334,7 +339,7 @@ impl<T: NodeType> CascadesOptimizer<T> {
         &self,
         group_id: GroupId,
         meta: &mut Option<HashMap<usize, PlanNodeMeta>>,
-    ) -> Result<RelNodeRef<T>> {
+    ) -> Result<ArcPlanNode<T>> {
         self.state
             .read()
             .unwrap()
@@ -359,7 +364,7 @@ impl<T: NodeType> CascadesOptimizer<T> {
         Ok(())
     }
 
-    pub fn step_optimize_rel(&self, root_rel: RelNodeRef<T>) -> Result<GroupId> {
+    pub fn step_optimize_rel(&self, root_rel: ArcPlanNode<T>) -> Result<GroupId> {
         let root_rel_2 = root_rel.clone(); // todo remove
         let (root_group_id, _) = self.add_expr_to_new_group(root_rel);
         trace!("Optimizing query plan {}", root_rel_2);
@@ -367,7 +372,7 @@ impl<T: NodeType> CascadesOptimizer<T> {
         Ok(root_group_id)
     }
 
-    fn optimize_inner(&self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
+    fn optimize_inner(&self, root_rel: ArcPlanNode<T>) -> Result<ArcPlanNode<T>> {
         let root_group_id = self.step_optimize_rel(root_rel)?;
         self.state
             .read()
@@ -378,11 +383,11 @@ impl<T: NodeType> CascadesOptimizer<T> {
 }
 
 impl<T: NodeType> Optimizer<T> for CascadesOptimizer<T> {
-    fn optimize(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
+    fn optimize(&mut self, root_rel: ArcPlanNode<T>) -> Result<ArcPlanNode<T>> {
         self.optimize_inner(root_rel)
     }
 
-    fn get_property<P: PropertyBuilder<T>>(&self, root_rel: RelNodeRef<T>, idx: usize) -> P::Prop {
+    fn get_property<P: PropertyBuilder<T>>(&self, root_rel: ArcPlanNode<T>, idx: usize) -> P::Prop {
         self.get_property_by_group::<P>(self.resolve_group_id(root_rel), idx)
     }
 }

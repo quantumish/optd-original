@@ -5,7 +5,7 @@ use itertools::Itertools;
 use std::any::Any;
 
 use crate::{
-    node::{NodeType, PlanNode, RelNodeRef},
+    node::{ArcPlanNode, NodeType, PlanNode},
     optimizer::Optimizer,
     property::PropertyBuilderAny,
     rules::{Rule, RuleMatcher},
@@ -20,14 +20,14 @@ pub struct HeuristicsOptimizer<T: NodeType> {
     rules: Arc<[Arc<dyn Rule<T, Self>>]>,
     apply_order: ApplyOrder,
     property_builders: Arc<[Box<dyn PropertyBuilderAny<T>>]>,
-    properties: HashMap<RelNodeRef<T>, Arc<[Box<dyn Any + Send + Sync + 'static>]>>,
+    properties: HashMap<ArcPlanNode<T>, Arc<[Box<dyn Any + Send + Sync + 'static>]>>,
 }
 
 fn match_node<T: NodeType>(
     typ: &T,
     children: &[RuleMatcher<T>],
     pick_to: Option<usize>,
-    node: RelNodeRef<T>,
+    node: ArcPlanNode<T>,
 ) -> Option<HashMap<usize, PlanNode<T>>> {
     if let RuleMatcher::PickMany { .. } | RuleMatcher::IgnoreMany = children.last().unwrap() {
     } else {
@@ -50,17 +50,18 @@ fn match_node<T: NodeType>(
             }
             RuleMatcher::PickOne { pick_to, expand: _ } => {
                 // Heuristics always keep the full plan without group placeholders, therefore we can ignore expand property.
-                let res = pick.insert(*pick_to, node.child(idx).as_ref().clone());
+                let res = pick.insert(*pick_to, node.child(idx).unwrap_plan_node().clone());
                 assert!(res.is_none(), "dup pick");
             }
             RuleMatcher::PickMany { pick_to } => {
-                let res = pick.insert(*pick_to, PlanNode::new_list(node.children[idx..].to_vec()));
-                assert!(res.is_none(), "dup pick");
-                should_end = true;
+                panic!("PickMany not supported currently");
+                // let res = pick.insert(*pick_to, PlanNode::new_list(node.children[idx..].to_vec()));
+                // assert!(res.is_none(), "dup pick");
+                // should_end = true;
             }
             _ => {
-                if let Some(new_picks) = match_and_pick(child, node.child(idx)) {
-                    pick.extend(new_picks.iter().map(|(k, v)| (*k, v.clone())));
+                if let Some(new_picks) = match_and_pick(child, node.child(idx).unwrap_plan_node()) {
+                    pick.extend(new_picks.iter().map(|(k, v)| (*k, v.clone().into())));
                 } else {
                     return None;
                 }
@@ -68,13 +69,14 @@ fn match_node<T: NodeType>(
         }
     }
     if let Some(pick_to) = pick_to {
-        let res: Option<PlanNode<T>> = pick.insert(
+        let res: Option<Arc<PlanNode<T>>> = pick.insert(
             pick_to,
             PlanNode {
-                typ: typ.clone(),
+                typ: typ,
                 children: node.children.clone(),
-                data: node.data.clone(),
-            },
+                predicates: node.predicates.clone(),
+            }
+            .into(),
         );
         assert!(res.is_none(), "dup pick");
     }
@@ -83,7 +85,7 @@ fn match_node<T: NodeType>(
 
 fn match_and_pick<T: NodeType>(
     matcher: &RuleMatcher<T>,
-    node: RelNodeRef<T>,
+    node: ArcPlanNode<T>,
 ) -> Option<HashMap<usize, PlanNode<T>>> {
     match matcher {
         RuleMatcher::MatchAndPickNode {
@@ -120,7 +122,7 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
         }
     }
 
-    fn optimize_inputs(&mut self, inputs: &[RelNodeRef<T>]) -> Result<Vec<RelNodeRef<T>>> {
+    fn optimize_inputs(&mut self, inputs: &[ArcPlanNode<T>]) -> Result<Vec<ArcPlanNode<T>>> {
         let mut optimized_inputs = Vec::with_capacity(inputs.len());
         for input in inputs {
             optimized_inputs.push(self.optimize(input.clone())?);
@@ -128,7 +130,7 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
         Ok(optimized_inputs)
     }
 
-    fn apply_rules(&mut self, mut root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
+    fn apply_rules(&mut self, mut root_rel: ArcPlanNode<T>) -> Result<ArcPlanNode<T>> {
         for rule in self.rules.as_ref() {
             let matcher = rule.matcher();
             if let Some(picks) = match_and_pick(matcher, root_rel.clone()) {
@@ -142,7 +144,7 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
         Ok(root_rel)
     }
 
-    fn optimize_inner(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
+    fn optimize_inner(&mut self, root_rel: ArcPlanNode<T>) -> Result<ArcPlanNode<T>> {
         match self.apply_order {
             ApplyOrder::BottomUp => {
                 let optimized_children = self.optimize_inputs(&root_rel.children)?;
@@ -150,7 +152,7 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
                     PlanNode {
                         typ: root_rel.typ.clone(),
                         children: optimized_children,
-                        data: root_rel.data.clone(),
+                        predicates: root_rel.predicates.clone(),
                     }
                     .into(),
                 )?;
@@ -181,7 +183,7 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
         }
     }
 
-    fn infer_properties(&mut self, root_rel: RelNodeRef<T>) {
+    fn infer_properties(&mut self, root_rel: ArcPlanNode<T>) {
         if self.properties.contains_key(&root_rel) {
             return;
         }
@@ -212,13 +214,13 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
 }
 
 impl<T: NodeType> Optimizer<T> for HeuristicsOptimizer<T> {
-    fn optimize(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
+    fn optimize(&mut self, root_rel: ArcPlanNode<T>) -> Result<ArcPlanNode<T>> {
         self.optimize_inner(root_rel)
     }
 
     fn get_property<P: crate::property::PropertyBuilder<T>>(
         &self,
-        root_rel: RelNodeRef<T>,
+        root_rel: ArcPlanNode<T>,
         idx: usize,
     ) -> P::Prop {
         let props = self.properties.get(&root_rel).unwrap();

@@ -10,8 +10,7 @@ pub trait CostModel<T: NodeType>: 'static + Send + Sync {
     fn compute_cost(
         &self,
         node: &T,
-        data: &Option<Value>,
-        children: &[Cost],
+        children: &[Cost], // TODO: Predicates are not passed into the cost model yet!
         context: Option<RelNodeContext>,
         // one reason we need the optimizer is to traverse children nodes to build up an expression tree
         optimizer: Option<&CascadesOptimizer<T>>,

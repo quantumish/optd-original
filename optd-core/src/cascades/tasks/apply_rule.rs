@@ -10,7 +10,7 @@ use crate::{
         tasks::{explore_expr::ExploreExprTask, optimize_inputs::OptimizeInputsTask},
         CascadesOptimizer, GroupId,
     },
-    node::{NodeType, PlanNode},
+    node::{NodeType, PlanNode, PlanNodeOrGroup},
     rules::{Rule, RuleMatcher},
 };
 
@@ -25,7 +25,7 @@ fn match_node<T: NodeType>(
     pick_to: Option<usize>,
     node: RelMemoNodeRef<T>,
     optimizer: &CascadesOptimizer<T>,
-) -> Vec<HashMap<usize, PlanNode<T>>> {
+) -> Vec<HashMap<usize, PlanNodeOrGroup<T>>> {
     if let RuleMatcher::PickMany { .. } | RuleMatcher::IgnoreMany = children.last().unwrap() {
     } else {
         assert_eq!(
@@ -62,9 +62,9 @@ fn match_node<T: NodeType>(
                         .flatten()
                         .collect_vec();
                     assert_eq!(bindings.len(), 1, "can only expand expression");
-                    bindings.remove(0).as_ref().clone()
+                    PlanNodeOrGroup::PlanNode(bindings.remove(0).as_ref().clone().into())
                 } else {
-                    PlanNode::new_group(group_id)
+                    PlanNodeOrGroup::Group(group_id)
                 };
                 for pick in &mut picks {
                     let res = pick.insert(*pick_to, node.clone());
@@ -72,18 +72,19 @@ fn match_node<T: NodeType>(
                 }
             }
             RuleMatcher::PickMany { pick_to } => {
-                for pick in &mut picks {
-                    let res = pick.insert(
-                        *pick_to,
-                        PlanNode::new_list(
-                            node.children[idx..]
-                                .iter()
-                                .map(|x| Arc::new(PlanNode::new_group(*x)))
-                                .collect_vec(),
-                        ),
-                    );
-                    assert!(res.is_none(), "dup pick");
-                }
+                panic!("PickMany not supported currently");
+                // for pick in &mut picks {
+                //     let res = pick.insert(
+                //         *pick_to,
+                //         PlanNode::new_list(
+                //             node.children[idx..]
+                //                 .iter()
+                //                 .map(|x| Arc::new(PlanNode::new_group(*x)))
+                //                 .collect_vec(),
+                //         ),
+                //     );
+                //     assert!(res.is_none(), "dup pick");
+                // }
                 should_end = true;
             }
             _ => {
@@ -102,17 +103,24 @@ fn match_node<T: NodeType>(
     }
     if let Some(pick_to) = pick_to {
         for pick in &mut picks {
-            let res: Option<PlanNode<T>> = pick.insert(
+            let res: Option<PlanNodeOrGroup<T>> = pick.insert(
                 pick_to,
-                PlanNode {
-                    typ: typ.clone(),
-                    children: node
-                        .children
-                        .iter()
-                        .map(|x| PlanNode::new_group(*x).into())
-                        .collect_vec(),
-                    data: node.data.clone(),
-                },
+                PlanNodeOrGroup::PlanNode(
+                    PlanNode {
+                        typ: typ.clone(),
+                        children: node
+                            .children
+                            .iter()
+                            .map(|x| PlanNodeOrGroup::Group(*x))
+                            .collect_vec(),
+                        predicates: node
+                            .predicates
+                            .iter()
+                            .map(|x| optimizer.get_pred_node(*x))
+                            .collect(),
+                    }
+                    .into(),
+                ),
             );
             assert!(res.is_none(), "dup pick");
         }
@@ -124,7 +132,7 @@ fn match_and_pick_expr<T: NodeType>(
     matcher: &RuleMatcher<T>,
     expr_id: ExprId,
     optimizer: &CascadesOptimizer<T>,
-) -> Vec<HashMap<usize, PlanNode<T>>> {
+) -> Vec<HashMap<usize, PlanNodeOrGroup<T>>> {
     let node = optimizer.get_expr_memoed(expr_id);
     match_and_pick(matcher, node, optimizer)
 }
@@ -133,7 +141,7 @@ fn match_and_pick_group<T: NodeType>(
     matcher: &RuleMatcher<T>,
     group_id: GroupId,
     optimizer: &CascadesOptimizer<T>,
-) -> Vec<HashMap<usize, PlanNode<T>>> {
+) -> Vec<HashMap<usize, PlanNodeOrGroup<T>>> {
     let mut matches = vec![];
     for expr_id in optimizer.get_all_exprs_in_group(group_id) {
         let node = optimizer.get_expr_memoed(expr_id);
@@ -146,7 +154,7 @@ fn match_and_pick<T: NodeType>(
     matcher: &RuleMatcher<T>,
     node: RelMemoNodeRef<T>,
     optimizer: &CascadesOptimizer<T>,
-) -> Vec<HashMap<usize, PlanNode<T>>> {
+) -> Vec<HashMap<usize, PlanNodeOrGroup<T>>> {
     match matcher {
         RuleMatcher::MatchAndPickNode {
             typ,
@@ -242,10 +250,6 @@ fn update_memo<T: NodeType>(
 ) -> Vec<ExprId> {
     let mut expr_ids = vec![];
     for new_expr in new_exprs {
-        if let Some(_) = new_expr.typ.extract_group() {
-            // TODO: handle "merge group" case
-            todo!("merge group case");
-        }
         let (_, expr_id) = optimizer.add_expr_to_group(new_expr, group_id);
         expr_ids.push(expr_id);
     }

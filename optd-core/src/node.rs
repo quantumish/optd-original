@@ -15,23 +15,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{cascades::GroupId, cost::Cost};
 
-// TODO: Can we change this to RelNodeArc?
-pub type RelNodeRef<T> = Arc<PlanNode<T>>;
-
-pub trait NodeType:
-    PartialEq + Eq + Hash + Clone + 'static + Display + Debug + Send + Sync
-{
-    fn is_logical(&self) -> bool;
-
-    // TODO: Design this better
-    fn group_typ(group_id: GroupId) -> Self;
-
-    fn extract_group(&self) -> Option<GroupId>;
-
-    // TODO: Design this better
-    fn list_typ() -> Self;
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SerializableOrderedF64(pub OrderedFloat<f64>);
 
@@ -56,7 +39,8 @@ impl<'de> Deserialize<'de> for SerializableOrderedF64 {
     }
 }
 
-// TODO: why not use arrow types here?
+// TODO: why not use arrow types here? Do we really need to define our own Value type?
+// Shouldn't we at least remove this from the core/engine?
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum Value {
     UInt8(u8),
@@ -217,24 +201,72 @@ impl Value {
     }
 }
 
-// TODO: Handle materialized/unmaterialized plan nodes better (current system
-// w/ Placeholder and `group_typ` is weird)
+// TODO: Major refactor---type all logical/physical operators, and have
+// better typing on transformation rules and impl rules
 
-/// A PlanNode is a node in a query plan. It has children, which may or may
-/// not be materialized
+pub trait NodeType:
+    PartialEq + Eq + Hash + Clone + Copy + 'static + Display + Debug + Send + Sync
+{
+    type PredType: PartialEq + Eq + Hash + Copy + Clone + 'static + Display + Debug + Send + Sync;
+
+    fn is_logical(&self) -> bool;
+}
+
+pub type ArcPlanNode<T> = Arc<PlanNode<T>>;
+pub type ArcPredNode<T> = Arc<PredNode<T>>;
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum PlanNodeOrGroup<T: NodeType> {
+    PlanNode(ArcPlanNode<T>),
+    Group(GroupId),
+}
+
+impl<T: NodeType> PlanNodeOrGroup<T> {
+    pub fn is_materialized(&self) -> bool {
+        match self {
+            PlanNodeOrGroup::PlanNode(_) => true,
+            PlanNodeOrGroup::Group(_) => false,
+        }
+    }
+
+    pub fn unwrap_plan_node(self) -> ArcPlanNode<T> {
+        match self {
+            PlanNodeOrGroup::PlanNode(node) => node,
+            PlanNodeOrGroup::Group(_) => panic!("Expected PlanNode, found Group"),
+        }
+    }
+
+    pub fn unwrap_group(self) -> GroupId {
+        match self {
+            PlanNodeOrGroup::PlanNode(_) => panic!("Expected Group, found PlanNode"),
+            PlanNodeOrGroup::Group(group_id) => group_id,
+        }
+    }
+}
+
+impl<T: NodeType> std::fmt::Display for PlanNodeOrGroup<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlanNodeOrGroup::PlanNode(node) => write!(f, "{}", node),
+            PlanNodeOrGroup::Group(group_id) => write!(f, "{}", group_id),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PlanNode<T: NodeType> {
+    /// A generic plan node type
     pub typ: T,
-    pub children: Vec<RelNodeRef<T>>,
-    pub data: Option<Value>,
+    /// Child plan nodes, which may be materialized or placeholder group IDs
+    /// based on how this node was initialized
+    pub children: Vec<PlanNodeOrGroup<T>>,
+    /// Predicate nodes, which are always materialized
+    pub predicates: Vec<ArcPredNode<T>>,
 }
 
 impl<T: NodeType> std::fmt::Display for PlanNode<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}", self.typ)?;
-        if let Some(ref data) = self.data {
-            write!(f, " {}", data)?;
-        }
         for child in &self.children {
             write!(f, " {}", child)?;
         }
@@ -243,32 +275,17 @@ impl<T: NodeType> std::fmt::Display for PlanNode<T> {
 }
 
 impl<T: NodeType> PlanNode<T> {
-    pub fn child(&self, idx: usize) -> RelNodeRef<T> {
-        if idx >= self.children.len() {
-            panic!("child index {} out of range: {}", idx, self);
-        }
+    pub fn child(&self, idx: usize) -> PlanNodeOrGroup<T> {
         self.children[idx].clone()
     }
+}
 
-    pub fn new_leaf(typ: T) -> Self {
-        Self {
-            typ,
-            data: None,
-            children: Vec::new(),
-        }
-    }
-
-    pub fn new_group(group_id: GroupId) -> Self {
-        Self::new_leaf(T::group_typ(group_id))
-    }
-
-    pub fn new_list(items: Vec<RelNodeRef<T>>) -> Self {
-        Self {
-            typ: T::list_typ(),
-            data: None,
-            children: items,
-        }
-    }
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct PredNode<T: NodeType> {
+    /// A generic predicate node type
+    pub typ: T::PredType,
+    /// Child predicate nodes, always materialized
+    pub children: Vec<ArcPredNode<T>>,
 }
 
 /// Metadata for a rel node.

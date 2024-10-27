@@ -82,7 +82,6 @@ fn update_winner<T: NodeType>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>)
     let total_cost = cost.sum(
         &cost.compute_cost(
             &expr.typ,
-            &expr.data,
             &input_cost,
             Some(context.clone()),
             Some(optimizer),

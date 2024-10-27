@@ -20,7 +20,7 @@ use arrow_schema::DataType;
 use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
-    node::{NodeType, PlanNode, PlanNodeMeta, PlanNodeMetaMap, RelNodeRef},
+    node::{ArcPlanNode, NodeType, PlanNode, PlanNodeMeta, PlanNodeMetaMap},
     optimizer::Optimizer,
 };
 
@@ -45,7 +45,7 @@ use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 
 /// OptRelNodeTyp FAQ:
 ///   - The define_plan_node!() macro defines what the children of each join node are
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OptRelNodeTyp {
     Placeholder(GroupId),
     // Plan nodes
@@ -175,7 +175,7 @@ impl NodeType for OptRelNodeTyp {
     }
 }
 
-pub type OptRelNodeRef = RelNodeRef<OptRelNodeTyp>;
+pub type OptRelNodeRef = ArcPlanNode<OptRelNodeTyp>;
 
 pub trait OptRelNode: 'static + Clone {
     fn into_rel_node(self) -> OptRelNodeRef;
