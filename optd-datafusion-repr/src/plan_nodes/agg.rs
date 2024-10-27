@@ -11,8 +11,8 @@ define_plan_node!(
     Agg, [
         { 0, child: ArcDfPlanNode }
     ], [
-        { 1, exprs: ExprList },
-        { 2, groups: ExprList }
+        { 0, exprs: ExprList },
+        { 1, groups: ExprList }
     ]
 );
 
@@ -24,7 +24,7 @@ define_plan_node!(
     PhysicalAgg, [
         { 0, child: ArcDfPlanNode }
     ], [
-        { 1, aggrs: ExprList },
-        { 2, groups: ExprList }
+        { 0, aggrs: ExprList },
+        { 1, groups: ExprList }
     ]
 );

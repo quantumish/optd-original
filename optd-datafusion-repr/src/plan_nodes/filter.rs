@@ -1,6 +1,6 @@
 use super::macros::define_plan_node;
 
-use super::{ArcDfPlanNode, DfNodeType, DfReprPlanNode};
+use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode};
 
 #[derive(Clone, Debug)]
 pub struct LogicalFilter(pub ArcDfPlanNode);
@@ -10,7 +10,7 @@ define_plan_node!(
     Filter, [
         { 0, child: ArcDfPlanNode }
     ], [
-        { 1, cond: Expr }
+        { 0, cond: ArcDfPredNode }
     ]
 );
 
@@ -22,6 +22,6 @@ define_plan_node!(
     PhysicalFilter, [
         { 0, child: ArcDfPlanNode }
     ], [
-        { 1, cond: Expr }
+        { 0, cond: ArcDfPredNode }
     ]
 );

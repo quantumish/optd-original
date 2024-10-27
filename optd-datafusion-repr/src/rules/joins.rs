@@ -8,9 +8,9 @@ use optd_core::rules::{Rule, RuleMatcher};
 
 use super::macros::{define_impl_rule, define_rule};
 use crate::plan_nodes::{
-    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ConstantType, DfNodeType, DfReprPlanNode, Expr,
-    ExprList, JoinType, LogOpType, LogicalEmptyRelation, LogicalJoin, LogicalProjection,
-    DfReprPlanNode, PhysicalHashJoin,
+    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ConstantType, DfNodeType, DfReprPlanNode,
+    DfReprPlanNode, Expr, ExprList, JoinType, LogOpType, LogicalEmptyRelation, LogicalJoin,
+    LogicalProjection, PhysicalHashJoin,
 };
 use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 

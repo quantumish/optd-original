@@ -18,8 +18,8 @@ use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
 use crate::plan_nodes::{
-    ColumnRefExpr, DfNodeType, DfReprPlanNode, Expr, ExprList, JoinType, LogOpExpr, LogOpType,
-    LogicalAgg, LogicalFilter, LogicalJoin, LogicalSort, DfReprPlanNode,
+    ColumnRefExpr, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ExprList, JoinType, LogOpExpr,
+    LogOpType, LogicalAgg, LogicalFilter, LogicalJoin, LogicalSort,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
@@ -425,9 +425,9 @@ mod tests {
 
     use crate::{
         plan_nodes::{
-            BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DfNodeType, ExprList, LogOpExpr,
-            LogOpType, LogicalAgg, LogicalFilter, LogicalJoin, LogicalScan, LogicalSort,
-            DfReprPlanNode,
+            BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DfNodeType, DfReprPlanNode,
+            ExprList, LogOpExpr, LogOpType, LogicalAgg, LogicalFilter, LogicalJoin, LogicalScan,
+            LogicalSort,
         },
         rules::{
             FilterAggTransposeRule, FilterInnerJoinTransposeRule, FilterMergeRule,

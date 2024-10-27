@@ -5,7 +5,7 @@ use pretty_xmlish::Pretty;
 
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 
-use super::{DfNodeType, DfReprPlanNode, Expr, JoinType, DfReprPlanNode, ArcDfPlanNode};
+use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode, JoinType};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ApplyType {
@@ -15,8 +15,8 @@ pub enum ApplyType {
     AntiSemi,
 }
 
-impl ApplyType {
-    pub fn to_join_type(self) -> JoinType {
+impl Into<JoinType> for ApplyType {
+    fn into(self) -> JoinType {
         match self {
             Self::Cross => JoinType::Cross,
             Self::LeftOuter => JoinType::LeftOuter,
@@ -33,22 +33,22 @@ impl Display for ApplyType {
 }
 
 #[derive(Clone, Debug)]
-pub struct LogicalApply(pub DfReprPlanNode);
+pub struct LogicalApply(pub ArcDfPlanNode);
 
 impl DfReprPlanNode for LogicalApply {
-    fn into_rel_node(self) -> ArcDfPlanNode {
-        self.0.into_rel_node()
+    fn into_plan_node(self) -> ArcDfPlanNode {
+        self.0.into_plan_node()
     }
 
-    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
-        if let DfNodeType::Apply(_) = rel_node.typ {
-            DfReprPlanNode::from_rel_node(rel_node).map(Self)
+    fn from_plan_node(plan_node: ArcDfPlanNode) -> Option<Self> {
+        if let DfNodeType::Apply(_) = plan_node.typ {
+            Some(Self(plan_node))
         } else {
             None
         }
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "LogicalApply",
             vec![
@@ -65,35 +65,31 @@ impl DfReprPlanNode for LogicalApply {
 
 impl LogicalApply {
     pub fn new(
-        left: DfReprPlanNode,
-        right: DfReprPlanNode,
-        cond: Expr,
+        left: ArcDfPlanNode,
+        right: ArcDfPlanNode,
+        cond: ArcDfPredNode,
         apply_type: ApplyType,
     ) -> LogicalApply {
-        LogicalApply(DfReprPlanNode(
-            PlanNode {
+        LogicalApply(
+            DfPlanNode {
                 typ: DfNodeType::Apply(apply_type),
-                children: vec![
-                    left.into_rel_node(),
-                    right.into_rel_node(),
-                    cond.into_rel_node(),
-                ],
-                data: None,
+                children: vec![left, right],
+                predicates: vec![cond],
             }
             .into(),
-        ))
+        )
     }
 
-    pub fn left_child(&self) -> DfReprPlanNode {
-        DfReprPlanNode::from_rel_node(self.clone().into_rel_node().child(0)).unwrap()
+    pub fn left_child(&self) -> ArcDfPlanNode {
+        self.0.child(0)
     }
 
-    pub fn right_child(&self) -> DfReprPlanNode {
-        DfReprPlanNode::from_rel_node(self.clone().into_rel_node().child(1)).unwrap()
+    pub fn right_child(&self) -> ArcDfPlanNode {
+        self.0.child(1)
     }
 
-    pub fn cond(&self) -> Expr {
-        Expr::from_rel_node(self.clone().into_rel_node().child(2)).unwrap()
+    pub fn cond(&self) -> ArcDfPredNode {
+        self.0.predicate(0)
     }
 
     pub fn apply_type(&self) -> ApplyType {

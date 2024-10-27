@@ -125,7 +125,7 @@ pub type DfPlanNode = PlanNode<DfNodeType>;
 pub type ArcDfPlanNode = ArcPlanNode<DfNodeType>;
 
 pub trait DfReprPlanNode: 'static + Clone {
-    fn into_plan_node(self) -> dyn DfReprPlanNode;
+    fn into_plan_node(self) -> ArcDfPlanNode;
 
     fn from_plan_node(plan_node: ArcDfPlanNode) -> Option<Self>;
 
@@ -144,5 +144,5 @@ pub trait DfReprPlanNode: 'static + Clone {
     }
 }
 
-pub type DfPredNode = PredNode<DfPredType>;
-pub type ArcDfPredNode = ArcPredNode<DfPredType>;
+pub type DfPredNode = PredNode<DfNodeType>;
+pub type ArcDfPredNode = ArcPredNode<DfNodeType>;

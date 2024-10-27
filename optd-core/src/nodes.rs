@@ -278,6 +278,10 @@ impl<T: NodeType> PlanNode<T> {
     pub fn child(&self, idx: usize) -> PlanNodeOrGroup<T> {
         self.children[idx].clone()
     }
+
+    pub fn predicate(&self, idx: usize) -> ArcPredNode<T> {
+        self.predicates[idx].clone()
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

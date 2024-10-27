@@ -2,33 +2,33 @@ use optd_core::nodes::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
 use super::macros::define_plan_node;
-use super::{DfNodeType, DfReprPlanNode, Expr, ExprList, JoinType, DfReprPlanNode, ArcDfPlanNode};
+use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode, JoinType};
 
 #[derive(Clone, Debug)]
-pub struct RawDependentJoin(pub DfReprPlanNode);
+pub struct RawDependentJoin(pub ArcDfPlanNode);
 
 define_plan_node!(
     RawDependentJoin : DfReprPlanNode,
     RawDepJoin, [
-        { 0, left: DfReprPlanNode },
-        { 1, right: DfReprPlanNode }
+        { 0, left: ArcDfPlanNode },
+        { 1, right: ArcDfPlanNode }
     ], [
-        { 2, cond: Expr },
-        { 3, extern_cols: ExprList }
+        { 0, cond: ArcDfPredNode },
+        { 1, extern_cols: ArcDfPredNode }
     ], { join_type: JoinType }
 );
 
 #[derive(Clone, Debug)]
-pub struct DependentJoin(pub DfReprPlanNode);
+pub struct DependentJoin(pub ArcDfPlanNode);
 
 define_plan_node!(
     DependentJoin : DfReprPlanNode,
     DepJoin, [
-        { 0, left: DfReprPlanNode },
-        { 1, right: DfReprPlanNode }
+        { 0, left: ArcDfPlanNode },
+        { 1, right: ArcDfPlanNode }
     ], [
-        { 2, cond: Expr },
-        { 3, extern_cols: ExprList }
+        { 0, cond: ArcDfPredNode },
+        { 1, extern_cols: ArcDfPredNode }
     ], { join_type: JoinType }
 );
 

@@ -2,7 +2,7 @@ use core::fmt;
 use std::fmt::Display;
 
 use super::macros::define_plan_node;
-use super::{Expr, ExprList, DfReprPlanNode, ArcDfPlanNode, DfNodeType, DfReprPlanNode};
+use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum JoinType {
@@ -24,42 +24,42 @@ impl Display for JoinType {
 }
 
 #[derive(Clone, Debug)]
-pub struct LogicalJoin(pub DfReprPlanNode);
+pub struct LogicalJoin(pub ArcDfPlanNode);
 
 define_plan_node!(
-    LogicalJoin : DfReprPlanNode,
+    LogicalJoin : DfPlanNode,
     Join, [
-        { 0, left: DfReprPlanNode },
-        { 1, right: DfReprPlanNode }
+        { 0, left: ArcDfPlanNode },
+        { 1, right: ArcDfPlanNode }
     ], [
-        { 2, cond: Expr }
+        { 0, cond: ArcDfPredNode }
     ], { join_type: JoinType }
 );
 
 #[derive(Clone, Debug)]
-pub struct PhysicalNestedLoopJoin(pub DfReprPlanNode);
+pub struct PhysicalNestedLoopJoin(pub ArcDfPlanNode);
 
 define_plan_node!(
-    PhysicalNestedLoopJoin : DfReprPlanNode,
+    PhysicalNestedLoopJoin : DfPlanNode,
     PhysicalNestedLoopJoin, [
-        { 0, left: DfReprPlanNode },
-        { 1, right: DfReprPlanNode }
+        { 0, left: ArcDfPlanNode },
+        { 1, right: ArcDfPlanNode }
     ], [
-        { 2, cond: Expr }
+        { 0, cond: ArcDfPredNode }
     ], { join_type: JoinType }
 );
 
 #[derive(Clone, Debug)]
-pub struct PhysicalHashJoin(pub DfReprPlanNode);
+pub struct PhysicalHashJoin(pub ArcDfPlanNode);
 
 define_plan_node!(
-    PhysicalHashJoin : DfReprPlanNode,
+    PhysicalHashJoin : DfPlanNode,
     PhysicalHashJoin, [
-        { 0, left: DfReprPlanNode },
-        { 1, right: DfReprPlanNode }
+        { 0, left: ArcDfPlanNode },
+        { 1, right: ArcDfPlanNode }
     ], [
-        { 2, left_keys: ExprList },
-        { 3, right_keys: ExprList }
+        { 0, left_keys: ArcDfPredNode },
+        { 1, right_keys: ArcDfPredNode }
     ], { join_type: JoinType }
 );
 

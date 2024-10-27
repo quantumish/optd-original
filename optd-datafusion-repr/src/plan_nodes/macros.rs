@@ -53,9 +53,10 @@ macro_rules! define_plan_node {
                         typ: DfNodeType::$variant $( ($inner_name) )?,
                         children: vec![
                             $($child_name.into_rel_node(),)*
+                        ],
+                        predicates: vec![
                             $($attr_name.into_rel_node()),*
                         ],
-                        predicates: vec![],
                     }
                     .into(),
                 )
@@ -63,14 +64,14 @@ macro_rules! define_plan_node {
 
             $(
                 pub fn $child_name(&self) -> $child_meta_typ {
-                    <$child_meta_typ>::from_rel_node(self.clone().into_rel_node().child($child_id)).unwrap()
+                    self.0.child($child_id)
                 }
             )*
 
 
             $(
                 pub fn $attr_name(&self) -> $attr_meta_typ {
-                    <$attr_meta_typ>::from_rel_node(self.clone().into_rel_node().child($attr_id)).unwrap()
+                    self.0.predicate($attr_id)
                 }
             )*
 

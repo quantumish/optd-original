@@ -1,28 +1,28 @@
 use super::expr::ExprList;
 use super::macros::define_plan_node;
 
-use super::{DfReprPlanNode, ArcDfPlanNode, DfNodeType, DfReprPlanNode};
+use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode};
 
 #[derive(Clone, Debug)]
-pub struct LogicalProjection(pub DfReprPlanNode);
+pub struct LogicalProjection(pub ArcDfPlanNode);
 
 define_plan_node!(
-    LogicalProjection : DfReprPlanNode,
+    LogicalProjection : DfPlanNode,
     Projection, [
-        { 0, child: DfReprPlanNode }
+        { 0, child: ArcDfPlanNode }
     ], [
-        { 1, exprs: ExprList }
+        { 0, exprs: ArcDfPredNode }
     ]
 );
 
 #[derive(Clone, Debug)]
-pub struct PhysicalProjection(pub DfReprPlanNode);
+pub struct PhysicalProjection(pub ArcDfPlanNode);
 
 define_plan_node!(
-    PhysicalProjection : DfReprPlanNode,
+    PhysicalProjection : DfPlanNode,
     PhysicalProjection, [
-        { 0, child: DfReprPlanNode }
+        { 0, child: ArcDfPlanNode }
     ], [
-        { 1, exprs: ExprList }
+        { 0, exprs: ArcDfPredNode }
     ]
 );

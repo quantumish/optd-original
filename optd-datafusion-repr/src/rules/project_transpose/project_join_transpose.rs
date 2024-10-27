@@ -11,8 +11,8 @@ use optd_core::optimizer::Optimizer;
 
 use super::project_transpose_common::ProjectionMapping;
 use crate::plan_nodes::{
-    ColumnRefExpr, DfNodeType, DfReprPlanNode, Expr, ExprList, JoinType, LogicalJoin,
-    LogicalProjection, DfReprPlanNode,
+    ColumnRefExpr, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ExprList, JoinType,
+    LogicalJoin, LogicalProjection,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
