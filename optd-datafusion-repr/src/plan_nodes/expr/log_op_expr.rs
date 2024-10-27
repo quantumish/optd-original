@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
-use optd_core::node::{PlanNode, PlanNodeMetaMap};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 use super::ExprList;
 
@@ -26,7 +26,7 @@ impl LogOpExpr {
     pub fn new(op_type: LogOpType, expr_list: ExprList) -> Self {
         LogOpExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::LogOp(op_type),
+                typ: DfNodeType::LogOp(op_type),
                 children: expr_list
                     .to_vec()
                     .into_iter()
@@ -48,7 +48,7 @@ impl LogOpExpr {
         // there is no need to call flatten_nested_logical recursively
         let mut new_expr_list = Vec::new();
         for child in expr_list.to_vec() {
-            if let OptRelNodeTyp::LogOp(child_op) = child.typ() {
+            if let DfNodeType::LogOp(child_op) = child.typ() {
                 if child_op == op {
                     let child_log_op_expr =
                         LogOpExpr::from_rel_node(child.into_rel_node()).unwrap();
@@ -75,7 +75,7 @@ impl LogOpExpr {
     }
 
     pub fn op_type(&self) -> LogOpType {
-        if let OptRelNodeTyp::LogOp(op_type) = self.clone().into_rel_node().typ {
+        if let DfNodeType::LogOp(op_type) = self.clone().into_rel_node().typ {
             op_type
         } else {
             panic!("not a log op")
@@ -83,13 +83,13 @@ impl LogOpExpr {
     }
 }
 
-impl OptRelNode for LogOpExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for LogOpExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if !matches!(rel_node.typ, OptRelNodeTyp::LogOp(_)) {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if !matches!(rel_node.typ, DfNodeType::LogOp(_)) {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

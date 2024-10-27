@@ -1,4 +1,4 @@
-use crate::node::{NodeType, Value};
+use crate::nodes::{NodeType, Value};
 use std::{any::Any, fmt::Debug};
 
 pub trait PropertyBuilderAny<T: NodeType>: 'static + Send + Sync {

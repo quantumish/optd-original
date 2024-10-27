@@ -1,4 +1,4 @@
-use crate::plan_nodes::{ColumnRefExpr, Expr, ExprList, OptRelNode};
+use crate::plan_nodes::{ColumnRefExpr, Expr, ExprList, DfReprPlanNode};
 
 /// This struct holds the mapping from original columns to projected columns.
 ///

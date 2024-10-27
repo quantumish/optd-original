@@ -2,7 +2,7 @@ use core::fmt;
 use std::fmt::Display;
 
 use super::macros::define_plan_node;
-use super::{Expr, ExprList, OptRelNode, OptRelNodeRef, OptRelNodeTyp, DfPlanNode};
+use super::{Expr, ExprList, DfReprPlanNode, ArcDfPlanNode, DfNodeType, DfReprPlanNode};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum JoinType {
@@ -24,39 +24,39 @@ impl Display for JoinType {
 }
 
 #[derive(Clone, Debug)]
-pub struct LogicalJoin(pub DfPlanNode);
+pub struct LogicalJoin(pub DfReprPlanNode);
 
 define_plan_node!(
-    LogicalJoin : DfPlanNode,
+    LogicalJoin : DfReprPlanNode,
     Join, [
-        { 0, left: DfPlanNode },
-        { 1, right: DfPlanNode }
+        { 0, left: DfReprPlanNode },
+        { 1, right: DfReprPlanNode }
     ], [
         { 2, cond: Expr }
     ], { join_type: JoinType }
 );
 
 #[derive(Clone, Debug)]
-pub struct PhysicalNestedLoopJoin(pub DfPlanNode);
+pub struct PhysicalNestedLoopJoin(pub DfReprPlanNode);
 
 define_plan_node!(
-    PhysicalNestedLoopJoin : DfPlanNode,
+    PhysicalNestedLoopJoin : DfReprPlanNode,
     PhysicalNestedLoopJoin, [
-        { 0, left: DfPlanNode },
-        { 1, right: DfPlanNode }
+        { 0, left: DfReprPlanNode },
+        { 1, right: DfReprPlanNode }
     ], [
         { 2, cond: Expr }
     ], { join_type: JoinType }
 );
 
 #[derive(Clone, Debug)]
-pub struct PhysicalHashJoin(pub DfPlanNode);
+pub struct PhysicalHashJoin(pub DfReprPlanNode);
 
 define_plan_node!(
-    PhysicalHashJoin : DfPlanNode,
+    PhysicalHashJoin : DfReprPlanNode,
     PhysicalHashJoin, [
-        { 0, left: DfPlanNode },
-        { 1, right: DfPlanNode }
+        { 0, left: DfReprPlanNode },
+        { 1, right: DfReprPlanNode }
     ], [
         { 2, left_keys: ExprList },
         { 3, right_keys: ExprList }

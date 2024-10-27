@@ -5,7 +5,7 @@ use itertools::Itertools;
 use std::any::Any;
 
 use crate::{
-    node::{ArcPlanNode, NodeType, PlanNode, PlanNodeOrGroup},
+    nodes::{ArcPlanNode, NodeType, PlanNode, PlanNodeOrGroup},
     optimizer::Optimizer,
     property::PropertyBuilderAny,
     rules::{Rule, RuleMatcher},
@@ -75,7 +75,7 @@ fn match_node<T: NodeType>(
         let res: Option<PlanNode<T>> = pick.insert(
             pick_to,
             PlanNode {
-                typ: *typ,
+                typ: typ.clone(),
                 children: node.children.clone(),
                 predicates: node.predicates.clone(),
             },
@@ -183,7 +183,7 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
                     .map(|x| PlanNodeOrGroup::PlanNode(x))
                     .collect();
                 let node: Arc<PlanNode<T>> = PlanNode {
-                    typ: root_rel.typ,
+                    typ: root_rel.typ.clone(),
                     children: optimized_children,
                     predicates: root_rel.predicates.clone(),
                 }

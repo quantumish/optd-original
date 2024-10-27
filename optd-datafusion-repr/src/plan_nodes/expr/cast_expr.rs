@@ -1,8 +1,8 @@
 use arrow_schema::DataType;
-use optd_core::node::{PlanNode, PlanNodeMetaMap};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 use super::DataTypeExpr;
 
@@ -13,7 +13,7 @@ impl CastExpr {
     pub fn new(expr: Expr, cast_to: DataType) -> Self {
         CastExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::Cast,
+                typ: DfNodeType::Cast,
                 children: vec![
                     expr.into_rel_node(),
                     DataTypeExpr::new(cast_to).into_rel_node(),
@@ -35,13 +35,13 @@ impl CastExpr {
     }
 }
 
-impl OptRelNode for CastExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for CastExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if !matches!(rel_node.typ, OptRelNodeTyp::Cast) {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if !matches!(rel_node.typ, DfNodeType::Cast) {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

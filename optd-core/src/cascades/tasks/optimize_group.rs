@@ -2,7 +2,7 @@ use tracing::trace;
 
 use crate::{
     cascades::{CascadesOptimizer, GroupId},
-    node::NodeType,
+    nodes::NodeType,
 };
 
 use super::{explore_group::ExploreGroupTask, optimize_expr::OptimizeExprTask, Task};

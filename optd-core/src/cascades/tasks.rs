@@ -1,6 +1,6 @@
 use optimize_group::OptimizeGroupTask;
 
-use crate::node::NodeType;
+use crate::nodes::NodeType;
 
 mod apply_rule;
 mod explore_expr;

@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
-use crate::node::PlanNodeOrGroup;
+use crate::nodes::PlanNodeOrGroup;
 use crate::{
-    node::{NodeType, PlanNode},
+    nodes::{NodeType, PlanNode},
     optimizer::Optimizer,
 };
 

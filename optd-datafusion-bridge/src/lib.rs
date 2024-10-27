@@ -20,8 +20,8 @@ use itertools::Itertools;
 use optd_core::cascades::BindingType;
 use optd_datafusion_repr::{
     plan_nodes::{
-        ConstantType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PhysicalHashJoin,
-        PhysicalNestedLoopJoin, DfPlanNode,
+        ConstantType, DfReprPlanNode, ArcDfPlanNode, DfNodeType, PhysicalHashJoin,
+        PhysicalNestedLoopJoin, DfReprPlanNode,
     },
     properties::schema::Catalog,
     DatafusionOptimizer,
@@ -120,21 +120,21 @@ enum LogicalJoinOrder {
     Join(Box<Self>, Box<Self>),
 }
 
-fn get_join_order(rel_node: OptRelNodeRef) -> Option<JoinOrder> {
+fn get_join_order(rel_node: ArcDfPlanNode) -> Option<JoinOrder> {
     match rel_node.typ {
-        OptRelNodeTyp::PhysicalHashJoin(_) => {
+        DfNodeType::PhysicalHashJoin(_) => {
             let join = PhysicalHashJoin::from_rel_node(rel_node.clone()).unwrap();
             let left = get_join_order(join.left().into_rel_node())?;
             let right = get_join_order(join.right().into_rel_node())?;
             Some(JoinOrder::HashJoin(Box::new(left), Box::new(right)))
         }
-        OptRelNodeTyp::PhysicalNestedLoopJoin(_) => {
+        DfNodeType::PhysicalNestedLoopJoin(_) => {
             let join = PhysicalNestedLoopJoin::from_rel_node(rel_node.clone()).unwrap();
             let left = get_join_order(join.left().into_rel_node())?;
             let right = get_join_order(join.right().into_rel_node())?;
             Some(JoinOrder::NestedLoopJoin(Box::new(left), Box::new(right)))
         }
-        OptRelNodeTyp::PhysicalScan => {
+        DfNodeType::PhysicalScan => {
             let scan =
                 optd_datafusion_repr::plan_nodes::PhysicalScan::from_rel_node(rel_node).unwrap();
             Some(JoinOrder::Table(scan.table().to_string()))
@@ -225,7 +225,7 @@ impl OptdQueryPlanner {
                 PlanType::OptimizedLogicalPlan {
                     optimizer_name: "optd".to_string(),
                 },
-                DfPlanNode::from_rel_node(optd_rel.clone())
+                DfReprPlanNode::from_rel_node(optd_rel.clone())
                     .unwrap()
                     .explain_to_string(None),
             ));
@@ -239,7 +239,7 @@ impl OptdQueryPlanner {
                     PlanType::OptimizedLogicalPlan {
                         optimizer_name: "optd-heuristic".to_string(),
                     },
-                    DfPlanNode::from_rel_node(optd_rel.clone())
+                    DfReprPlanNode::from_rel_node(optd_rel.clone())
                         .unwrap()
                         .explain_to_string(None),
                 ))
@@ -253,7 +253,7 @@ impl OptdQueryPlanner {
                 PlanType::OptimizedPhysicalPlan {
                     optimizer_name: "optd".to_string(),
                 },
-                DfPlanNode::from_rel_node(optimized_rel.clone())
+                DfReprPlanNode::from_rel_node(optimized_rel.clone())
                     .unwrap()
                     .explain_to_string(if verbose { Some(&meta) } else { None }),
             ));

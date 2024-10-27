@@ -1,7 +1,7 @@
-use optd_core::node::{PlanNode, PlanNodeMetaMap, Value};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 #[derive(Clone, Debug)]
 pub struct ColumnRefExpr(pub Expr);
@@ -13,7 +13,7 @@ impl ColumnRefExpr {
         let u64_column_idx = column_idx as u64;
         ColumnRefExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::ColumnRef,
+                typ: DfNodeType::ColumnRef,
                 children: vec![],
                 data: Some(Value::UInt64(u64_column_idx)),
             }
@@ -31,13 +31,13 @@ impl ColumnRefExpr {
     }
 }
 
-impl OptRelNode for ColumnRefExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for ColumnRefExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if rel_node.typ != OptRelNodeTyp::ColumnRef {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if rel_node.typ != DfNodeType::ColumnRef {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

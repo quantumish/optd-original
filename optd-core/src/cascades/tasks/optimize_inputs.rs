@@ -7,7 +7,7 @@ use crate::{
         CascadesOptimizer, GroupId,
     },
     cost::Cost,
-    node::NodeType,
+    nodes::NodeType,
 };
 
 use super::{optimize_group::OptimizeGroupTask, Task};

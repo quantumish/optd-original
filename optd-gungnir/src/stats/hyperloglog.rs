@@ -5,7 +5,7 @@
 //! We modified it by hashing objects into 64-bit values instead of 32-bit ones to reduce the
 //! number of collisions and eliminate the need for a large range correction estimator.
 
-use optd_core::node::Value;
+use optd_core::nodes::Value;
 
 use crate::stats::murmur2::murmur_hash;
 use std::{cmp::max, marker::PhantomData};

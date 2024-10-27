@@ -2,20 +2,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::DataType;
-use optd_core::node::PlanNode;
+use optd_core::nodes::PlanNode;
 use optd_core::optimizer::Optimizer;
 use optd_core::rules::{Rule, RuleMatcher};
 
 use crate::plan_nodes::{
-    BinOpType, ConstantType, FuncType, JoinType, LogOpType, OptRelNodeTyp, SortOrderType, UnOpType,
+    BinOpType, ConstantType, DfNodeType, FuncType, JoinType, LogOpType, SortOrderType, UnOpType,
 };
 
 pub struct PhysicalConversionRule {
-    matcher: RuleMatcher<OptRelNodeTyp>,
+    matcher: RuleMatcher<DfNodeType>,
 }
 
 impl PhysicalConversionRule {
-    pub fn new(logical_typ: OptRelNodeTyp) -> Self {
+    pub fn new(logical_typ: DfNodeType) -> Self {
         Self {
             matcher: RuleMatcher::MatchAndPickDiscriminant {
                 typ_discriminant: std::mem::discriminant(&logical_typ),
@@ -27,37 +27,37 @@ impl PhysicalConversionRule {
 }
 
 impl PhysicalConversionRule {
-    pub fn all_conversions<O: Optimizer<OptRelNodeTyp>>() -> Vec<Arc<dyn Rule<OptRelNodeTyp, O>>> {
+    pub fn all_conversions<O: Optimizer<DfNodeType>>() -> Vec<Arc<dyn Rule<DfNodeType, O>>> {
         // Define conversions below, and add them to this list!
         // Note that we're using discriminant matching, so only one value of each variant
         // is sufficient to match all values of a variant.
-        let mut rules: Vec<Arc<dyn Rule<OptRelNodeTyp, O>>> = vec![
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Scan)),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Projection)),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Join(
+        let mut rules: Vec<Arc<dyn Rule<DfNodeType, O>>> = vec![
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Scan)),
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Projection)),
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Join(
                 JoinType::Inner,
             ))),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Filter)),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Sort)),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Agg)),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::EmptyRelation)),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Limit)),
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Filter)),
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Sort)),
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Agg)),
+            Arc::new(PhysicalConversionRule::new(DfNodeType::EmptyRelation)),
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Limit)),
         ];
 
         rules
     }
 }
 
-impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionRule {
-    fn matcher(&self) -> &RuleMatcher<OptRelNodeTyp> {
+impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
+    fn matcher(&self) -> &RuleMatcher<DfNodeType> {
         &self.matcher
     }
 
     fn apply(
         &self,
         _optimizer: &O,
-        mut input: HashMap<usize, PlanNode<OptRelNodeTyp>>,
-    ) -> Vec<PlanNode<OptRelNodeTyp>> {
+        mut input: HashMap<usize, PlanNode<DfNodeType>>,
+    ) -> Vec<PlanNode<DfNodeType>> {
         let PlanNode {
             typ,
             data,
@@ -65,73 +65,73 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
         } = input.remove(&0).unwrap();
 
         match typ {
-            OptRelNodeTyp::Apply(x) => {
+            DfNodeType::Apply(x) => {
                 let node = PlanNode {
-                    typ: OptRelNodeTyp::PhysicalNestedLoopJoin(x.to_join_type()),
+                    typ: DfNodeType::PhysicalNestedLoopJoin(x.to_join_type()),
                     children,
                     data,
                 };
                 vec![node]
             }
-            OptRelNodeTyp::Join(x) => {
+            DfNodeType::Join(x) => {
                 let node = PlanNode {
-                    typ: OptRelNodeTyp::PhysicalNestedLoopJoin(x),
+                    typ: DfNodeType::PhysicalNestedLoopJoin(x),
                     children,
                     data,
                 };
                 vec![node]
             }
-            OptRelNodeTyp::Scan => {
+            DfNodeType::Scan => {
                 let node = PlanNode {
-                    typ: OptRelNodeTyp::PhysicalScan,
+                    typ: DfNodeType::PhysicalScan,
                     children,
                     data,
                 };
                 vec![node]
             }
-            OptRelNodeTyp::Filter => {
+            DfNodeType::Filter => {
                 let node = PlanNode {
-                    typ: OptRelNodeTyp::PhysicalFilter,
+                    typ: DfNodeType::PhysicalFilter,
                     children,
                     data,
                 };
                 vec![node]
             }
-            OptRelNodeTyp::Projection => {
+            DfNodeType::Projection => {
                 let node = PlanNode {
-                    typ: OptRelNodeTyp::PhysicalProjection,
+                    typ: DfNodeType::PhysicalProjection,
                     children,
                     data,
                 };
                 vec![node]
             }
-            OptRelNodeTyp::Sort => {
+            DfNodeType::Sort => {
                 let node = PlanNode {
-                    typ: OptRelNodeTyp::PhysicalSort,
+                    typ: DfNodeType::PhysicalSort,
                     children,
                     data,
                 };
                 vec![node]
             }
-            OptRelNodeTyp::Agg => {
+            DfNodeType::Agg => {
                 let node = PlanNode {
-                    typ: OptRelNodeTyp::PhysicalAgg,
+                    typ: DfNodeType::PhysicalAgg,
                     children,
                     data,
                 };
                 vec![node]
             }
-            OptRelNodeTyp::EmptyRelation => {
+            DfNodeType::EmptyRelation => {
                 let node = PlanNode {
-                    typ: OptRelNodeTyp::PhysicalEmptyRelation,
+                    typ: DfNodeType::PhysicalEmptyRelation,
                     children,
                     data,
                 };
                 vec![node]
             }
-            OptRelNodeTyp::Limit => {
+            DfNodeType::Limit => {
                 let node = PlanNode {
-                    typ: OptRelNodeTyp::PhysicalLimit,
+                    typ: DfNodeType::PhysicalLimit,
                     children,
                     data,
                 };

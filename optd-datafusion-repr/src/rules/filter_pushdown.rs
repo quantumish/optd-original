@@ -15,11 +15,11 @@ use std::collections::{HashMap, HashSet};
 use std::vec;
 
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{node::PlanNode, optimizer::Optimizer};
+use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
 use crate::plan_nodes::{
-    ColumnRefExpr, DfPlanNode, Expr, ExprList, JoinType, LogOpExpr, LogOpType, LogicalAgg,
-    LogicalFilter, LogicalJoin, LogicalSort, OptRelNode, OptRelNodeTyp,
+    ColumnRefExpr, DfNodeType, DfReprPlanNode, Expr, ExprList, JoinType, LogOpExpr, LogOpType,
+    LogicalAgg, LogicalFilter, LogicalJoin, LogicalSort, DfReprPlanNode,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
@@ -60,7 +60,7 @@ fn determine_join_cond_dep(
     let mut left_col = false;
     let mut right_col = false;
     for child in children {
-        if child.typ() == OptRelNodeTyp::ColumnRef {
+        if child.typ() == DfNodeType::ColumnRef {
             let col_ref = ColumnRefExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
             let index = col_ref.index();
             if index < left_schema_size {
@@ -94,12 +94,10 @@ fn categorize_conds(mut categorization_fn: impl FnMut(Expr, &Vec<Expr>), cond: E
     fn categorize_conds_helper(cond: Expr, bottom_level_children: &mut Vec<Expr>) {
         assert!(cond.typ().is_expression());
         match cond.typ() {
-            OptRelNodeTyp::ColumnRef | OptRelNodeTyp::Constant(_) => {
-                bottom_level_children.push(cond)
-            }
+            DfNodeType::ColumnRef | DfNodeType::Constant(_) => bottom_level_children.push(cond),
             _ => {
                 for child in &cond.clone().into_rel_node().children {
-                    if child.typ == OptRelNodeTyp::List {
+                    if child.typ == DfNodeType::List {
                         // TODO: What should we do when we encounter a List?
                         continue;
                     }
@@ -118,7 +116,7 @@ fn categorize_conds(mut categorization_fn: impl FnMut(Expr, &Vec<Expr>), cond: E
         categorization_fn(cond, bottom_level_children);
     };
     match cond.typ() {
-        OptRelNodeTyp::LogOp(LogOpType::And) => {
+        DfNodeType::LogOp(LogOpType::And) => {
             for child in &cond.into_rel_node().children {
                 categorize_indep_expr(Expr::from_rel_node(child.clone()).unwrap());
             }
@@ -136,10 +134,10 @@ define_rule!(
 );
 
 fn apply_filter_merge(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     FilterMergeRulePicks { child, cond1, cond }: FilterMergeRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
-    let child = DfPlanNode::from_group(child.into());
+) -> Vec<PlanNode<DfNodeType>> {
+    let child = DfReprPlanNode::from_group(child.into());
     let curr_cond = Expr::from_rel_node(cond.into()).unwrap();
     let child_cond = Expr::from_rel_node(cond1.into()).unwrap();
 
@@ -161,14 +159,14 @@ define_rule!(
 );
 
 fn apply_filter_cross_join_transpose(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<DfNodeType>,
     FilterCrossJoinTransposeRulePicks {
         child_a,
         child_b,
         join_cond,
         cond,
     }: FilterCrossJoinTransposeRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     filter_join_transpose(
         optimizer,
         JoinType::Cross,
@@ -190,14 +188,14 @@ define_rule!(
 );
 
 fn apply_filter_inner_join_transpose(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<DfNodeType>,
     FilterInnerJoinTransposeRulePicks {
         child_a,
         child_b,
         join_cond,
         cond,
     }: FilterInnerJoinTransposeRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     filter_join_transpose(
         optimizer,
         JoinType::Inner,
@@ -215,13 +213,13 @@ fn apply_filter_inner_join_transpose(
 /// We will consider each part of the conjunction separately, and push down
 /// only the relevant parts.
 fn filter_join_transpose(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<DfNodeType>,
     join_typ: JoinType,
-    join_child_a: PlanNode<OptRelNodeTyp>,
-    join_child_b: PlanNode<OptRelNodeTyp>,
-    join_cond: PlanNode<OptRelNodeTyp>,
-    filter_cond: PlanNode<OptRelNodeTyp>,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+    join_child_a: PlanNode<DfNodeType>,
+    join_child_b: PlanNode<DfNodeType>,
+    join_cond: PlanNode<DfNodeType>,
+    filter_cond: PlanNode<DfNodeType>,
+) -> Vec<PlanNode<DfNodeType>> {
     let left_schema_size = optimizer
         .get_property::<SchemaPropertyBuilder>(join_child_a.clone().into(), 0)
         .len();
@@ -229,8 +227,8 @@ fn filter_join_transpose(
         .get_property::<SchemaPropertyBuilder>(join_child_b.clone().into(), 0)
         .len();
 
-    let join_child_a = DfPlanNode::from_group(join_child_a.into());
-    let join_child_b = DfPlanNode::from_group(join_child_b.into());
+    let join_child_a = DfReprPlanNode::from_group(join_child_a.into());
+    let join_child_b = DfReprPlanNode::from_group(join_child_b.into());
     let join_cond = Expr::from_rel_node(join_cond.into()).unwrap();
     let filter_cond = Expr::from_rel_node(filter_cond.into()).unwrap();
     // TODO: Push existing join conditions down as well
@@ -317,10 +315,10 @@ define_rule!(
 
 /// Filter and sort should always be commutable.
 fn apply_filter_sort_transpose(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     FilterSortTransposeRulePicks { child, exprs, cond }: FilterSortTransposeRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
-    let child = DfPlanNode::from_group(child.into());
+) -> Vec<PlanNode<DfNodeType>> {
+    let child = DfReprPlanNode::from_group(child.into());
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
 
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
@@ -340,17 +338,17 @@ define_rule!(
 /// involves the group by columns. We will consider each part of the conjunction
 /// separately, and push down only the relevant parts.
 fn apply_filter_agg_transpose(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     FilterAggTransposeRulePicks {
         child,
         exprs,
         groups,
         cond,
     }: FilterAggTransposeRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
     let groups = ExprList::from_rel_node(groups.into()).unwrap();
-    let child = DfPlanNode::from_group(child.into());
+    let child = DfReprPlanNode::from_group(child.into());
 
     // Get top-level group-by columns. Does not cover cases where group-by exprs
     // are more complex than a top-level column reference.
@@ -360,7 +358,7 @@ fn apply_filter_agg_transpose(
         .children
         .iter()
         .filter_map(|expr| match expr.typ {
-            OptRelNodeTyp::ColumnRef => {
+            DfNodeType::ColumnRef => {
                 Some(ColumnRefExpr::from_rel_node(expr.clone()).unwrap().index())
             }
             _ => None,
@@ -374,7 +372,7 @@ fn apply_filter_agg_transpose(
     let categorization_fn = |expr: Expr, children: &Vec<Expr>| {
         let mut group_by_cols_only = true;
         for child in children {
-            if child.typ() == OptRelNodeTyp::ColumnRef {
+            if child.typ() == DfNodeType::ColumnRef {
                 let col_ref = ColumnRefExpr::from_rel_node(child.clone().into_rel_node()).unwrap();
                 if !group_cols.contains(&col_ref.index()) {
                     group_by_cols_only = false;
@@ -427,9 +425,9 @@ mod tests {
 
     use crate::{
         plan_nodes::{
-            BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogOpExpr, LogOpType,
-            LogicalAgg, LogicalFilter, LogicalJoin, LogicalScan, LogicalSort, OptRelNode,
-            OptRelNodeTyp,
+            BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DfNodeType, ExprList, LogOpExpr,
+            LogOpType, LogicalAgg, LogicalFilter, LogicalJoin, LogicalScan, LogicalSort,
+            DfReprPlanNode,
         },
         rules::{
             FilterAggTransposeRule, FilterInnerJoinTransposeRule, FilterMergeRule,
@@ -456,8 +454,8 @@ mod tests {
 
         let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
-        assert!(matches!(plan.typ, OptRelNodeTyp::Sort));
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
+        assert!(matches!(plan.typ, DfNodeType::Sort));
+        assert!(matches!(plan.child(0).typ, DfNodeType::Filter));
     }
 
     #[test]
@@ -485,7 +483,7 @@ mod tests {
 
         let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
-        assert!(matches!(plan.typ, OptRelNodeTyp::Filter));
+        assert!(matches!(plan.typ, DfNodeType::Filter));
         let cond_log_op = LogOpExpr::from_rel_node(
             LogicalFilter::from_rel_node(plan.clone())
                 .unwrap()
@@ -672,7 +670,7 @@ mod tests {
         let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
         let plan_filter = LogicalFilter::from_rel_node(plan.clone()).unwrap();
-        assert!(matches!(plan_filter.0.typ(), OptRelNodeTyp::Filter));
+        assert!(matches!(plan_filter.0.typ(), DfNodeType::Filter));
         let plan_filter_expr =
             LogOpExpr::from_rel_node(plan_filter.cond().into_rel_node()).unwrap();
         assert!(matches!(plan_filter_expr.op_type(), LogOpType::And));

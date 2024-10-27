@@ -1,11 +1,9 @@
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{node::PlanNode, optimizer::Optimizer};
+use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::plan_nodes::{
-    ConstantExpr, ConstantType, LogicalEmptyRelation, OptRelNode, OptRelNodeTyp,
-};
+use crate::plan_nodes::{ConstantExpr, ConstantType, DfNodeType, LogicalEmptyRelation, DfReprPlanNode};
 
 use super::macros::define_rule;
 use crate::properties::schema::SchemaPropertyBuilder;
@@ -20,11 +18,11 @@ define_rule!(
 ///     - Limit with skip 0 and no fetch -> Eliminate from the tree
 ///     - Limit with limit 0 -> EmptyRelation
 fn apply_eliminate_limit(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<DfNodeType>,
     EliminateLimitRulePicks { child, skip, fetch }: EliminateLimitRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
-    if let OptRelNodeTyp::Constant(ConstantType::UInt64) = skip.typ {
-        if let OptRelNodeTyp::Constant(ConstantType::UInt64) = fetch.typ {
+) -> Vec<PlanNode<DfNodeType>> {
+    if let DfNodeType::Constant(ConstantType::UInt64) = skip.typ {
+        if let DfNodeType::Constant(ConstantType::UInt64) = fetch.typ {
             let skip_val = ConstantExpr::from_rel_node(skip.into())
                 .unwrap()
                 .value()

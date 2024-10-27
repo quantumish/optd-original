@@ -1,14 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use optd_core::{
-    cascades::CascadesOptimizer, heuristics::HeuristicsOptimizer, node::Value,
+    cascades::CascadesOptimizer, heuristics::HeuristicsOptimizer, nodes::Value,
     optimizer::Optimizer, rules::Rule,
 };
 use optd_datafusion_repr::{
     cost::{DataFusionPerTableStats, OptCostModel},
     plan_nodes::{
-        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DfPlanNode, JoinType, LogicalFilter,
-        LogicalJoin, LogicalScan, OptRelNode, OptRelNodeTyp,
+        BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DfNodeType, DfReprPlanNode, JoinType,
+        LogicalFilter, LogicalJoin, LogicalScan, DfReprPlanNode,
     },
     rules::{HashJoinRule, JoinAssocRule, JoinCommuteRule, PhysicalConversionRule},
 };
@@ -22,16 +22,16 @@ pub fn main() {
         .with_target(false)
         .init();
 
-    let transform_rules: Vec<Arc<dyn Rule<OptRelNodeTyp, CascadesOptimizer<OptRelNodeTyp>>>> = vec![
+    let transform_rules: Vec<Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType>>>> = vec![
         Arc::new(JoinCommuteRule::new()),
         Arc::new(JoinAssocRule::new()),
     ];
-    let impl_rules: Vec<Arc<dyn Rule<OptRelNodeTyp, CascadesOptimizer<OptRelNodeTyp>>>> = vec![
-        Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Scan)),
-        Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Join(
+    let impl_rules: Vec<Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType>>>> = vec![
+        Arc::new(PhysicalConversionRule::new(DfNodeType::Scan)),
+        Arc::new(PhysicalConversionRule::new(DfNodeType::Join(
             JoinType::Inner,
         ))),
-        Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Filter)),
+        Arc::new(PhysicalConversionRule::new(DfNodeType::Filter)),
         Arc::new(HashJoinRule::new()),
     ];
 
@@ -67,7 +67,7 @@ pub fn main() {
     let fnal = LogicalJoin::new(scan3.0, join_filter.0, join_cond.0, JoinType::Inner);
     let node = optimizer.optimize(fnal.0.clone().into_rel_node());
     // optimizer.dump(None); TODO: implement this function
-    let node: Arc<optd_core::node::PlanNode<OptRelNodeTyp>> = node.unwrap();
+    let node: Arc<optd_core::nodes::PlanNode<DfNodeType>> = node.unwrap();
     println!(
         "cost={}",
         optimizer
@@ -76,7 +76,7 @@ pub fn main() {
     );
     println!(
         "{}",
-        DfPlanNode::from_rel_node(node)
+        DfReprPlanNode::from_rel_node(node)
             .unwrap()
             .explain_to_string(None)
     );
@@ -85,11 +85,11 @@ pub fn main() {
         vec![
             Arc::new(JoinCommuteRule::new()),
             Arc::new(JoinAssocRule::new()),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Scan)),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Join(
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Scan)),
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Join(
                 JoinType::Inner,
             ))),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Filter)),
+            Arc::new(PhysicalConversionRule::new(DfNodeType::Filter)),
             Arc::new(HashJoinRule::new()),
         ],
         optd_core::heuristics::ApplyOrder::BottomUp,
@@ -98,7 +98,7 @@ pub fn main() {
     let node = optimizer.optimize(fnal.0.into_rel_node()).unwrap();
     println!(
         "{}",
-        DfPlanNode::from_rel_node(node)
+        DfReprPlanNode::from_rel_node(node)
             .unwrap()
             .explain_to_string(None)
     );

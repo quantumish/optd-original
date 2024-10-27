@@ -3,7 +3,7 @@ use std::ops::Bound;
 use optd_core::{
     cascades::{BindingType, CascadesOptimizer, RelNodeContext},
     cost::Cost,
-    node::Value,
+    nodes::Value,
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -13,8 +13,8 @@ use crate::{
         UNIMPLEMENTED_SEL,
     },
     plan_nodes::{
-        BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, ConstantType, Expr, InListExpr, LikeExpr,
-        LogOpType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, UnOpType,
+        BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, ConstantType, DfNodeType, Expr,
+        InListExpr, LikeExpr, LogOpType, DfReprPlanNode, ArcDfPlanNode, UnOpType,
     },
     properties::{
         column_ref::{
@@ -40,7 +40,7 @@ impl<
         &self,
         children: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
         let (row_cnt, _, _) = Self::cost_tuple(&children[0]);
         let (_, compute_cost, _) = Self::cost_tuple(&children[1]);
@@ -81,15 +81,15 @@ impl<
     /// This is why the function only takes in a single schema.
     pub(super) fn get_filter_selectivity(
         &self,
-        expr_tree: OptRelNodeRef,
+        expr_tree: ArcDfPlanNode,
         schema: &Schema,
         column_refs: &BaseTableColumnRefs,
     ) -> f64 {
         assert!(expr_tree.typ.is_expression());
         match &expr_tree.typ {
-            OptRelNodeTyp::Constant(_) => Self::get_constant_selectivity(expr_tree),
-            OptRelNodeTyp::ColumnRef => unimplemented!("check bool type or else panic"),
-            OptRelNodeTyp::UnOp(un_op_typ) => {
+            DfNodeType::Constant(_) => Self::get_constant_selectivity(expr_tree),
+            DfNodeType::ColumnRef => unimplemented!("check bool type or else panic"),
+            DfNodeType::UnOp(un_op_typ) => {
                 assert!(expr_tree.children.len() == 1);
                 let child = expr_tree.child(0);
                 match un_op_typ {
@@ -101,7 +101,7 @@ impl<
                     ),
                 }
             }
-            OptRelNodeTyp::BinOp(bin_op_typ) => {
+            DfNodeType::BinOp(bin_op_typ) => {
                 assert!(expr_tree.children.len() == 2);
                 let left_child = expr_tree.child(0);
                 let right_child = expr_tree.child(1);
@@ -122,23 +122,23 @@ impl<
                     unreachable!("all BinOpTypes should be true for at least one is_*() function")
                 }
             }
-            OptRelNodeTyp::LogOp(log_op_typ) => {
+            DfNodeType::LogOp(log_op_typ) => {
                 self.get_log_op_selectivity(*log_op_typ, &expr_tree.children, schema, column_refs)
             }
-            OptRelNodeTyp::Func(_) => unimplemented!("check bool type or else panic"),
-            OptRelNodeTyp::SortOrder(_) => {
+            DfNodeType::Func(_) => unimplemented!("check bool type or else panic"),
+            DfNodeType::SortOrder(_) => {
                 panic!("the selectivity of sort order expressions is undefined")
             }
-            OptRelNodeTyp::Between => UNIMPLEMENTED_SEL,
-            OptRelNodeTyp::Cast => unimplemented!("check bool type or else panic"),
-            OptRelNodeTyp::Like => {
+            DfNodeType::Between => UNIMPLEMENTED_SEL,
+            DfNodeType::Cast => unimplemented!("check bool type or else panic"),
+            DfNodeType::Like => {
                 let like_expr = LikeExpr::from_rel_node(expr_tree).unwrap();
                 self.get_like_selectivity(&like_expr, column_refs)
             }
-            OptRelNodeTyp::DataType(_) => {
+            DfNodeType::DataType(_) => {
                 panic!("the selectivity of a data type is not defined")
             }
-            OptRelNodeTyp::InList => {
+            DfNodeType::InList => {
                 let in_list_expr = InListExpr::from_rel_node(expr_tree).unwrap();
                 self.get_in_list_selectivity(&in_list_expr, column_refs)
             }
@@ -148,8 +148,8 @@ impl<
         }
     }
 
-    fn get_constant_selectivity(const_node: OptRelNodeRef) -> f64 {
-        if let OptRelNodeTyp::Constant(const_typ) = const_node.typ {
+    fn get_constant_selectivity(const_node: ArcDfPlanNode) -> f64 {
+        if let DfNodeType::Constant(const_typ) = const_node.typ {
             if matches!(const_typ, ConstantType::Bool) {
                 let value = const_node
                     .as_ref()
@@ -178,7 +178,7 @@ impl<
     fn get_log_op_selectivity(
         &self,
         log_op_typ: LogOpType,
-        children: &[OptRelNodeRef],
+        children: &[ArcDfPlanNode],
         schema: &Schema,
         column_refs: &BaseTableColumnRefs,
     ) -> f64 {
@@ -197,10 +197,10 @@ impl<
     /// This is convenient to avoid repeating the same logic just with "left" and "right" swapped.
     /// The last return value is true when the input node (left) is a ColumnRefExpr.
     fn get_semantic_nodes(
-        left: OptRelNodeRef,
-        right: OptRelNodeRef,
+        left: ArcDfPlanNode,
+        right: ArcDfPlanNode,
         schema: &Schema,
-    ) -> (Vec<ColumnRefExpr>, Vec<Value>, Vec<OptRelNodeRef>, bool) {
+    ) -> (Vec<ColumnRefExpr>, Vec<Value>, Vec<ArcDfPlanNode>, bool) {
         let mut col_ref_exprs = vec![];
         let mut values = vec![];
         let mut non_col_ref_exprs = vec![];
@@ -211,8 +211,8 @@ impl<
         let mut uncasted_right = right;
         loop {
             // println!("loop {}, uncasted_left={:?}, uncasted_right={:?}", Local::now(), uncasted_left, uncasted_right);
-            if uncasted_left.as_ref().typ == OptRelNodeTyp::Cast
-                && uncasted_right.as_ref().typ == OptRelNodeTyp::Cast
+            if uncasted_left.as_ref().typ == DfNodeType::Cast
+                && uncasted_right.as_ref().typ == DfNodeType::Cast
             {
                 let left_cast_expr = CastExpr::from_rel_node(uncasted_left)
                     .expect("we already checked that the type is Cast");
@@ -221,10 +221,10 @@ impl<
                 assert!(left_cast_expr.cast_to() == right_cast_expr.cast_to());
                 uncasted_left = left_cast_expr.child().into_rel_node();
                 uncasted_right = right_cast_expr.child().into_rel_node();
-            } else if uncasted_left.as_ref().typ == OptRelNodeTyp::Cast
-                || uncasted_right.as_ref().typ == OptRelNodeTyp::Cast
+            } else if uncasted_left.as_ref().typ == DfNodeType::Cast
+                || uncasted_right.as_ref().typ == DfNodeType::Cast
             {
-                let is_left_cast = uncasted_left.as_ref().typ == OptRelNodeTyp::Cast;
+                let is_left_cast = uncasted_left.as_ref().typ == DfNodeType::Cast;
                 let (mut cast_node, mut non_cast_node) = if is_left_cast {
                     (uncasted_left, uncasted_right)
                 } else {
@@ -237,7 +237,7 @@ impl<
                 let cast_expr_cast_to = cast_expr.cast_to();
 
                 let should_break = match cast_expr_child.typ {
-                    OptRelNodeTyp::Constant(_) => {
+                    DfNodeType::Constant(_) => {
                         cast_node = ConstantExpr::new(
                             ConstantExpr::from_rel_node(cast_expr_child)
                                 .expect("we already checked that the type is Constant")
@@ -247,7 +247,7 @@ impl<
                         .into_rel_node();
                         false
                     }
-                    OptRelNodeTyp::ColumnRef => {
+                    DfNodeType::ColumnRef => {
                         let col_ref_expr = ColumnRefExpr::from_rel_node(cast_expr_child)
                             .expect("we already checked that the type is ColumnRef");
                         let col_ref_idx = col_ref_expr.index();
@@ -258,7 +258,7 @@ impl<
                             &schema.fields[col_ref_idx].typ.into_data_type();
 
                         match non_cast_node.typ {
-                            OptRelNodeTyp::ColumnRef => {
+                            DfNodeType::ColumnRef => {
                                 // In general, there's no way to remove the Cast here. We can't move the Cast to the
                                 // other ColumnRef because that would lead to an infinite loop. Thus, we just leave the
                                 // cast where it is and break.
@@ -293,14 +293,14 @@ impl<
 
         // Sort nodes into col_ref_exprs, values, and non_col_ref_exprs
         match uncasted_left.as_ref().typ {
-            OptRelNodeTyp::ColumnRef => {
+            DfNodeType::ColumnRef => {
                 is_left_col_ref = true;
                 col_ref_exprs.push(
                     ColumnRefExpr::from_rel_node(uncasted_left)
                         .expect("we already checked that the type is ColumnRef"),
                 );
             }
-            OptRelNodeTyp::Constant(_) => {
+            DfNodeType::Constant(_) => {
                 is_left_col_ref = false;
                 values.push(
                     ConstantExpr::from_rel_node(uncasted_left)
@@ -314,13 +314,13 @@ impl<
             }
         }
         match uncasted_right.as_ref().typ {
-            OptRelNodeTyp::ColumnRef => {
+            DfNodeType::ColumnRef => {
                 col_ref_exprs.push(
                     ColumnRefExpr::from_rel_node(uncasted_right)
                         .expect("we already checked that the type is ColumnRef"),
                 );
             }
-            OptRelNodeTyp::Constant(_) => values.push(
+            DfNodeType::Constant(_) => values.push(
                 ConstantExpr::from_rel_node(uncasted_right)
                     .expect("we already checked that the type is Constant")
                     .value(),
@@ -338,8 +338,8 @@ impl<
     fn get_comp_op_selectivity(
         &self,
         comp_bin_op_typ: BinOpType,
-        left: OptRelNodeRef,
-        right: OptRelNodeRef,
+        left: ArcDfPlanNode,
+        right: ArcDfPlanNode,
         schema: &Schema,
         column_refs: &BaseTableColumnRefs,
     ) -> f64 {
@@ -399,11 +399,11 @@ impl<
                     );
 
                     match non_col_ref_expr.as_ref().typ {
-                        OptRelNodeTyp::BinOp(_) => {
+                        DfNodeType::BinOp(_) => {
                             Self::get_default_comparison_op_selectivity(comp_bin_op_typ)
                         }
-                        OptRelNodeTyp::Cast => UNIMPLEMENTED_SEL,
-                        OptRelNodeTyp::Constant(_) => unreachable!(
+                        DfNodeType::Cast => UNIMPLEMENTED_SEL,
+                        DfNodeType::Constant(_) => unreachable!(
                             "we should have handled this in the values.len() == 1 branch"
                         ),
                         _ => unimplemented!(
@@ -569,7 +569,7 @@ impl<
 #[cfg(test)]
 mod tests {
     use arrow_schema::DataType;
-    use optd_core::node::Value;
+    use optd_core::nodes::Value;
 
     use crate::{
         cost::base_cost::{tests::*, DEFAULT_EQ_SEL},

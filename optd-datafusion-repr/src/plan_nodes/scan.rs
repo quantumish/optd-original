@@ -3,26 +3,26 @@ use std::sync::Arc;
 use pretty_xmlish::Pretty;
 
 use crate::explain::Insertable;
-use optd_core::node::{PlanNode, PlanNodeMetaMap, Value};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap, PredNode, Value};
 
-use super::{replace_typ, DfPlanNode, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use super::{ArcDfPlanNode, ConstantExpr, DfNodeType, DfPlanNode, DfPredType, DfReprPlanNode};
 
 #[derive(Clone, Debug)]
-pub struct LogicalScan(pub DfPlanNode);
+pub struct LogicalScan(pub ArcDfPlanNode);
 
-impl OptRelNode for LogicalScan {
-    fn into_rel_node(self) -> OptRelNodeRef {
-        self.0.into_rel_node()
+impl DfReprPlanNode for LogicalScan {
+    fn into_plan_node(self) -> ArcDfPlanNode {
+        self.0
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if rel_node.typ != OptRelNodeTyp::Scan {
+    fn from_plan_node(plan_node: ArcDfPlanNode) -> Option<Self> {
+        if plan_node.typ != DfNodeType::Scan {
             return None;
         }
-        DfPlanNode::from_rel_node(rel_node).map(Self)
+        Some(Self(plan_node))
     }
 
-    fn dispatch_explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::childless_record(
             "LogicalScan",
             vec![("table", self.table().to_string().into())],
@@ -32,37 +32,44 @@ impl OptRelNode for LogicalScan {
 
 impl LogicalScan {
     pub fn new(table: String) -> LogicalScan {
-        LogicalScan(DfPlanNode(
-            PlanNode {
-                typ: OptRelNodeTyp::Scan,
+        LogicalScan(
+            DfPlanNode {
+                typ: DfNodeType::Scan,
                 children: vec![],
-                data: Some(Value::String(table.into())),
+                predicates: vec![ConstantExpr::string(table).into()],
             }
             .into(),
-        ))
+        )
     }
 
     pub fn table(&self) -> Arc<str> {
-        self.clone().into_rel_node().data.as_ref().unwrap().as_str()
+        self.0
+            .predicates
+            .first()
+            .unwrap()
+            .data
+            .as_ref()
+            .unwrap()
+            .as_str()
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct PhysicalScan(pub DfPlanNode);
+pub struct PhysicalScan(pub ArcDfPlanNode);
 
-impl OptRelNode for PhysicalScan {
-    fn into_rel_node(self) -> OptRelNodeRef {
-        replace_typ(self.0.into_rel_node(), OptRelNodeTyp::PhysicalScan)
+impl DfReprPlanNode for PhysicalScan {
+    fn into_plan_node(self) -> ArcDfPlanNode {
+        self.0
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if rel_node.typ != OptRelNodeTyp::PhysicalScan {
+    fn from_plan_node(plan_node: ArcDfPlanNode) -> Option<Self> {
+        if plan_node.typ != DfNodeType::PhysicalScan {
             return None;
         }
-        DfPlanNode::from_rel_node(rel_node).map(Self)
+        Some(Self(plan_node))
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         let mut fields = vec![("table", self.table().to_string().into())];
         if let Some(meta_map) = meta_map {
             fields = fields.with_meta(self.0.get_meta(meta_map));
@@ -72,11 +79,9 @@ impl OptRelNode for PhysicalScan {
 }
 
 impl PhysicalScan {
-    pub fn new(node: DfPlanNode) -> PhysicalScan {
-        Self(node)
-    }
-
     pub fn table(&self) -> Arc<str> {
-        self.clone().into_rel_node().data.as_ref().unwrap().as_str()
+        ConstantExpr::from_plan_node(self.0.predicates.first().unwrap())
+            .value()
+            .as_str()
     }
 }

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{node::PlanNode, optimizer::Optimizer};
+use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
-use crate::plan_nodes::{DfPlanNode, ExprList, LogicalProjection, OptRelNode, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, DfReprPlanNode, ExprList, LogicalProjection, DfReprPlanNode};
 use crate::rules::macros::define_rule;
 
 use super::project_transpose_common::ProjectionMapping;
@@ -17,14 +17,14 @@ define_rule!(
 );
 
 fn apply_projection_merge(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     ProjectMergeRulePicks {
         child,
         exprs1,
         exprs2,
     }: ProjectMergeRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
-    let child = DfPlanNode::from_group(child.into());
+) -> Vec<PlanNode<DfNodeType>> {
+    let child = DfReprPlanNode::from_group(child.into());
     let exprs1 = ExprList::from_rel_node(exprs1.into()).unwrap();
     let exprs2 = ExprList::from_rel_node(exprs2.into()).unwrap();
 
@@ -49,7 +49,7 @@ mod tests {
 
     use crate::{
         plan_nodes::{
-            ColumnRefExpr, ExprList, LogicalProjection, LogicalScan, OptRelNode, OptRelNodeTyp,
+            ColumnRefExpr, DfNodeType, ExprList, LogicalProjection, LogicalScan, DfReprPlanNode,
         },
         rules::ProjectMergeRule,
         testing::new_test_optimizer,
@@ -84,9 +84,9 @@ mod tests {
         ])
         .into_rel_node();
 
-        assert_eq!(plan.typ, OptRelNodeTyp::Projection);
+        assert_eq!(plan.typ, DfNodeType::Projection);
         assert_eq!(plan.child(1), res_proj_exprs);
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Scan));
+        assert!(matches!(plan.child(0).typ, DfNodeType::Scan));
     }
 
     #[test]
@@ -130,9 +130,9 @@ mod tests {
         ])
         .into_rel_node();
 
-        assert_eq!(plan.typ, OptRelNodeTyp::Projection);
+        assert_eq!(plan.typ, DfNodeType::Projection);
         assert_eq!(plan.child(1), res_proj_exprs);
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Scan));
+        assert!(matches!(plan.child(0).typ, DfNodeType::Scan));
     }
 
     #[test]
@@ -184,8 +184,8 @@ mod tests {
         ])
         .into_rel_node();
 
-        assert_eq!(plan.typ, OptRelNodeTyp::Projection);
+        assert_eq!(plan.typ, DfNodeType::Projection);
         assert_eq!(plan.child(1), res_proj_exprs);
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Scan));
+        assert!(matches!(plan.child(0).typ, DfNodeType::Scan));
     }
 }

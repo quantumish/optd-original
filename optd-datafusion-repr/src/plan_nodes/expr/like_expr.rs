@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use optd_core::node::{PlanNode, PlanNodeMetaMap, Value};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 #[derive(Clone, Debug)]
 pub struct LikeExpr(pub Expr);
@@ -15,7 +15,7 @@ impl LikeExpr {
         let case_insensitive = if case_insensitive { 1 } else { 0 };
         LikeExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::Like,
+                typ: DfNodeType::Like,
                 children: vec![expr.into_rel_node(), pattern.into_rel_node()],
                 data: Some(Value::Serialized(Arc::new([negated, case_insensitive]))),
             }
@@ -47,13 +47,13 @@ impl LikeExpr {
     }
 }
 
-impl OptRelNode for LikeExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for LikeExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if !matches!(rel_node.typ, OptRelNodeTyp::Like) {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if !matches!(rel_node.typ, DfNodeType::Like) {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

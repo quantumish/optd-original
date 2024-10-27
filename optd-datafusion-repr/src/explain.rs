@@ -1,4 +1,4 @@
-use optd_core::node::PlanNodeMeta;
+use optd_core::nodes::PlanNodeMeta;
 use pretty_xmlish::Pretty;
 
 use crate::cost::{COMPUTE_COST, IO_COST, ROW_COUNT};

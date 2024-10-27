@@ -6,7 +6,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     cost::base_cost::stats::{Distribution, MostCommonValues},
-    plan_nodes::{ConstantExpr, ConstantType, OptRelNode, OptRelNodeTyp},
+    plan_nodes::{ConstantExpr, ConstantType, DfReprPlanNode, DfNodeType},
 };
 
 use super::{OptCostModel, DEFAULT_UNK_SEL};
@@ -19,7 +19,7 @@ impl<
     pub(super) fn get_limit_cost(
         children: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
         let (row_cnt, compute_cost, _) = Self::cost_tuple(&children[0]);
         let row_cnt = if let (Some(context), Some(optimizer)) = (context, optimizer) {
@@ -33,7 +33,7 @@ impl<
             assert!(
                 matches!(
                     fetch_expr.typ,
-                    OptRelNodeTyp::Constant(ConstantType::UInt64)
+                    DfNodeType::Constant(ConstantType::UInt64)
                 ),
                 "fetch type can only be UInt64"
             );

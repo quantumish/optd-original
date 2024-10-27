@@ -1,9 +1,9 @@
 use arrow_schema::{DataType, IntervalUnit};
-use optd_core::node::{PlanNode, PlanNodeMetaMap, SerializableOrderedF64, Value};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap, SerializableOrderedF64, Value};
 use pretty_xmlish::Pretty;
 use serde::{Deserialize, Serialize};
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{ArcDfPlanNode, DfNodeType, DfReprPlanNode, Expr};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum ConstantType {
@@ -21,7 +21,7 @@ pub enum ConstantType {
     Date,
     IntervalMonthDateNano,
     Decimal,
-    Any,
+    Binary,
 }
 
 impl ConstantType {
@@ -48,6 +48,7 @@ impl ConstantType {
     // for decimal128, the precision is lost
     pub fn from_data_type(data_type: DataType) -> Self {
         match data_type {
+            DataType::Binary => ConstantType::Binary,
             DataType::Boolean => ConstantType::Bool,
             DataType::UInt8 => ConstantType::UInt8,
             DataType::UInt16 => ConstantType::UInt16,
@@ -68,7 +69,7 @@ impl ConstantType {
 
     pub fn into_data_type(&self) -> DataType {
         match self {
-            ConstantType::Any => unimplemented!(),
+            ConstantType::Binary => DataType::Binary,
             ConstantType::Bool => DataType::Boolean,
             ConstantType::UInt8 => DataType::UInt8,
             ConstantType::UInt16 => DataType::UInt16,
@@ -99,7 +100,7 @@ impl ConstantExpr {
     pub fn new_with_type(value: Value, typ: ConstantType) -> Self {
         ConstantExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::Constant(typ),
+                typ: DfNodeType::Constant(typ),
                 children: vec![],
                 data: Some(value),
             }
@@ -172,13 +173,17 @@ impl ConstantExpr {
         )
     }
 
+    pub fn serialized(value: Arc<[u8]>) -> Self {
+        Self::new_with_type(Value::Serialized(value), ConstantType::Binary)
+    }
+
     /// Gets the constant value.
     pub fn value(&self) -> Value {
         self.0 .0.data.clone().unwrap()
     }
 
     pub fn constant_type(&self) -> ConstantType {
-        if let OptRelNodeTyp::Constant(typ) = self.0.typ() {
+        if let DfNodeType::Constant(typ) = self.0.typ() {
             typ
         } else {
             panic!("not a constant")
@@ -186,13 +191,13 @@ impl ConstantExpr {
     }
 }
 
-impl OptRelNode for ConstantExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for ConstantExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if let OptRelNodeTyp::Constant(_) = rel_node.typ {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if let DfNodeType::Constant(_) = rel_node.typ {
             return Expr::from_rel_node(rel_node).map(Self);
         }
         None

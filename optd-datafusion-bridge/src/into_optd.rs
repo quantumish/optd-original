@@ -5,12 +5,12 @@ use datafusion::{
     scalar::ScalarValue,
 };
 use datafusion_expr::Subquery;
-use optd_core::node::PlanNode;
+use optd_core::nodes::PlanNode;
 use optd_datafusion_repr::plan_nodes::{
-    BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, DfPlanNode, Expr,
-    ExprList, ExternColumnRefExpr, FuncExpr, FuncType, InListExpr, JoinType, LikeExpr, LogOpExpr,
-    LogOpType, LogicalAgg, LogicalEmptyRelation, LogicalFilter, LogicalJoin, LogicalLimit,
-    LogicalProjection, LogicalScan, LogicalSort, OptRelNode, OptRelNodeRef, OptRelNodeTyp,
+    BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, DfNodeType,
+    DfReprPlanNode, Expr, ExprList, ExternColumnRefExpr, FuncExpr, FuncType, InListExpr, JoinType,
+    LikeExpr, LogOpExpr, LogOpType, LogicalAgg, LogicalEmptyRelation, LogicalFilter, LogicalJoin,
+    LogicalLimit, LogicalProjection, LogicalScan, LogicalSort, DfReprPlanNode, ArcDfPlanNode,
     RawDependentJoin, SortOrderExpr, SortOrderType,
 };
 use optd_datafusion_repr::properties::schema::Schema as OptdSchema;
@@ -21,9 +21,9 @@ impl OptdPlanContext<'_> {
     fn subqueries_to_dependent_joins(
         &mut self,
         subqueries: &[&Subquery],
-        input: DfPlanNode,
+        input: DfReprPlanNode,
         input_schema: &DFSchema,
-    ) -> Result<DfPlanNode> {
+    ) -> Result<DfReprPlanNode> {
         let mut node = input;
         for Subquery {
             subquery,
@@ -54,12 +54,12 @@ impl OptdPlanContext<'_> {
                 ),
                 JoinType::Cross,
             );
-            node = DfPlanNode::from_rel_node(dep_join.into_rel_node()).unwrap();
+            node = DfReprPlanNode::from_rel_node(dep_join.into_rel_node()).unwrap();
         }
         Ok(node)
     }
 
-    fn conv_into_optd_table_scan(&mut self, node: &logical_plan::TableScan) -> Result<DfPlanNode> {
+    fn conv_into_optd_table_scan(&mut self, node: &logical_plan::TableScan) -> Result<DfReprPlanNode> {
         let table_name = node.table_name.to_string();
         if node.fetch.is_some() {
             bail!("fetch")
@@ -374,7 +374,7 @@ impl OptdPlanContext<'_> {
     }
 
     fn add_column_offset(offset: usize, expr: Expr) -> Expr {
-        if expr.typ() == OptRelNodeTyp::ColumnRef {
+        if expr.typ() == DfNodeType::ColumnRef {
             let expr = ColumnRefExpr::from_rel_node(expr.into_rel_node()).unwrap();
             return ColumnRefExpr::new(expr.index() + offset).into_expr();
         }
@@ -512,7 +512,7 @@ impl OptdPlanContext<'_> {
         &mut self,
         node: &LogicalPlan,
         dep_ctx: Option<&DFSchema>,
-    ) -> Result<DfPlanNode> {
+    ) -> Result<DfReprPlanNode> {
         let node = match node {
             LogicalPlan::TableScan(node) => self.conv_into_optd_table_scan(node)?.into_plan_node(),
             LogicalPlan::Projection(node) => self
@@ -544,7 +544,7 @@ impl OptdPlanContext<'_> {
         Ok(node)
     }
 
-    pub fn conv_into_optd(&mut self, root_rel: &LogicalPlan) -> Result<OptRelNodeRef> {
+    pub fn conv_into_optd(&mut self, root_rel: &LogicalPlan) -> Result<ArcDfPlanNode> {
         let res = self.conv_into_optd_plan_node(root_rel, None)?;
         Ok(res.into_rel_node())
     }

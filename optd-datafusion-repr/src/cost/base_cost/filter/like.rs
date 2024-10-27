@@ -9,7 +9,7 @@ use crate::{
         },
         OptCostModel,
     },
-    plan_nodes::{ColumnRefExpr, ConstantExpr, LikeExpr, OptRelNode, OptRelNodeTyp},
+    plan_nodes::{ColumnRefExpr, ConstantExpr, DfNodeType, LikeExpr, DfReprPlanNode},
     properties::column_ref::{BaseTableColumnRef, BaseTableColumnRefs, ColumnRef},
 };
 
@@ -45,13 +45,13 @@ impl<
         let child = like_expr.child();
 
         // Check child is a column ref.
-        if !matches!(child.typ(), OptRelNodeTyp::ColumnRef) {
+        if !matches!(child.typ(), DfNodeType::ColumnRef) {
             return UNIMPLEMENTED_SEL;
         }
 
         // Check pattern is a constant.
         let pattern = like_expr.pattern();
-        if !matches!(pattern.typ(), OptRelNodeTyp::Constant(_)) {
+        if !matches!(pattern.typ(), DfNodeType::Constant(_)) {
             return UNIMPLEMENTED_SEL;
         }
 
@@ -114,7 +114,7 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use optd_core::node::Value;
+    use optd_core::nodes::Value;
 
     use crate::{
         cost::base_cost::{

@@ -1,8 +1,8 @@
 use arrow_schema::DataType;
-use optd_core::node::{PlanNode, PlanNodeMetaMap};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 #[derive(Clone, Debug)]
 pub struct DataTypeExpr(pub Expr);
@@ -11,7 +11,7 @@ impl DataTypeExpr {
     pub fn new(typ: DataType) -> Self {
         DataTypeExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::DataType(typ),
+                typ: DfNodeType::DataType(typ),
                 children: vec![],
                 data: None,
             }
@@ -20,7 +20,7 @@ impl DataTypeExpr {
     }
 
     pub fn data_type(&self) -> DataType {
-        if let OptRelNodeTyp::DataType(data_type) = self.0.typ() {
+        if let DfNodeType::DataType(data_type) = self.0.typ() {
             data_type
         } else {
             panic!("not a data type")
@@ -28,13 +28,13 @@ impl DataTypeExpr {
     }
 }
 
-impl OptRelNode for DataTypeExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for DataTypeExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if !matches!(rel_node.typ, OptRelNodeTyp::DataType(_)) {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if !matches!(rel_node.typ, DfNodeType::DataType(_)) {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

@@ -205,9 +205,9 @@ impl Value {
 // better typing on transformation rules and impl rules
 
 pub trait NodeType:
-    PartialEq + Eq + Hash + Clone + Copy + 'static + Display + Debug + Send + Sync
+    PartialEq + Eq + Hash + Clone + 'static + Display + Debug + Send + Sync
 {
-    type PredType: PartialEq + Eq + Hash + Copy + Clone + 'static + Display + Debug + Send + Sync;
+    type PredType: PartialEq + Eq + Hash + Clone + 'static + Display + Debug + Send + Sync;
 
     fn is_logical(&self) -> bool;
 }
@@ -286,6 +286,8 @@ pub struct PredNode<T: NodeType> {
     pub typ: T::PredType,
     /// Child predicate nodes, always materialized
     pub children: Vec<ArcPredNode<T>>,
+    /// Data associated with the predicate, if any
+    pub data: Option<Value>,
 }
 
 /// Metadata for a rel node.

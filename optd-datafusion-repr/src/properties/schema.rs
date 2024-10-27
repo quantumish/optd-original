@@ -4,7 +4,7 @@ use std::sync::Arc;
 use optd_core::property::PropertyBuilder;
 
 use super::DEFAULT_NAME;
-use crate::plan_nodes::{ConstantType, EmptyRelationData, FuncType, OptRelNodeTyp};
+use crate::plan_nodes::{ConstantType, DfNodeType, EmptyRelationData, FuncType};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Field {
@@ -18,7 +18,7 @@ impl Field {
     fn placeholder() -> Self {
         Self {
             name: DEFAULT_NAME.to_string(),
-            typ: ConstantType::Any,
+            typ: ConstantType::Binary,
             nullable: true,
         }
     }
@@ -57,35 +57,35 @@ impl SchemaPropertyBuilder {
     }
 }
 
-impl PropertyBuilder<OptRelNodeTyp> for SchemaPropertyBuilder {
+impl PropertyBuilder<DfNodeType> for SchemaPropertyBuilder {
     type Prop = Schema;
 
     fn derive(
         &self,
-        typ: OptRelNodeTyp,
-        data: Option<optd_core::node::Value>,
+        typ: DfNodeType,
+        data: Option<optd_core::nodes::Value>,
         children: &[&Self::Prop],
     ) -> Self::Prop {
         match typ {
-            OptRelNodeTyp::Scan => {
+            DfNodeType::Scan => {
                 let name = data.unwrap().as_str().to_string();
                 self.catalog.get(&name)
             }
-            OptRelNodeTyp::Projection => children[1].clone(),
-            OptRelNodeTyp::Filter => children[0].clone(),
-            OptRelNodeTyp::DepJoin(_) | OptRelNodeTyp::Join(_) => {
+            DfNodeType::Projection => children[1].clone(),
+            DfNodeType::Filter => children[0].clone(),
+            DfNodeType::DepJoin(_) | DfNodeType::Join(_) => {
                 let mut schema = children[0].clone();
                 let schema2 = children[1].clone();
                 schema.fields.extend(schema2.fields);
                 schema
             }
-            OptRelNodeTyp::EmptyRelation => {
+            DfNodeType::EmptyRelation => {
                 let data = data.unwrap().as_slice();
                 let empty_relation_data: EmptyRelationData =
                     bincode::deserialize(data.as_ref()).unwrap();
                 empty_relation_data.schema
             }
-            OptRelNodeTyp::ColumnRef => {
+            DfNodeType::ColumnRef => {
                 let data_typ = ConstantType::get_data_type_from_value(&data.unwrap());
                 Schema {
                     fields: vec![Field {
@@ -95,23 +95,23 @@ impl PropertyBuilder<OptRelNodeTyp> for SchemaPropertyBuilder {
                     }],
                 }
             }
-            OptRelNodeTyp::List => {
+            DfNodeType::List => {
                 let mut fields = vec![];
                 for child in children {
                     fields.extend(child.fields.clone());
                 }
                 Schema { fields }
             }
-            OptRelNodeTyp::LogOp(_) => Schema {
+            DfNodeType::LogOp(_) => Schema {
                 fields: vec![Field::placeholder(); children.len()],
             },
-            OptRelNodeTyp::Agg => {
+            DfNodeType::Agg => {
                 let mut group_by_schema = children[1].clone();
                 let agg_schema = children[2].clone();
                 group_by_schema.fields.extend(agg_schema.fields);
                 group_by_schema
             }
-            OptRelNodeTyp::Cast => Schema {
+            DfNodeType::Cast => Schema {
                 fields: children[0]
                     .fields
                     .iter()
@@ -121,7 +121,7 @@ impl PropertyBuilder<OptRelNodeTyp> for SchemaPropertyBuilder {
                     })
                     .collect(),
             },
-            OptRelNodeTyp::DataType(data_type) => Schema {
+            DfNodeType::DataType(data_type) => Schema {
                 fields: vec![Field {
                     // name and nullable are just placeholders since
                     // they'll be overwritten by Cast
@@ -130,7 +130,7 @@ impl PropertyBuilder<OptRelNodeTyp> for SchemaPropertyBuilder {
                     nullable: true,
                 }],
             },
-            OptRelNodeTyp::Func(FuncType::Agg(_)) => Schema {
+            DfNodeType::Func(FuncType::Agg(_)) => Schema {
                 // TODO: this is just a place holder now.
                 // The real type should be the column type.
                 fields: vec![Field::placeholder()],

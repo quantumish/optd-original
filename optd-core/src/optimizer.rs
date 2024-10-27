@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::{
-    node::{NodeType, ArcPlanNode},
+    nodes::{ArcPlanNode, NodeType},
     property::PropertyBuilder,
 };
 

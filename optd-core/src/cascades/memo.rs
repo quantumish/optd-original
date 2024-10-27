@@ -13,7 +13,7 @@ use tracing::trace;
 
 use crate::{
     cost::Cost,
-    node::{
+    nodes::{
         ArcPlanNode, ArcPredNode, NodeType, PlanNode, PlanNodeMeta, PlanNodeMetaMap,
         PlanNodeOrGroup, PredNode, Value,
     },
@@ -60,6 +60,7 @@ impl<T: NodeType> std::fmt::Display for MemoPlanNode<T> {
 pub struct MemoPredNode<T: NodeType> {
     pub typ: T::PredType,
     pub children: Vec<PredId>,
+    pub data: Option<Value>,
 }
 
 impl<T: NodeType> std::fmt::Display for MemoPredNode<T> {
@@ -197,12 +198,13 @@ impl<T: NodeType> Memo<T> {
         let children_pred_ids = pred_node
             .children
             .iter()
-            .map(|child| self.get_pred_expr_info(pred_node.clone()))
+            .map(|child| self.get_pred_expr_info(child.clone()))
             .collect::<Vec<_>>();
 
         let memo_node = MemoPredNode {
-            typ: pred_node.typ,
+            typ: pred_node.typ.clone(),
             children: children_pred_ids,
+            data: pred_node.data.clone(),
         };
         let Some(&pred_id) = self.pred_node_to_pred_id.get(&memo_node) else {
             unreachable!("not found {}", memo_node)
@@ -226,7 +228,7 @@ impl<T: NodeType> Memo<T> {
             .map(|pred| self.get_pred_expr_info(pred.clone()))
             .collect::<Vec<_>>();
         let memo_node = MemoPlanNode {
-            typ: plan_node.typ,
+            typ: plan_node.typ.clone(),
             children: children_group_ids,
             predicates: pred_group_ids,
         };
@@ -269,8 +271,9 @@ impl<T: NodeType> Memo<T> {
             .collect::<Vec<_>>();
 
         let memo_node = MemoPredNode {
-            typ: pred_node.typ,
+            typ: pred_node.typ.clone(),
             children: children_pred_ids,
+            data: pred_node.data.clone(),
         };
         if let Some(&pred_id) = self.pred_node_to_pred_id.get(&memo_node) {
             return pred_id;
@@ -539,7 +542,7 @@ impl<T: NodeType> Memo<T> {
                     predicates.push(self.get_pred_from_pred_id(*pred));
                 }
                 let node = Arc::new(PlanNode {
-                    typ: expr.typ,
+                    typ: expr.typ.clone(),
                     children,
                     predicates,
                 });
@@ -568,6 +571,7 @@ impl<T: NodeType> Memo<T> {
         Arc::new(PredNode {
             typ: pred_node.typ,
             children,
+            data: pred_node.data.clone(),
         })
     }
 

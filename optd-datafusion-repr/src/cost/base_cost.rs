@@ -5,14 +5,14 @@ mod limit;
 pub(crate) mod stats;
 
 use crate::{
-    plan_nodes::OptRelNodeTyp,
+    plan_nodes::DfNodeType,
     properties::column_ref::{BaseTableColumnRef, ColumnRef},
 };
 use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, RelNodeContext},
     cost::{Cost, CostModel},
-    node::{NodeType, PlanNode, Value},
+    nodes::{NodeType, PlanNode, Value},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -98,7 +98,7 @@ impl<
 impl<
         M: MostCommonValues + Serialize + DeserializeOwned,
         D: Distribution + Serialize + DeserializeOwned,
-    > CostModel<OptRelNodeTyp> for OptCostModel<M, D>
+    > CostModel<DfNodeType> for OptCostModel<M, D>
 {
     fn explain(&self, cost: &Cost) -> String {
         format!(
@@ -127,14 +127,14 @@ impl<
 
     fn compute_cost(
         &self,
-        node: &OptRelNodeTyp,
+        node: &DfNodeType,
         data: &Option<Value>,
         children: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
         match node {
-            OptRelNodeTyp::PhysicalScan => {
+            DfNodeType::PhysicalScan => {
                 let table = data.as_ref().unwrap().as_str();
                 let row_cnt = self
                     .per_table_stats_map
@@ -143,26 +143,26 @@ impl<
                     .unwrap_or(1) as f64;
                 Self::cost(row_cnt, 0.0, row_cnt)
             }
-            OptRelNodeTyp::PhysicalEmptyRelation => Self::cost(0.5, 0.01, 0.0),
-            OptRelNodeTyp::PhysicalLimit => Self::get_limit_cost(children, context, optimizer),
-            OptRelNodeTyp::PhysicalFilter => self.get_filter_cost(children, context, optimizer),
-            OptRelNodeTyp::PhysicalNestedLoopJoin(join_typ) => {
+            DfNodeType::PhysicalEmptyRelation => Self::cost(0.5, 0.01, 0.0),
+            DfNodeType::PhysicalLimit => Self::get_limit_cost(children, context, optimizer),
+            DfNodeType::PhysicalFilter => self.get_filter_cost(children, context, optimizer),
+            DfNodeType::PhysicalNestedLoopJoin(join_typ) => {
                 self.get_nlj_cost(*join_typ, children, context, optimizer)
             }
-            OptRelNodeTyp::PhysicalProjection => {
+            DfNodeType::PhysicalProjection => {
                 let (row_cnt, _, _) = Self::cost_tuple(&children[0]);
                 let (_, compute_cost, _) = Self::cost_tuple(&children[1]);
                 Self::cost(row_cnt, compute_cost * row_cnt, 0.0)
             }
-            OptRelNodeTyp::PhysicalHashJoin(join_typ) => {
+            DfNodeType::PhysicalHashJoin(join_typ) => {
                 self.get_hash_join_cost(*join_typ, children, context, optimizer)
             }
-            OptRelNodeTyp::PhysicalSort => {
+            DfNodeType::PhysicalSort => {
                 let (row_cnt, _, _) = Self::cost_tuple(&children[0]);
                 Self::cost(row_cnt, row_cnt * row_cnt.ln_1p().max(1.0), 0.0)
             }
-            OptRelNodeTyp::PhysicalAgg => self.get_agg_cost(children, context, optimizer),
-            OptRelNodeTyp::List => {
+            DfNodeType::PhysicalAgg => self.get_agg_cost(children, context, optimizer),
+            DfNodeType::List => {
                 let compute_cost = children
                     .iter()
                     .map(|child| {
@@ -172,7 +172,7 @@ impl<
                     .sum::<f64>();
                 Self::cost(1.0, compute_cost + 0.01, 0.0)
             }
-            OptRelNodeTyp::ColumnRef => Self::cost(1.0, 0.01, 0.0),
+            DfNodeType::ColumnRef => Self::cost(1.0, 0.01, 0.0),
             _ if node.is_expression() => {
                 let compute_cost = children
                     .iter()
@@ -187,7 +187,7 @@ impl<
         }
     }
 
-    fn compute_plan_node_cost(&self, node: &PlanNode<OptRelNodeTyp>) -> Cost {
+    fn compute_plan_node_cost(&self, node: &PlanNode<DfNodeType>) -> Cost {
         let mut cost = self.zero();
         let top = compute_plan_node_cost(self, node, &mut cost);
         cost.0[ROW_COUNT] = top.0[ROW_COUNT];
@@ -235,7 +235,7 @@ impl<
 mod tests {
     use arrow_schema::DataType;
     use itertools::Itertools;
-    use optd_core::node::Value;
+    use optd_core::nodes::Value;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
 
@@ -243,7 +243,7 @@ mod tests {
         cost::base_cost::stats::*,
         plan_nodes::{
             BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, Expr, ExprList,
-            InListExpr, LikeExpr, LogOpExpr, LogOpType, OptRelNode, OptRelNodeRef, UnOpExpr,
+            InListExpr, LikeExpr, LogOpExpr, LogOpType, DfReprPlanNode, ArcDfPlanNode, UnOpExpr,
             UnOpType,
         },
     };
@@ -454,17 +454,17 @@ mod tests {
         )
     }
 
-    pub fn col_ref(idx: u64) -> OptRelNodeRef {
+    pub fn col_ref(idx: u64) -> ArcDfPlanNode {
         // this conversion is always safe because idx was originally a usize
         let idx_as_usize = idx as usize;
         ColumnRefExpr::new(idx_as_usize).into_rel_node()
     }
 
-    pub fn cnst(value: Value) -> OptRelNodeRef {
+    pub fn cnst(value: Value) -> ArcDfPlanNode {
         ConstantExpr::new(value).into_rel_node()
     }
 
-    pub fn cast(child: OptRelNodeRef, cast_type: DataType) -> OptRelNodeRef {
+    pub fn cast(child: ArcDfPlanNode, cast_type: DataType) -> ArcDfPlanNode {
         CastExpr::new(
             Expr::from_rel_node(child).expect("child should be an Expr"),
             cast_type,
@@ -472,7 +472,7 @@ mod tests {
         .into_rel_node()
     }
 
-    pub fn bin_op(op_type: BinOpType, left: OptRelNodeRef, right: OptRelNodeRef) -> OptRelNodeRef {
+    pub fn bin_op(op_type: BinOpType, left: ArcDfPlanNode, right: ArcDfPlanNode) -> ArcDfPlanNode {
         BinOpExpr::new(
             Expr::from_rel_node(left).expect("left should be an Expr"),
             Expr::from_rel_node(right).expect("right should be an Expr"),
@@ -481,7 +481,7 @@ mod tests {
         .into_rel_node()
     }
 
-    pub fn log_op(op_type: LogOpType, children: Vec<OptRelNodeRef>) -> OptRelNodeRef {
+    pub fn log_op(op_type: LogOpType, children: Vec<ArcDfPlanNode>) -> ArcDfPlanNode {
         LogOpExpr::new(
             op_type,
             ExprList::new(
@@ -496,7 +496,7 @@ mod tests {
         .into_rel_node()
     }
 
-    pub fn un_op(op_type: UnOpType, child: OptRelNodeRef) -> OptRelNodeRef {
+    pub fn un_op(op_type: UnOpType, child: ArcDfPlanNode) -> ArcDfPlanNode {
         UnOpExpr::new(
             Expr::from_rel_node(child).expect("child should be an Expr"),
             op_type,

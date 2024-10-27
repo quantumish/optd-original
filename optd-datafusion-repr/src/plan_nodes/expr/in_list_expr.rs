@@ -1,7 +1,7 @@
-use optd_core::node::{PlanNode, PlanNodeMetaMap, Value};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 use super::ExprList;
 
@@ -12,7 +12,7 @@ impl InListExpr {
     pub fn new(expr: Expr, list: ExprList, negated: bool) -> Self {
         InListExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::InList,
+                typ: DfNodeType::InList,
                 children: vec![expr.into_rel_node(), list.into_rel_node()],
                 data: Some(Value::Bool(negated)),
             }
@@ -34,13 +34,13 @@ impl InListExpr {
     }
 }
 
-impl OptRelNode for InListExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for InListExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if !matches!(rel_node.typ, OptRelNodeTyp::InList) {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if !matches!(rel_node.typ, DfNodeType::InList) {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

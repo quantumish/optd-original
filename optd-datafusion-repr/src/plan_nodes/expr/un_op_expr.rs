@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
-use optd_core::node::{PlanNode, PlanNodeMetaMap};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UnOpType {
@@ -24,7 +24,7 @@ impl UnOpExpr {
     pub fn new(child: Expr, op_type: UnOpType) -> Self {
         UnOpExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::UnOp(op_type),
+                typ: DfNodeType::UnOp(op_type),
                 children: vec![child.into_rel_node()],
                 data: None,
             }
@@ -37,7 +37,7 @@ impl UnOpExpr {
     }
 
     pub fn op_type(&self) -> UnOpType {
-        if let OptRelNodeTyp::UnOp(op_type) = self.clone().into_rel_node().typ {
+        if let DfNodeType::UnOp(op_type) = self.clone().into_rel_node().typ {
             op_type
         } else {
             panic!("not a un op")
@@ -45,13 +45,13 @@ impl UnOpExpr {
     }
 }
 
-impl OptRelNode for UnOpExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for UnOpExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if !matches!(rel_node.typ, OptRelNodeTyp::UnOp(_)) {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if !matches!(rel_node.typ, DfNodeType::UnOp(_)) {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

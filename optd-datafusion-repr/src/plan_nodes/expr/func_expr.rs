@@ -1,7 +1,7 @@
-use optd_core::node::{PlanNode, PlanNodeMetaMap};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 use super::ExprList;
 
@@ -35,7 +35,7 @@ impl FuncExpr {
     pub fn new(func_id: FuncType, argv: ExprList) -> Self {
         FuncExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::Func(func_id),
+                typ: DfNodeType::Func(func_id),
                 children: vec![argv.into_rel_node()],
                 data: None,
             }
@@ -55,7 +55,7 @@ impl FuncExpr {
 
     /// Gets the function id.
     pub fn func(&self) -> FuncType {
-        if let OptRelNodeTyp::Func(func_id) = &self.clone().into_rel_node().typ {
+        if let DfNodeType::Func(func_id) = &self.clone().into_rel_node().typ {
             func_id.clone()
         } else {
             panic!("not a function")
@@ -63,13 +63,13 @@ impl FuncExpr {
     }
 }
 
-impl OptRelNode for FuncExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for FuncExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if !matches!(rel_node.typ, OptRelNodeTyp::Func(_)) {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if !matches!(rel_node.typ, DfNodeType::Func(_)) {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

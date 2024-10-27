@@ -1,27 +1,27 @@
-use crate::plan_nodes::OptRelNodeTyp;
+use crate::plan_nodes::DfNodeType;
 use optd_core::{
     cascades::{CascadesOptimizer, RelNodeContext},
     cost::{Cost, CostModel},
-    node::{PlanNode, Value},
+    nodes::{PlanNode, Value},
 };
 
 /// Dummy cost model that returns a 0 cost in all cases.
 /// Intended for testing with the cascades optimizer.
 pub struct DummyCostModel;
 
-impl CostModel<OptRelNodeTyp> for DummyCostModel {
+impl CostModel<DfNodeType> for DummyCostModel {
     fn compute_cost(
         &self,
-        _node: &OptRelNodeTyp,
+        _node: &DfNodeType,
         _data: &Option<Value>,
         _children: &[Cost],
         _context: Option<RelNodeContext>,
-        _optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        _optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
         Cost(vec![0.0])
     }
 
-    fn compute_plan_node_cost(&self, _node: &PlanNode<OptRelNodeTyp>) -> Cost {
+    fn compute_plan_node_cost(&self, _node: &PlanNode<DfNodeType>) -> Cost {
         Cost(vec![0.0])
     }
 

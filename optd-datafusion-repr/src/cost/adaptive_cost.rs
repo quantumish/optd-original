@@ -3,11 +3,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{cost::OptCostModel, plan_nodes::OptRelNodeTyp};
+use crate::{cost::OptCostModel, plan_nodes::DfNodeType};
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId, RelNodeContext},
     cost::{Cost, CostModel},
-    node::{PlanNode, Value},
+    nodes::{PlanNode, Value},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -40,7 +40,7 @@ pub struct AdaptiveCostModel<
 impl<
         M: MostCommonValues + Serialize + DeserializeOwned,
         D: Distribution + Serialize + DeserializeOwned,
-    > CostModel<OptRelNodeTyp> for AdaptiveCostModel<M, D>
+    > CostModel<DfNodeType> for AdaptiveCostModel<M, D>
 {
     fn explain(&self, cost: &Cost) -> String {
         self.base_model.explain(cost)
@@ -56,13 +56,13 @@ impl<
 
     fn compute_cost(
         &self,
-        node: &OptRelNodeTyp,
+        node: &DfNodeType,
         data: &Option<Value>,
         children: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
-        if let OptRelNodeTyp::PhysicalScan = node {
+        if let DfNodeType::PhysicalScan = node {
             let guard = self.runtime_row_cnt.lock().unwrap();
             if let Some((runtime_row_cnt, iter)) =
                 guard.history.get(&context.as_ref().unwrap().group_id)
@@ -90,7 +90,7 @@ impl<
         OptCostModel::<M, D>::cost(row_cnt, compute_cost, io_cost)
     }
 
-    fn compute_plan_node_cost(&self, node: &PlanNode<OptRelNodeTyp>) -> Cost {
+    fn compute_plan_node_cost(&self, node: &PlanNode<DfNodeType>) -> Cost {
         self.base_model.compute_plan_node_cost(node)
     }
 }

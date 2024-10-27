@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{node::PlanNode, optimizer::Optimizer};
+use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
 use crate::plan_nodes::{
-    DfPlanNode, Expr, ExprList, LogicalAgg, LogicalSort, OptRelNode, OptRelNodeTyp, SortOrderExpr,
+    DfNodeType, DfReprPlanNode, Expr, ExprList, LogicalAgg, LogicalSort, DfReprPlanNode, SortOrderExpr,
     SortOrderType,
 };
 
@@ -28,20 +28,20 @@ define_rule!(
 ///     from t1
 ///     order by id desc, name
 fn apply_eliminate_duplicated_sort_expr(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     EliminateDuplicatedSortExprRulePicks { child, exprs }: EliminateDuplicatedSortExprRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     let sort_keys: Vec<Expr> = exprs
         .children
         .iter()
         .map(|x| Expr::from_rel_node(x.clone()).unwrap())
         .collect_vec();
 
-    let normalized_sort_keys: Vec<Arc<PlanNode<OptRelNodeTyp>>> = exprs
+    let normalized_sort_keys: Vec<Arc<PlanNode<DfNodeType>>> = exprs
         .children
         .iter()
         .map(|x| match x.typ {
-            OptRelNodeTyp::SortOrder(_) => SortOrderExpr::new(
+            DfNodeType::SortOrder(_) => SortOrderExpr::new(
                 SortOrderType::Asc,
                 SortOrderExpr::from_rel_node(x.clone()).unwrap().child(),
             )
@@ -51,7 +51,7 @@ fn apply_eliminate_duplicated_sort_expr(
         .collect_vec();
 
     let mut dedup_expr: Vec<Expr> = Vec::new();
-    let mut dedup_set: HashSet<Arc<PlanNode<OptRelNodeTyp>>> = HashSet::new();
+    let mut dedup_set: HashSet<Arc<PlanNode<DfNodeType>>> = HashSet::new();
 
     sort_keys
         .iter()
@@ -65,7 +65,7 @@ fn apply_eliminate_duplicated_sort_expr(
 
     if dedup_expr.len() != sort_keys.len() {
         let node = LogicalSort::new(
-            DfPlanNode::from_group(child.into()),
+            DfReprPlanNode::from_group(child.into()),
             ExprList::new(dedup_expr),
         );
         return vec![node.into_rel_node().as_ref().clone()];
@@ -89,15 +89,15 @@ define_rule!(
 ///     from t1
 ///     group by id, name
 fn apply_eliminate_duplicated_agg_expr(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     EliminateDuplicatedAggExprRulePicks {
         child,
         exprs,
         groups,
     }: EliminateDuplicatedAggExprRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     let mut dedup_expr: Vec<Expr> = Vec::new();
-    let mut dedup_set: HashSet<Arc<PlanNode<OptRelNodeTyp>>> = HashSet::new();
+    let mut dedup_set: HashSet<Arc<PlanNode<DfNodeType>>> = HashSet::new();
     groups.children.iter().for_each(|expr| {
         if !dedup_set.contains(expr) {
             dedup_expr.push(Expr::from_rel_node(expr.clone()).unwrap());
@@ -107,7 +107,7 @@ fn apply_eliminate_duplicated_agg_expr(
 
     if dedup_expr.len() != groups.children.len() {
         let node = LogicalAgg::new(
-            DfPlanNode::from_group(child.into()),
+            DfReprPlanNode::from_group(child.into()),
             ExprList::from_group(exprs.into()),
             ExprList::new(dedup_expr),
         );

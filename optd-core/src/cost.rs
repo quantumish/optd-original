@@ -1,6 +1,6 @@
 use crate::{
     cascades::{CascadesOptimizer, RelNodeContext},
-    node::{NodeType, PlanNode, Value},
+    nodes::{NodeType, PlanNode, Value},
 };
 
 #[derive(Default, Clone, Debug, PartialOrd, PartialEq)]

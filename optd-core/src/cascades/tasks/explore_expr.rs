@@ -5,7 +5,7 @@ use crate::{
         optimizer::{rule_matches_expr, ExprId},
         CascadesOptimizer,
     },
-    node::NodeType,
+    nodes::NodeType,
 };
 
 use super::{apply_rule::ApplyRuleTask, explore_group::ExploreGroupTask, Task};

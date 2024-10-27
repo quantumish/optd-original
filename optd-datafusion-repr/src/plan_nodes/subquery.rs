@@ -1,17 +1,17 @@
-use optd_core::node::{PlanNode, PlanNodeMetaMap, Value};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
 use super::macros::define_plan_node;
-use super::{DfPlanNode, Expr, ExprList, JoinType, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use super::{DfNodeType, DfReprPlanNode, Expr, ExprList, JoinType, DfReprPlanNode, ArcDfPlanNode};
 
 #[derive(Clone, Debug)]
-pub struct RawDependentJoin(pub DfPlanNode);
+pub struct RawDependentJoin(pub DfReprPlanNode);
 
 define_plan_node!(
-    RawDependentJoin : DfPlanNode,
+    RawDependentJoin : DfReprPlanNode,
     RawDepJoin, [
-        { 0, left: DfPlanNode },
-        { 1, right: DfPlanNode }
+        { 0, left: DfReprPlanNode },
+        { 1, right: DfReprPlanNode }
     ], [
         { 2, cond: Expr },
         { 3, extern_cols: ExprList }
@@ -19,13 +19,13 @@ define_plan_node!(
 );
 
 #[derive(Clone, Debug)]
-pub struct DependentJoin(pub DfPlanNode);
+pub struct DependentJoin(pub DfReprPlanNode);
 
 define_plan_node!(
-    DependentJoin : DfPlanNode,
+    DependentJoin : DfReprPlanNode,
     DepJoin, [
-        { 0, left: DfPlanNode },
-        { 1, right: DfPlanNode }
+        { 0, left: DfReprPlanNode },
+        { 1, right: DfReprPlanNode }
     ], [
         { 2, cond: Expr },
         { 3, extern_cols: ExprList }
@@ -42,7 +42,7 @@ impl ExternColumnRefExpr {
         let u64_column_idx = column_idx as u64;
         ExternColumnRefExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::ExternColumnRef,
+                typ: DfNodeType::ExternColumnRef,
                 children: vec![],
                 data: Some(Value::UInt64(u64_column_idx)),
             }
@@ -60,13 +60,13 @@ impl ExternColumnRefExpr {
     }
 }
 
-impl OptRelNode for ExternColumnRefExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for ExternColumnRefExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if rel_node.typ != OptRelNodeTyp::ExternColumnRef {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if rel_node.typ != DfNodeType::ExternColumnRef {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

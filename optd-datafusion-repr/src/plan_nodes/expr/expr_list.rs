@@ -1,11 +1,11 @@
 use itertools::Itertools;
-use optd_core::node::{PlanNode, PlanNodeMetaMap};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 #[derive(Clone, Debug)]
-pub struct ExprList(OptRelNodeRef);
+pub struct ExprList(ArcDfPlanNode);
 
 impl ExprList {
     pub fn new(exprs: Vec<Expr>) -> Self {
@@ -35,18 +35,18 @@ impl ExprList {
             .collect_vec()
     }
 
-    pub fn from_group(rel_node: OptRelNodeRef) -> Self {
+    pub fn from_group(rel_node: ArcDfPlanNode) -> Self {
         Self(rel_node)
     }
 }
 
-impl OptRelNode for ExprList {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for ExprList {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.clone()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if rel_node.typ != OptRelNodeTyp::List {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if rel_node.typ != DfNodeType::List {
             return None;
         }
         Some(ExprList(rel_node))

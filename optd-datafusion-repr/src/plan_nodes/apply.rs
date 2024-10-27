@@ -3,9 +3,9 @@ use std::fmt::Display;
 
 use pretty_xmlish::Pretty;
 
-use optd_core::node::{PlanNode, PlanNodeMetaMap};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 
-use super::{DfPlanNode, Expr, JoinType, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use super::{DfNodeType, DfReprPlanNode, Expr, JoinType, DfReprPlanNode, ArcDfPlanNode};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ApplyType {
@@ -33,16 +33,16 @@ impl Display for ApplyType {
 }
 
 #[derive(Clone, Debug)]
-pub struct LogicalApply(pub DfPlanNode);
+pub struct LogicalApply(pub DfReprPlanNode);
 
-impl OptRelNode for LogicalApply {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for LogicalApply {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if let OptRelNodeTyp::Apply(_) = rel_node.typ {
-            DfPlanNode::from_rel_node(rel_node).map(Self)
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if let DfNodeType::Apply(_) = rel_node.typ {
+            DfReprPlanNode::from_rel_node(rel_node).map(Self)
         } else {
             None
         }
@@ -65,14 +65,14 @@ impl OptRelNode for LogicalApply {
 
 impl LogicalApply {
     pub fn new(
-        left: DfPlanNode,
-        right: DfPlanNode,
+        left: DfReprPlanNode,
+        right: DfReprPlanNode,
         cond: Expr,
         apply_type: ApplyType,
     ) -> LogicalApply {
-        LogicalApply(DfPlanNode(
+        LogicalApply(DfReprPlanNode(
             PlanNode {
-                typ: OptRelNodeTyp::Apply(apply_type),
+                typ: DfNodeType::Apply(apply_type),
                 children: vec![
                     left.into_rel_node(),
                     right.into_rel_node(),
@@ -84,12 +84,12 @@ impl LogicalApply {
         ))
     }
 
-    pub fn left_child(&self) -> DfPlanNode {
-        DfPlanNode::from_rel_node(self.clone().into_rel_node().child(0)).unwrap()
+    pub fn left_child(&self) -> DfReprPlanNode {
+        DfReprPlanNode::from_rel_node(self.clone().into_rel_node().child(0)).unwrap()
     }
 
-    pub fn right_child(&self) -> DfPlanNode {
-        DfPlanNode::from_rel_node(self.clone().into_rel_node().child(1)).unwrap()
+    pub fn right_child(&self) -> DfReprPlanNode {
+        DfReprPlanNode::from_rel_node(self.clone().into_rel_node().child(1)).unwrap()
     }
 
     pub fn cond(&self) -> Expr {
@@ -97,7 +97,7 @@ impl LogicalApply {
     }
 
     pub fn apply_type(&self) -> ApplyType {
-        if let OptRelNodeTyp::Apply(jty) = self.0 .0.typ {
+        if let DfNodeType::Apply(jty) = self.0 .0.typ {
             jty
         } else {
             unreachable!()

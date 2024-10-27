@@ -3,7 +3,7 @@ use std::sync::Arc;
 use optd_core::{
     cascades::{BindingType, CascadesOptimizer, RelNodeContext},
     cost::Cost,
-    node::PlanNode,
+    nodes::PlanNode,
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -12,7 +12,7 @@ use crate::{
         stats::{Distribution, MostCommonValues},
         DEFAULT_NUM_DISTINCT,
     },
-    plan_nodes::{ExprList, OptRelNode, OptRelNodeTyp},
+    plan_nodes::{DfNodeType, ExprList, DfReprPlanNode},
     properties::column_ref::{BaseTableColumnRef, ColumnRef, ColumnRefPropertyBuilder},
 };
 
@@ -27,7 +27,7 @@ impl<
         &self,
         children: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
         let child_row_cnt = Self::row_cnt(&children[0]);
         let row_cnt = self.get_agg_row_cnt(context, optimizer, child_row_cnt);
@@ -43,12 +43,12 @@ impl<
     fn get_agg_row_cnt(
         &self,
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<DfNodeType>>,
         child_row_cnt: f64,
     ) -> f64 {
         if let (Some(context), Some(optimizer)) = (context, optimizer) {
             let group_by_id = context.children_group_ids[2];
-            let mut group_by_exprs: Vec<Arc<PlanNode<OptRelNodeTyp>>> =
+            let mut group_by_exprs: Vec<Arc<PlanNode<DfNodeType>>> =
                 optimizer.get_all_group_bindings(group_by_id, BindingType::Both);
             assert!(
                 group_by_exprs.len() == 1,

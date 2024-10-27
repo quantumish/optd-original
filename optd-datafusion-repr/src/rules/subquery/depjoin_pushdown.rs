@@ -1,13 +1,13 @@
 // TODO: No push past join
 // TODO: Sideways information passing??
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{node::PlanNode, optimizer::Optimizer};
+use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 use std::collections::HashMap;
 
 use crate::plan_nodes::{
-    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DependentJoin, DfPlanNode, Expr, ExprList,
-    ExternColumnRefExpr, JoinType, LogOpExpr, LogOpType, LogicalAgg, LogicalFilter, LogicalJoin,
-    LogicalProjection, OptRelNode, OptRelNodeTyp,
+    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DependentJoin, DfNodeType, DfReprPlanNode, Expr,
+    ExprList, ExternColumnRefExpr, JoinType, LogOpExpr, LogOpType, LogicalAgg, LogicalFilter,
+    LogicalJoin, LogicalProjection, DfReprPlanNode,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 use crate::rules::macros::define_rule;
@@ -19,7 +19,7 @@ fn rewrite_extern_column_refs(
 ) -> Option<Expr> {
     let expr_rel = expr.clone().into_rel_node();
     assert!(expr.typ().is_expression());
-    if let OptRelNodeTyp::ExternColumnRef = expr.typ() {
+    if let DfNodeType::ExternColumnRef = expr.typ() {
         let col_ref = ExternColumnRefExpr::from_rel_node(expr_rel.clone()).unwrap();
         let rewritten = rewrite_fn(col_ref.index());
         return if let Some(rewritten_idx) = rewritten {
@@ -34,7 +34,7 @@ fn rewrite_extern_column_refs(
     let children = children
         .into_iter()
         .map(|child| {
-            if child.typ == OptRelNodeTyp::List {
+            if child.typ == DfNodeType::List {
                 // TODO: What should we do with List?
                 return Some(child);
             }
@@ -73,14 +73,14 @@ define_rule!(
 /// This makes later transformations valid, and has to happen first.
 /// More information can be found in the "Unnesting Arbitrary Queries" paper.
 fn apply_dep_initial_distinct(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<DfNodeType>,
     DepInitialDistinctPicks {
         left,
         right,
         cond,
         extern_cols,
     }: DepInitialDistinctPicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     assert!(cond == *ConstantExpr::bool(true).into_rel_node());
 
     let left_schema_size = optimizer
@@ -105,8 +105,8 @@ fn apply_dep_initial_distinct(
     // If we have no correlated columns, just emit a cross join instead
     if correlated_col_indices.is_empty() {
         let new_join = LogicalJoin::new(
-            DfPlanNode::from_group(left.into()),
-            DfPlanNode::from_group(right.into()),
+            DfReprPlanNode::from_group(left.into()),
+            DfReprPlanNode::from_group(right.into()),
             ConstantExpr::bool(true).into_expr(),
             JoinType::Cross,
         );
@@ -117,7 +117,7 @@ fn apply_dep_initial_distinct(
     // An aggregate node that groups by all correlated columns allows us to
     // effectively get the domain
     let distinct_agg_node = LogicalAgg::new(
-        DfPlanNode::from_group(left.clone().into()),
+        DfReprPlanNode::from_group(left.clone().into()),
         ExprList::new(vec![]),
         ExprList::new(
             correlated_col_indices
@@ -129,7 +129,7 @@ fn apply_dep_initial_distinct(
 
     let new_dep_join = DependentJoin::new(
         distinct_agg_node.into_plan_node(),
-        DfPlanNode::from_group(right.into()),
+        DfReprPlanNode::from_group(right.into()),
         Expr::from_rel_node(cond.into()).unwrap(),
         ExprList::from_rel_node(extern_cols.into()).unwrap(),
         JoinType::Cross,
@@ -157,8 +157,8 @@ fn apply_dep_initial_distinct(
     .into_expr();
 
     let new_join = LogicalJoin::new(
-        DfPlanNode::from_group(left.into()),
-        DfPlanNode::from_rel_node(new_dep_join.into_rel_node()).unwrap(),
+        DfReprPlanNode::from_group(left.into()),
+        DfReprPlanNode::from_rel_node(new_dep_join.into_rel_node()).unwrap(),
         join_cond,
         JoinType::Inner,
     );
@@ -167,7 +167,7 @@ fn apply_dep_initial_distinct(
     // for correctness (Project the left side of the new join,
     // plus the *right side of the right side*)
     let new_proj = LogicalProjection::new(
-        DfPlanNode::from_rel_node(new_join.into_rel_node()).unwrap(),
+        DfReprPlanNode::from_rel_node(new_join.into_rel_node()).unwrap(),
         ExprList::new(
             (0..left_schema_size)
                 .chain(
@@ -198,7 +198,7 @@ define_rule!(
 /// The new projection node above the dependent join is changed to include the columns
 /// from both sides of the dependent join. Otherwise, this transformation is trivial.
 fn apply_dep_join_past_proj(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<DfNodeType>,
     DepJoinPastProjPicks {
         left,
         right,
@@ -206,7 +206,7 @@ fn apply_dep_join_past_proj(
         cond,
         extern_cols,
     }: DepJoinPastProjPicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     // TODO: can we have external columns in projection node? I don't think so?
     // Cross join should always have true cond
     assert!(cond == *ConstantExpr::bool(true).into_rel_node());
@@ -229,14 +229,14 @@ fn apply_dep_join_past_proj(
     );
 
     let new_dep_join = DependentJoin::new(
-        DfPlanNode::from_group(left.into()),
-        DfPlanNode::from_group(right.into()),
+        DfReprPlanNode::from_group(left.into()),
+        DfReprPlanNode::from_group(right.into()),
         Expr::from_rel_node(cond.into()).unwrap(),
         ExprList::from_rel_node(extern_cols.into()).unwrap(),
         JoinType::Cross,
     );
     let new_proj = LogicalProjection::new(
-        DfPlanNode::from_rel_node(new_dep_join.into_rel_node()).unwrap(),
+        DfReprPlanNode::from_rel_node(new_dep_join.into_rel_node()).unwrap(),
         new_proj_exprs,
     );
 
@@ -259,7 +259,7 @@ define_rule!(
 /// The new projection node above the dependent join is changed to include the columns
 /// from both sides of the dependent join. Otherwise, this transformation is trivial.
 fn apply_dep_join_past_filter(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<DfNodeType>,
     DepJoinPastFilterPicks {
         left,
         right,
@@ -267,7 +267,7 @@ fn apply_dep_join_past_filter(
         cond,
         extern_cols,
     }: DepJoinPastFilterPicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     // Cross join should always have true cond
     assert!(cond == *ConstantExpr::bool(true).into_rel_node());
     let left_schema_len = optimizer
@@ -300,8 +300,8 @@ fn apply_dep_join_past_filter(
     .unwrap();
 
     let new_dep_join = DependentJoin::new(
-        DfPlanNode::from_group(left.into()),
-        DfPlanNode::from_group(right.into()),
+        DfReprPlanNode::from_group(left.into()),
+        DfReprPlanNode::from_group(right.into()),
         Expr::from_rel_node(cond.into()).unwrap(),
         ExprList::new(
             correlated_col_indices
@@ -313,7 +313,7 @@ fn apply_dep_join_past_filter(
     );
 
     let new_filter = LogicalFilter::new(
-        DfPlanNode::from_rel_node(new_dep_join.into_rel_node()).unwrap(),
+        DfReprPlanNode::from_rel_node(new_dep_join.into_rel_node()).unwrap(),
         rewritten_expr,
     );
 
@@ -342,7 +342,7 @@ define_rule!(
 /// TODO: the outer join is not implemented yet, so some edge cases won't work.
 ///       Run SQList tests to catch these, I guess.
 fn apply_dep_join_past_agg(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     DepJoinPastAggPicks {
         left,
         right,
@@ -351,7 +351,7 @@ fn apply_dep_join_past_agg(
         cond,
         extern_cols,
     }: DepJoinPastAggPicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     // Cross join should always have true cond
     assert!(cond == *ConstantExpr::bool(true).into_rel_node());
 
@@ -402,15 +402,15 @@ fn apply_dep_join_past_agg(
     );
 
     let new_dep_join = DependentJoin::new(
-        DfPlanNode::from_group(left.into()),
-        DfPlanNode::from_group(right.into()),
+        DfReprPlanNode::from_group(left.into()),
+        DfReprPlanNode::from_group(right.into()),
         Expr::from_rel_node(cond.into()).unwrap(),
         extern_cols,
         JoinType::Cross,
     );
 
     let new_agg = LogicalAgg::new(
-        DfPlanNode::from_rel_node(new_dep_join.into_rel_node()).unwrap(),
+        DfReprPlanNode::from_rel_node(new_dep_join.into_rel_node()).unwrap(),
         new_exprs,
         new_groups,
     );
@@ -427,29 +427,29 @@ define_rule!(
 /// If we've gone all the way down to the scan node, we can swap the dependent join
 /// for an inner join! Our main mission is complete!
 fn apply_dep_join_eliminate_at_scan(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     DepJoinEliminateAtScanPicks {
         left,
         right,
         cond,
         extern_cols: _,
     }: DepJoinEliminateAtScanPicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     // TODO: Is there ever a situation we need to detect that we can convert earlier?
     // Technically we can convert as soon as we clear the last externcolumnref...
 
     // Cross join should always have true cond
     assert!(cond == *ConstantExpr::bool(true).into_rel_node());
 
-    if right.typ != OptRelNodeTyp::Scan {
+    if right.typ != DfNodeType::Scan {
         return vec![];
     }
 
     // let scan = LogicalScan::new("test".to_string()).into_rel_node();
 
     let new_join = LogicalJoin::new(
-        DfPlanNode::from_group(left.into()),
-        DfPlanNode::from_group(right.into()),
+        DfReprPlanNode::from_group(left.into()),
+        DfReprPlanNode::from_group(right.into()),
         ConstantExpr::bool(true).into_expr(),
         JoinType::Inner,
     );

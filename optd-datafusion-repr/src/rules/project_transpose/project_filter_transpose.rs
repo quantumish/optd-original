@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::vec;
 
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{node::PlanNode, optimizer::Optimizer};
+use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
 use super::project_transpose_common::ProjectionMapping;
 use crate::plan_nodes::{
-    DfPlanNode, Expr, ExprList, LogicalFilter, LogicalProjection, OptRelNode, OptRelNodeTyp,
+    DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ExprList, LogicalFilter, LogicalProjection,
 };
 use crate::rules::macros::define_rule;
 
@@ -26,9 +26,9 @@ define_rule!(
 /// adds a projection node after a filter node
 /// only keeping necessary columns (proj node exprs + filter col exprs)
 fn apply_projection_filter_transpose(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     ProjectFilterTransposeRulePicks { child, cond, exprs }: ProjectFilterTransposeRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     // get columns out of cond
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
     let exprs_vec = exprs.clone().to_vec();
@@ -49,7 +49,7 @@ fn apply_projection_filter_transpose(
         return vec![];
     };
 
-    let child: DfPlanNode = DfPlanNode::from_group(child.into());
+    let child: DfReprPlanNode = DfReprPlanNode::from_group(child.into());
     let new_filter_cond: Expr = mapping.rewrite_filter_cond(cond_as_expr.clone(), true);
     let bottom_proj_node = LogicalProjection::new(child, bottom_proj_exprs);
     let new_filter_node = LogicalFilter::new(bottom_proj_node.into_plan_node(), new_filter_cond);
@@ -79,10 +79,10 @@ define_rule!(
 /// Calcite only checks if the projection contains a windowing calculation
 /// We check neither of those things and do it always (which may be wrong)
 fn apply_filter_project_transpose(
-    _optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<DfNodeType>,
     FilterProjectTransposeRulePicks { child, exprs, cond }: FilterProjectTransposeRulePicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
-    let child = DfPlanNode::from_group(child.into());
+) -> Vec<PlanNode<DfNodeType>> {
+    let child = DfReprPlanNode::from_group(child.into());
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
     let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
 
@@ -102,8 +102,8 @@ mod tests {
 
     use crate::{
         plan_nodes::{
-            BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ExprList, LogOpExpr, LogOpType,
-            LogicalFilter, LogicalProjection, LogicalScan, OptRelNode, OptRelNodeTyp,
+            BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DfNodeType, DfReprPlanNode,
+            ExprList, LogOpExpr, LogOpType, LogicalFilter, LogicalProjection, LogicalScan,
         },
         rules::{FilterProjectTransposeRule, ProjectFilterTransposeRule},
         testing::new_test_optimizer,
@@ -145,10 +145,10 @@ mod tests {
         .into_rel_node();
 
         assert_eq!(plan.child(1), res_filter_expr);
-        assert_eq!(plan.typ, OptRelNodeTyp::Filter);
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Projection));
+        assert_eq!(plan.typ, DfNodeType::Filter);
+        assert!(matches!(plan.child(0).typ, DfNodeType::Projection));
         assert_eq!(plan.child(0).child(1), proj_exprs.into_rel_node());
-        assert!(matches!(plan.child(0).child(0).typ, OptRelNodeTyp::Scan));
+        assert!(matches!(plan.child(0).child(0).typ, DfNodeType::Scan));
     }
 
     #[test]
@@ -171,7 +171,7 @@ mod tests {
 
         let proj_exprs = ExprList::new(vec![ColumnRefExpr::new(1).into_expr()]);
 
-        let res_filter_expr: Arc<optd_core::node::PlanNode<OptRelNodeTyp>> = BinOpExpr::new(
+        let res_filter_expr: Arc<optd_core::nodes::PlanNode<DfNodeType>> = BinOpExpr::new(
             ColumnRefExpr::new(1).into_expr(),
             ConstantExpr::int32(5).into_expr(),
             BinOpType::Eq,
@@ -179,7 +179,7 @@ mod tests {
         .into_expr()
         .into_rel_node();
 
-        let res_top_proj_exprs: Arc<optd_core::node::PlanNode<OptRelNodeTyp>> =
+        let res_top_proj_exprs: Arc<optd_core::nodes::PlanNode<DfNodeType>> =
             ExprList::new(vec![ColumnRefExpr::new(0).into_expr()]).into_rel_node();
 
         let res_bot_proj_exprs = ExprList::new(vec![
@@ -192,27 +192,24 @@ mod tests {
 
         let plan = test_optimizer.optimize(proj.into_rel_node()).unwrap();
 
-        assert_eq!(plan.typ, OptRelNodeTyp::Projection);
+        assert_eq!(plan.typ, DfNodeType::Projection);
         assert_eq!(plan.child(1), res_top_proj_exprs);
 
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
+        assert!(matches!(plan.child(0).typ, DfNodeType::Filter));
         assert_eq!(plan.child(0).child(1), res_filter_expr);
 
-        assert!(matches!(
-            plan.child(0).child(0).typ,
-            OptRelNodeTyp::Projection
-        ));
+        assert!(matches!(plan.child(0).child(0).typ, DfNodeType::Projection));
         assert_eq!(plan.child(0).child(0).child(1), res_bot_proj_exprs);
 
         assert!(matches!(
             plan.child(0).child(0).child(0).typ,
-            OptRelNodeTyp::Scan
+            DfNodeType::Scan
         ));
     }
 
     #[test]
     fn push_proj_past_filter_adv_1() {
-        let mut test_optimizer: optd_core::heuristics::HeuristicsOptimizer<OptRelNodeTyp> =
+        let mut test_optimizer: optd_core::heuristics::HeuristicsOptimizer<DfNodeType> =
             new_test_optimizer(Arc::new(ProjectFilterTransposeRule::new()));
 
         let scan = LogicalScan::new("customer".into());
@@ -269,16 +266,16 @@ mod tests {
         .into_expr()
         .into_rel_node();
 
-        assert!(matches!(plan.typ, OptRelNodeTyp::Filter));
+        assert!(matches!(plan.typ, DfNodeType::Filter));
         assert_eq!(plan.child(1), res_filter_expr);
 
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Projection));
+        assert!(matches!(plan.child(0).typ, DfNodeType::Projection));
         assert_eq!(plan.child(0).child(1), proj_exprs.into_rel_node());
     }
 
     #[test]
     fn push_proj_past_filter_adv_2() {
-        let mut test_optimizer: optd_core::heuristics::HeuristicsOptimizer<OptRelNodeTyp> =
+        let mut test_optimizer: optd_core::heuristics::HeuristicsOptimizer<DfNodeType> =
             new_test_optimizer(Arc::new(ProjectFilterTransposeRule::new()));
 
         let scan = LogicalScan::new("customer".into());
@@ -352,16 +349,13 @@ mod tests {
         ])
         .into_rel_node();
 
-        assert!(matches!(plan.typ, OptRelNodeTyp::Projection));
+        assert!(matches!(plan.typ, DfNodeType::Projection));
         assert_eq!(plan.child(1), top_proj_exprs);
 
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
+        assert!(matches!(plan.child(0).typ, DfNodeType::Filter));
         assert_eq!(plan.child(0).child(1), res_filter_expr);
 
-        assert!(matches!(
-            plan.child(0).child(0).typ,
-            OptRelNodeTyp::Projection
-        ));
+        assert!(matches!(plan.child(0).child(0).typ, DfNodeType::Projection));
         assert_eq!(plan.child(0).child(0).child(1), bot_proj_exprs);
     }
 
@@ -386,8 +380,8 @@ mod tests {
         let filter = LogicalFilter::new(proj.into_plan_node(), filter_expr);
         let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
-        assert_eq!(plan.typ, OptRelNodeTyp::Projection);
-        assert!(matches!(plan.child(0).typ, OptRelNodeTyp::Filter));
+        assert_eq!(plan.typ, DfNodeType::Projection);
+        assert!(matches!(plan.child(0).typ, DfNodeType::Filter));
     }
 
     #[test]
@@ -429,9 +423,9 @@ mod tests {
 
         let plan = test_optimizer.optimize(filter.into_rel_node()).unwrap();
 
-        assert!(matches!(plan.typ, OptRelNodeTyp::Projection));
+        assert!(matches!(plan.typ, DfNodeType::Projection));
         let plan_filter = LogicalFilter::from_rel_node(plan.child(0)).unwrap();
-        assert!(matches!(plan_filter.0.typ(), OptRelNodeTyp::Filter));
+        assert!(matches!(plan_filter.0.typ(), DfNodeType::Filter));
         let plan_filter_expr =
             LogOpExpr::from_rel_node(plan_filter.cond().into_rel_node()).unwrap();
         assert!(matches!(plan_filter_expr.op_type(), LogOpType::And));

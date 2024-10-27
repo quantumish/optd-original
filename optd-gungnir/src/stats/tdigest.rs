@@ -4,7 +4,7 @@
 //! For more details, refer to: https://arxiv.org/pdf/1902.04023.pdf
 
 use itertools::Itertools;
-use optd_core::node::Value;
+use optd_core::nodes::Value;
 use serde::{Deserialize, Serialize};
 use std::{f64::consts::PI, hash::Hash, marker::PhantomData};
 

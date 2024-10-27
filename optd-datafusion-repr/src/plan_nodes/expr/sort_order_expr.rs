@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
-use optd_core::node::{PlanNode, PlanNodeMetaMap};
+use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum SortOrderType {
@@ -24,7 +24,7 @@ impl SortOrderExpr {
     pub fn new(order: SortOrderType, child: Expr) -> Self {
         SortOrderExpr(Expr(
             PlanNode {
-                typ: OptRelNodeTyp::SortOrder(order),
+                typ: DfNodeType::SortOrder(order),
                 children: vec![child.into_rel_node()],
                 data: None,
             }
@@ -37,7 +37,7 @@ impl SortOrderExpr {
     }
 
     pub fn order(&self) -> SortOrderType {
-        if let OptRelNodeTyp::SortOrder(order) = self.0.typ() {
+        if let DfNodeType::SortOrder(order) = self.0.typ() {
             order
         } else {
             panic!("not a sort order expr")
@@ -45,13 +45,13 @@ impl SortOrderExpr {
     }
 }
 
-impl OptRelNode for SortOrderExpr {
-    fn into_rel_node(self) -> OptRelNodeRef {
+impl DfReprPlanNode for SortOrderExpr {
+    fn into_rel_node(self) -> ArcDfPlanNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: OptRelNodeRef) -> Option<Self> {
-        if !matches!(rel_node.typ, OptRelNodeTyp::SortOrder(_)) {
+    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
+        if !matches!(rel_node.typ, DfNodeType::SortOrder(_)) {
             return None;
         }
         Expr::from_rel_node(rel_node).map(Self)

@@ -8,15 +8,15 @@ use optd_core::{
     rules::Rule,
 };
 
-use crate::{plan_nodes::OptRelNodeTyp, properties::schema::SchemaPropertyBuilder};
+use crate::{plan_nodes::DfNodeType, properties::schema::SchemaPropertyBuilder};
 
 use self::tpch_catalog::TpchCatalog;
 
 /// Create a "dummy" optimizer preloaded with the TPC-H catalog for testing
 /// Note: Only provides the schema property currently
 pub fn new_test_optimizer(
-    rule: Arc<dyn Rule<OptRelNodeTyp, HeuristicsOptimizer<OptRelNodeTyp>>>,
-) -> HeuristicsOptimizer<OptRelNodeTyp> {
+    rule: Arc<dyn Rule<DfNodeType, HeuristicsOptimizer<DfNodeType>>>,
+) -> HeuristicsOptimizer<DfNodeType> {
     let dummy_catalog = Arc::new(TpchCatalog);
 
     HeuristicsOptimizer::new_with_rules(

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::{ops::Deref, sync::Arc};
 
-use crate::plan_nodes::{BinOpType, EmptyRelationData, JoinType, LogOpType, OptRelNodeTyp};
+use crate::plan_nodes::{BinOpType, DfNodeType, EmptyRelationData, JoinType, LogOpType};
 use anyhow::anyhow;
 use optd_core::property::PropertyBuilder;
 use union_find::disjoint_sets::DisjointSets;
@@ -275,18 +275,18 @@ impl ColumnRefPropertyBuilder {
     }
 }
 
-impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
+impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
     type Prop = GroupColumnRefs;
 
     fn derive(
         &self,
-        typ: OptRelNodeTyp,
-        data: Option<optd_core::node::Value>,
+        typ: DfNodeType,
+        data: Option<optd_core::nodes::Value>,
         children: &[&Self::Prop],
     ) -> Self::Prop {
         match typ {
             // Should account for PhysicalScan.
-            OptRelNodeTyp::Scan => {
+            DfNodeType::Scan => {
                 let table_name = data.unwrap().as_str().to_string();
                 let schema = self.catalog.get(&table_name);
                 let column_cnt = schema.fields.len();
@@ -295,7 +295,7 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
                     .collect();
                 GroupColumnRefs::new(column_refs, None)
             }
-            OptRelNodeTyp::EmptyRelation => {
+            DfNodeType::EmptyRelation => {
                 let data = data.unwrap().as_slice();
                 let empty_relation_data: EmptyRelationData =
                     bincode::deserialize(data.as_ref()).unwrap();
@@ -306,7 +306,7 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
                     .collect();
                 GroupColumnRefs::new(column_refs, None)
             }
-            OptRelNodeTyp::ColumnRef => {
+            DfNodeType::ColumnRef => {
                 let col_ref_idx = data.unwrap().as_u64();
                 // this is always safe since col_ref_idx was initially a usize in ColumnRefExpr::new()
                 let usize_col_ref_idx = col_ref_idx as usize;
@@ -315,12 +315,12 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
                 }];
                 GroupColumnRefs::new(column_refs, None)
             }
-            OptRelNodeTyp::List => {
+            DfNodeType::List => {
                 // Concatentate the children column refs.
                 let column_refs = Self::concat_children_col_refs(children);
                 GroupColumnRefs::new(column_refs, None)
             }
-            OptRelNodeTyp::LogOp(op_type) => {
+            DfNodeType::LogOp(op_type) => {
                 let column_refs = vec![ColumnRef::Derived];
                 // For AND, combine the eq columns of each child expression.
                 let correlation = {
@@ -344,7 +344,7 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
                 };
                 GroupColumnRefs::new(column_refs, correlation)
             }
-            OptRelNodeTyp::Projection => {
+            DfNodeType::Projection => {
                 let child = children[0];
                 let exprs = children[1];
                 let column_refs = exprs
@@ -362,7 +362,7 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
                 GroupColumnRefs::new(column_refs, child.output_correlation.clone())
             }
             // Should account for all physical join types.
-            OptRelNodeTyp::Join(join_type) | OptRelNodeTyp::RawDepJoin(join_type)  | OptRelNodeTyp::DepJoin(join_type)=> {
+            DfNodeType::Join(join_type) | DfNodeType::RawDepJoin(join_type)  | DfNodeType::DepJoin(join_type)=> {
                 // Concatenate left and right children column refs.
                 let column_refs = Self::concat_children_col_refs(&children[0..2]);
                 // Merge the equal columns of two children as input correlation.
@@ -409,7 +409,7 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
                 };
                 GroupColumnRefs::new(column_refs, output_correlation)
             }
-            OptRelNodeTyp::Agg => {
+            DfNodeType::Agg => {
                 let child = children[0];
                 // Group by columns first.
                 let mut group_by_col_refs: Vec<_> = children[2]
@@ -429,15 +429,15 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
                 // Aggregation clears all semantic correlations.
                 GroupColumnRefs::new(group_by_col_refs, None)
             }
-            OptRelNodeTyp::Filter
-            | OptRelNodeTyp::Sort
-            | OptRelNodeTyp::Limit
-            | OptRelNodeTyp::SortOrder(_) => children[0].clone(),
-            OptRelNodeTyp::Cast => {
+            DfNodeType::Filter
+            | DfNodeType::Sort
+            | DfNodeType::Limit
+            | DfNodeType::SortOrder(_) => children[0].clone(),
+            DfNodeType::Cast => {
                 // FIXME: we just assume the column value does not change.
                 children[0].clone()
             }
-            OptRelNodeTyp::BinOp(op_type) => {
+            DfNodeType::BinOp(op_type) => {
                 let column_refs = vec![ColumnRef::Derived];
                 // For correlation, we only handle the column = column case, e.g. #0 = #1.
                 let correlation = match op_type {
@@ -464,13 +464,13 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
                 };
                 GroupColumnRefs::new(column_refs, correlation)
             }
-            OptRelNodeTyp::Constant(_)
-            | OptRelNodeTyp::ExternColumnRef // TODO Possibly very very wrong---consult cost model team
-            | OptRelNodeTyp::Func(_)
-            | OptRelNodeTyp::DataType(_)
-            | OptRelNodeTyp::Between
-            | OptRelNodeTyp::Like
-            | OptRelNodeTyp::InList => GroupColumnRefs::new(vec![ColumnRef::Derived], None),
+            DfNodeType::Constant(_)
+            | DfNodeType::ExternColumnRef // TODO Possibly very very wrong---consult cost model team
+            | DfNodeType::Func(_)
+            | DfNodeType::DataType(_)
+            | DfNodeType::Between
+            | DfNodeType::Like
+            | DfNodeType::InList => GroupColumnRefs::new(vec![ColumnRef::Derived], None),
             _ => unimplemented!("Unsupported rel node type {:?}", typ),
         }
     }

@@ -1,12 +1,12 @@
-use super::{macros::define_plan_node, Expr, OptRelNode, OptRelNodeRef, OptRelNodeTyp, DfPlanNode};
+use super::{macros::define_plan_node, Expr, DfReprPlanNode, ArcDfPlanNode, DfNodeType, DfReprPlanNode};
 
 #[derive(Clone, Debug)]
-pub struct LogicalLimit(pub DfPlanNode);
+pub struct LogicalLimit(pub DfReprPlanNode);
 
 define_plan_node!(
-    LogicalLimit : DfPlanNode,
+    LogicalLimit : DfReprPlanNode,
     Limit, [
-        { 0, child: DfPlanNode }
+        { 0, child: DfReprPlanNode }
     ], [
         { 1, skip: Expr },
         { 2, fetch: Expr }
@@ -14,12 +14,12 @@ define_plan_node!(
 );
 
 #[derive(Clone, Debug)]
-pub struct PhysicalLimit(pub DfPlanNode);
+pub struct PhysicalLimit(pub DfReprPlanNode);
 
 define_plan_node!(
-    PhysicalLimit : DfPlanNode,
+    PhysicalLimit : DfReprPlanNode,
     PhysicalLimit, [
-        { 0, child: DfPlanNode }
+        { 0, child: DfReprPlanNode }
     ], [
         { 1, skip: Expr },
         { 2, fetch: Expr }

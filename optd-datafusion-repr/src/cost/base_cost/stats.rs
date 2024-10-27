@@ -9,7 +9,7 @@ use datafusion::{
     parquet::arrow::arrow_reader::ParquetRecordBatchReader,
 };
 use itertools::Itertools;
-use optd_core::node::{SerializableOrderedF64, Value};
+use optd_core::nodes::{SerializableOrderedF64, Value};
 use optd_gungnir::stats::{
     counter::Counter,
     hyperloglog::{self, HyperLogLog},

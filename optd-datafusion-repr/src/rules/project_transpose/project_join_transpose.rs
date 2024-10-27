@@ -6,13 +6,13 @@ use std::sync::Arc;
 use std::vec;
 
 use crate::rules::macros::define_rule;
-use optd_core::node::PlanNode;
+use optd_core::nodes::PlanNode;
 use optd_core::optimizer::Optimizer;
 
 use super::project_transpose_common::ProjectionMapping;
 use crate::plan_nodes::{
-    ColumnRefExpr, DfPlanNode, Expr, ExprList, JoinType, LogicalJoin, LogicalProjection,
-    OptRelNode, OptRelNodeTyp,
+    ColumnRefExpr, DfNodeType, DfReprPlanNode, Expr, ExprList, JoinType, LogicalJoin,
+    LogicalProjection, DfReprPlanNode,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
@@ -29,20 +29,20 @@ define_rule!(
 );
 
 fn apply_projection_pull_up_join(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<DfNodeType>,
     ProjectionPullUpJoinPicks {
         left,
         right,
         list,
         cond,
     }: ProjectionPullUpJoinPicks,
-) -> Vec<PlanNode<OptRelNodeTyp>> {
+) -> Vec<PlanNode<DfNodeType>> {
     let left = Arc::new(left.clone());
     let right = Arc::new(right.clone());
 
     let list = ExprList::from_rel_node(Arc::new(list)).unwrap();
 
-    let projection = LogicalProjection::new(DfPlanNode::from_group(left.clone()), list.clone());
+    let projection = LogicalProjection::new(DfReprPlanNode::from_group(left.clone()), list.clone());
 
     let Some(mapping) = ProjectionMapping::build(&projection.exprs()) else {
         return vec![];
@@ -58,8 +58,8 @@ fn apply_projection_pull_up_join(
     }
     let node = LogicalProjection::new(
         LogicalJoin::new(
-            DfPlanNode::from_group(left),
-            DfPlanNode::from_group(right),
+            DfReprPlanNode::from_group(left),
+            DfReprPlanNode::from_group(right),
             mapping.rewrite_join_cond(
                 Expr::from_rel_node(Arc::new(cond)).unwrap(),
                 left_schema.len(),

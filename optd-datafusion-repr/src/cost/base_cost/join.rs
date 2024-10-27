@@ -13,8 +13,8 @@ use crate::{
         DEFAULT_NUM_DISTINCT,
     },
     plan_nodes::{
-        BinOpType, ColumnRefExpr, Expr, ExprList, JoinType, LogOpExpr, LogOpType, OptRelNode,
-        OptRelNodeRef, OptRelNodeTyp,
+        BinOpType, ColumnRefExpr, DfNodeType, Expr, ExprList, JoinType, LogOpExpr, LogOpType,
+        DfReprPlanNode, ArcDfPlanNode,
     },
     properties::{
         column_ref::{
@@ -37,7 +37,7 @@ impl<
         join_typ: JoinType,
         children: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
         let (row_cnt_1, _, _) = Self::cost_tuple(&children[0]);
         let (row_cnt_2, _, _) = Self::cost_tuple(&children[1]);
@@ -78,7 +78,7 @@ impl<
         join_typ: JoinType,
         children: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
         let (row_cnt_1, _, _) = Self::cost_tuple(&children[0]);
         let (row_cnt_2, _, _) = Self::cost_tuple(&children[1]);
@@ -129,7 +129,7 @@ impl<
     fn get_input_correlation(
         &self,
         context: &RelNodeContext,
-        optimizer: &CascadesOptimizer<OptRelNodeTyp>,
+        optimizer: &CascadesOptimizer<DfNodeType>,
     ) -> Option<SemanticCorrelation> {
         let left_group_id = context.children_group_ids[0];
         let right_group_id = context.children_group_ids[1];
@@ -204,7 +204,7 @@ impl<
         &self,
         join_typ: JoinType,
         on_col_ref_pairs: Vec<(ColumnRefExpr, ColumnRefExpr)>,
-        filter_expr_tree: Option<OptRelNodeRef>,
+        filter_expr_tree: Option<ArcDfPlanNode>,
         schema: &Schema,
         column_refs: &BaseTableColumnRefs,
         input_correlation: Option<SemanticCorrelation>,
@@ -254,7 +254,7 @@ impl<
     fn get_join_selectivity_from_expr_tree(
         &self,
         join_typ: JoinType,
-        expr_tree: OptRelNodeRef,
+        expr_tree: ArcDfPlanNode,
         schema: &Schema,
         column_refs: &BaseTableColumnRefs,
         input_correlation: Option<SemanticCorrelation>,
@@ -262,7 +262,7 @@ impl<
         right_row_cnt: f64,
     ) -> f64 {
         assert!(expr_tree.typ.is_expression());
-        if expr_tree.typ == OptRelNodeTyp::LogOp(LogOpType::And) {
+        if expr_tree.typ == DfNodeType::LogOp(LogOpType::And) {
             let mut on_col_ref_pairs = vec![];
             let mut filter_expr_trees = vec![];
             for child_expr_tree in &expr_tree.children {
@@ -332,17 +332,15 @@ impl<
     /// The reason the check and the info are in the same function is because their code is almost identical.
     /// It only picks out equality conditions between two column refs on different tables
     fn get_on_col_ref_pair(
-        expr_tree: OptRelNodeRef,
+        expr_tree: ArcDfPlanNode,
         column_refs: &BaseTableColumnRefs,
     ) -> Option<(ColumnRefExpr, ColumnRefExpr)> {
         // 1. Check that it's equality
-        if expr_tree.typ == OptRelNodeTyp::BinOp(BinOpType::Eq) {
+        if expr_tree.typ == DfNodeType::BinOp(BinOpType::Eq) {
             let left_child = expr_tree.child(0);
             let right_child = expr_tree.child(1);
             // 2. Check that both sides are column refs
-            if left_child.typ == OptRelNodeTyp::ColumnRef
-                && right_child.typ == OptRelNodeTyp::ColumnRef
-            {
+            if left_child.typ == DfNodeType::ColumnRef && right_child.typ == DfNodeType::ColumnRef {
                 // 3. Check that both sides don't belong to the same table (if we don't know, that means they don't belong)
                 let left_col_ref_expr = ColumnRefExpr::from_rel_node(left_child)
                     .expect("we already checked that the type is ColumnRef");
@@ -543,11 +541,11 @@ impl<
 mod tests {
     use std::collections::HashSet;
 
-    use optd_core::node::Value;
+    use optd_core::nodes::Value;
 
     use crate::{
         cost::base_cost::{tests::*, DEFAULT_EQ_SEL},
-        plan_nodes::{BinOpType, JoinType, LogOpType, OptRelNodeRef},
+        plan_nodes::{BinOpType, JoinType, LogOpType, ArcDfPlanNode},
         properties::{
             column_ref::{
                 BaseTableColumnRef, BaseTableColumnRefs, ColumnRef, EqBaseTableColumnSets,
@@ -563,7 +561,7 @@ mod tests {
         cost_model: &TestOptCostModel,
         reverse_tables: bool,
         join_typ: JoinType,
-        expr_tree: OptRelNodeRef,
+        expr_tree: ArcDfPlanNode,
         schema: &Schema,
         column_refs: &BaseTableColumnRefs,
         input_correlation: Option<SemanticCorrelation>,
@@ -865,8 +863,8 @@ mod tests {
     /// I made this helper function to avoid copying all eight lines over and over
     fn assert_outer_selectivities(
         cost_model: &TestOptCostModel,
-        expr_tree: OptRelNodeRef,
-        expr_tree_rev: OptRelNodeRef,
+        expr_tree: ArcDfPlanNode,
+        expr_tree_rev: ArcDfPlanNode,
         schema: &Schema,
         column_refs: &BaseTableColumnRefs,
         expected_table1_outer_sel: f64,

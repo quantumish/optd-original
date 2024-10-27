@@ -1,4 +1,4 @@
-use crate::node::NodeType;
+use crate::nodes::NodeType;
 
 // TODO: Documentation
 pub enum RuleMatcher<T: NodeType> {

@@ -10,7 +10,7 @@ use crate::{
         tasks::{explore_expr::ExploreExprTask, optimize_inputs::OptimizeInputsTask},
         CascadesOptimizer, GroupId,
     },
-    node::{NodeType, PlanNode, PlanNodeOrGroup},
+    nodes::{NodeType, PlanNode, PlanNodeOrGroup},
     rules::{Rule, RuleMatcher},
 };
 

@@ -8,7 +8,7 @@ use crate::{
         },
         OptCostModel,
     },
-    plan_nodes::{ColumnRefExpr, ConstantExpr, InListExpr, OptRelNode, OptRelNodeTyp},
+    plan_nodes::{ColumnRefExpr, ConstantExpr, DfNodeType, InListExpr, DfReprPlanNode},
     properties::column_ref::{BaseTableColumnRef, BaseTableColumnRefs, ColumnRef},
 };
 
@@ -27,7 +27,7 @@ impl<
         let child = expr.child();
 
         // Check child is a column ref.
-        if !matches!(child.typ(), OptRelNodeTyp::ColumnRef) {
+        if !matches!(child.typ(), DfNodeType::ColumnRef) {
             return UNIMPLEMENTED_SEL;
         }
 
@@ -35,7 +35,7 @@ impl<
         let list_exprs = expr.list().to_vec();
         if list_exprs
             .iter()
-            .any(|expr| !matches!(expr.typ(), OptRelNodeTyp::Constant(_)))
+            .any(|expr| !matches!(expr.typ(), DfNodeType::Constant(_)))
         {
             return UNIMPLEMENTED_SEL;
         }
@@ -77,7 +77,7 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use optd_core::node::Value;
+    use optd_core::nodes::Value;
 
     use crate::{
         cost::base_cost::tests::{

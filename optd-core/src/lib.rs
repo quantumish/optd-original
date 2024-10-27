@@ -3,7 +3,7 @@
 pub mod cascades;
 pub mod cost;
 pub mod heuristics;
-pub mod node;
+pub mod nodes;
 pub mod optimizer;
 pub mod property;
 pub mod rules;

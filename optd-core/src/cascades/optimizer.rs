@@ -12,7 +12,7 @@ use tracing::trace;
 
 use crate::{
     cost::CostModel,
-    node::{ArcPlanNode, ArcPredNode, NodeType, PlanNodeMeta, PredNode},
+    nodes::{ArcPlanNode, ArcPredNode, NodeType, PlanNodeMeta, PredNode},
     optimizer::Optimizer,
     property::{PropertyBuilder, PropertyBuilderAny},
     rules::{Rule, RuleMatcher},
