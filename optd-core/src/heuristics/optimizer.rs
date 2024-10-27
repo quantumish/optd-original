@@ -5,7 +5,7 @@ use itertools::Itertools;
 use std::any::Any;
 
 use crate::{
-    node::{ArcPlanNode, NodeType, PlanNode},
+    node::{ArcPlanNode, NodeType, PlanNode, PlanNodeOrGroup},
     optimizer::Optimizer,
     property::PropertyBuilderAny,
     rules::{Rule, RuleMatcher},
@@ -40,7 +40,7 @@ fn match_node<T: NodeType>(
     }
 
     let mut should_end = false;
-    let mut pick = HashMap::new();
+    let mut pick: HashMap<usize, PlanNode<T>> = HashMap::new();
     for (idx, child) in children.iter().enumerate() {
         assert!(!should_end, "many matcher should be at the end");
         match child {
@@ -50,7 +50,10 @@ fn match_node<T: NodeType>(
             }
             RuleMatcher::PickOne { pick_to, expand: _ } => {
                 // Heuristics always keep the full plan without group placeholders, therefore we can ignore expand property.
-                let res = pick.insert(*pick_to, node.child(idx).unwrap_plan_node().clone());
+                let res = pick.insert(
+                    *pick_to,
+                    Arc::unwrap_or_clone(node.child(idx).unwrap_plan_node()),
+                );
                 assert!(res.is_none(), "dup pick");
             }
             RuleMatcher::PickMany { pick_to } => {
@@ -69,14 +72,13 @@ fn match_node<T: NodeType>(
         }
     }
     if let Some(pick_to) = pick_to {
-        let res: Option<Arc<PlanNode<T>>> = pick.insert(
+        let res: Option<PlanNode<T>> = pick.insert(
             pick_to,
             PlanNode {
-                typ: typ,
+                typ: *typ,
                 children: node.children.clone(),
                 predicates: node.predicates.clone(),
-            }
-            .into(),
+            },
         );
         assert!(res.is_none(), "dup pick");
     }
@@ -122,9 +124,10 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
         }
     }
 
-    fn optimize_inputs(&mut self, inputs: &[ArcPlanNode<T>]) -> Result<Vec<ArcPlanNode<T>>> {
+    fn optimize_inputs(&mut self, inputs: &[PlanNodeOrGroup<T>]) -> Result<Vec<ArcPlanNode<T>>> {
         let mut optimized_inputs = Vec::with_capacity(inputs.len());
         for input in inputs {
+            let input = input.unwrap_plan_node();
             optimized_inputs.push(self.optimize(input.clone())?);
         }
         Ok(optimized_inputs)
@@ -134,6 +137,10 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
         for rule in self.rules.as_ref() {
             let matcher = rule.matcher();
             if let Some(picks) = match_and_pick(matcher, root_rel.clone()) {
+                let picks = picks
+                    .into_iter()
+                    .map(|(k, v)| (k, PlanNodeOrGroup::PlanNode(v.into())))
+                    .collect(); // This is kinda ugly, but it works for now
                 let mut results = rule.apply(self, picks);
                 assert!(results.len() <= 1);
                 if !results.is_empty() {
@@ -147,7 +154,11 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
     fn optimize_inner(&mut self, root_rel: ArcPlanNode<T>) -> Result<ArcPlanNode<T>> {
         match self.apply_order {
             ApplyOrder::BottomUp => {
-                let optimized_children = self.optimize_inputs(&root_rel.children)?;
+                let optimized_children = self
+                    .optimize_inputs(&root_rel.children)?
+                    .into_iter()
+                    .map(|x| PlanNodeOrGroup::PlanNode(x))
+                    .collect();
                 let node = self.apply_rules(
                     PlanNode {
                         typ: root_rel.typ.clone(),
@@ -166,11 +177,15 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
             ApplyOrder::TopDown => {
                 self.infer_properties(root_rel.clone());
                 let root_rel = self.apply_rules(root_rel)?;
-                let optimized_children = self.optimize_inputs(&root_rel.children)?;
+                let optimized_children = self
+                    .optimize_inputs(&root_rel.children)?
+                    .into_iter()
+                    .map(|x| PlanNodeOrGroup::PlanNode(x))
+                    .collect();
                 let node: Arc<PlanNode<T>> = PlanNode {
-                    typ: root_rel.typ.clone(),
+                    typ: root_rel.typ,
                     children: optimized_children,
-                    data: root_rel.data.clone(),
+                    predicates: root_rel.predicates.clone(),
                 }
                 .into();
                 self.infer_properties(root_rel.clone());
@@ -192,8 +207,9 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
             .children
             .iter()
             .map(|child| {
-                self.infer_properties((*child).clone());
-                self.properties.get(child).unwrap().clone()
+                let plan_node = child.unwrap_plan_node();
+                self.infer_properties(plan_node.clone());
+                self.properties.get(&plan_node).unwrap().clone()
             })
             .collect_vec();
         let mut props = Vec::with_capacity(self.property_builders.len());
@@ -202,11 +218,7 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
                 .iter()
                 .map(|x| x[id].as_ref() as &dyn std::any::Any)
                 .collect::<Vec<_>>();
-            let prop = builder.derive_any(
-                root_rel.typ.clone(),
-                root_rel.data.clone(),
-                child_properties.as_slice(),
-            );
+            let prop = builder.derive_any(root_rel.typ.clone(), child_properties.as_slice());
             props.push(prop);
         }
         self.properties.insert(root_rel.clone(), props.into());

@@ -229,17 +229,17 @@ impl<T: NodeType> PlanNodeOrGroup<T> {
         }
     }
 
-    pub fn unwrap_plan_node(self) -> ArcPlanNode<T> {
+    pub fn unwrap_plan_node(&self) -> ArcPlanNode<T> {
         match self {
-            PlanNodeOrGroup::PlanNode(node) => node,
+            PlanNodeOrGroup::PlanNode(node) => node.clone(),
             PlanNodeOrGroup::Group(_) => panic!("Expected PlanNode, found Group"),
         }
     }
 
-    pub fn unwrap_group(self) -> GroupId {
+    pub fn unwrap_group(&self) -> GroupId {
         match self {
             PlanNodeOrGroup::PlanNode(_) => panic!("Expected Group, found PlanNode"),
-            PlanNodeOrGroup::Group(group_id) => group_id,
+            PlanNodeOrGroup::Group(group_id) => *group_id,
         }
     }
 }
