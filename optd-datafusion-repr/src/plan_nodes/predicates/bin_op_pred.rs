@@ -3,7 +3,9 @@ use std::fmt::Display;
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
+use crate::plan_nodes::{
+    ArcDfPlanNode, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode,
+};
 
 /// The pattern of storing numerical, comparison, and logical operators in the same type with is_*() functions
 ///     to distinguish between them matches how datafusion::logical_expr::Operator does things
@@ -50,30 +52,30 @@ impl BinOpType {
 }
 
 #[derive(Clone, Debug)]
-pub struct BinOpExpr(pub Expr);
+pub struct BinOpPred(pub ArcDfPredNode);
 
-impl BinOpExpr {
-    pub fn new(left: Expr, right: Expr, op_type: BinOpType) -> Self {
-        BinOpExpr(Expr(
-            PlanNode {
-                typ: DfNodeType::BinOp(op_type),
-                children: vec![left.into_rel_node(), right.into_rel_node()],
+impl BinOpPred {
+    pub fn new(left: ArcDfPredNode, right: ArcDfPredNode, op_type: BinOpType) -> Self {
+        BinOpPred(
+            DfPredNode {
+                typ: DfPredType::BinOp(op_type),
+                children: vec![left, right],
                 data: None,
             }
             .into(),
-        ))
+        )
     }
 
-    pub fn left_child(&self) -> Expr {
-        Expr::from_rel_node(self.clone().into_rel_node().child(0)).unwrap()
+    pub fn left_child(&self) -> ArcDfPredNode {
+        self.0.child(0)
     }
 
-    pub fn right_child(&self) -> Expr {
-        Expr::from_rel_node(self.clone().into_rel_node().child(1)).unwrap()
+    pub fn right_child(&self) -> ArcDfPredNode {
+        self.0.child(1)
     }
 
     pub fn op_type(&self) -> BinOpType {
-        if let DfNodeType::BinOp(op_type) = self.clone().into_rel_node().typ {
+        if let DfPredType::BinOp(op_type) = self.clone().into_rel_node().typ {
             op_type
         } else {
             panic!("not a bin op")
@@ -81,19 +83,19 @@ impl BinOpExpr {
     }
 }
 
-impl DfReprPlanNode for BinOpExpr {
-    fn into_rel_node(self) -> ArcDfPlanNode {
-        self.0.into_rel_node()
+impl DfReprPredNode for BinOpPred {
+    fn into_pred_node(self) -> ArcDfPredNode {
+        self.0
     }
 
-    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
-        if !matches!(rel_node.typ, DfNodeType::BinOp(_)) {
+    fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {
+        if !matches!(pred_node.typ, DfPredType::BinOp(_)) {
             return None;
         }
-        Expr::from_rel_node(rel_node).map(Self)
+        Some(Self(pred_node))
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             self.op_type().to_string(),
             vec![],

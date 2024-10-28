@@ -1,5 +1,5 @@
-use super::expr::ExprList;
 use super::macros::define_plan_node;
+use super::predicates::ListPred;
 
 use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode};
 

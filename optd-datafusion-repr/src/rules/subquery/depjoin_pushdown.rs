@@ -5,8 +5,8 @@ use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 use std::collections::HashMap;
 
 use crate::plan_nodes::{
-    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DependentJoin, DfNodeType, DfReprPlanNode, Expr,
-    ExprList, ExternColumnRefExpr, JoinType, LogOpExpr, LogOpType, LogicalAgg, LogicalFilter,
+    BinOpPred, BinOpType, ColumnRefPred, ConstantPred, DependentJoin, DfNodeType, DfReprPlanNode, Expr,
+    ListPred, ExternColumnRefExpr, JoinType, LogOpPred, LogOpType, LogicalAgg, LogicalFilter,
     LogicalJoin, LogicalProjection, DfReprPlanNode,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
@@ -23,7 +23,7 @@ fn rewrite_extern_column_refs(
         let col_ref = ExternColumnRefExpr::from_rel_node(expr_rel.clone()).unwrap();
         let rewritten = rewrite_fn(col_ref.index());
         return if let Some(rewritten_idx) = rewritten {
-            let new_col_ref = ColumnRefExpr::new(rewritten_idx);
+            let new_col_ref = ColumnRefPred::new(rewritten_idx);
             Some(Expr::from_rel_node(new_col_ref.into_rel_node()).unwrap())
         } else {
             None
@@ -81,7 +81,7 @@ fn apply_dep_initial_distinct(
         extern_cols,
     }: DepInitialDistinctPicks,
 ) -> Vec<PlanNode<DfNodeType>> {
-    assert!(cond == *ConstantExpr::bool(true).into_rel_node());
+    assert!(cond == *ConstantPred::bool(true).into_rel_node());
 
     let left_schema_size = optimizer
         .get_property::<SchemaPropertyBuilder>(left.clone().into(), 0)
@@ -91,7 +91,7 @@ fn apply_dep_initial_distinct(
         .get_property::<SchemaPropertyBuilder>(right.clone().into(), 0)
         .len();
 
-    let correlated_col_indices = ExprList::from_rel_node(extern_cols.clone().into())
+    let correlated_col_indices = ListPred::from_rel_node(extern_cols.clone().into())
         .unwrap()
         .to_vec()
         .into_iter()
@@ -107,7 +107,7 @@ fn apply_dep_initial_distinct(
         let new_join = LogicalJoin::new(
             DfReprPlanNode::from_group(left.into()),
             DfReprPlanNode::from_group(right.into()),
-            ConstantExpr::bool(true).into_expr(),
+            ConstantPred::bool(true).into_expr(),
             JoinType::Cross,
         );
 
@@ -118,11 +118,11 @@ fn apply_dep_initial_distinct(
     // effectively get the domain
     let distinct_agg_node = LogicalAgg::new(
         DfReprPlanNode::from_group(left.clone().into()),
-        ExprList::new(vec![]),
-        ExprList::new(
+        ListPred::new(vec![]),
+        ListPred::new(
             correlated_col_indices
                 .iter()
-                .map(|x| ColumnRefExpr::new(*x).into_expr())
+                .map(|x| ColumnRefPred::new(*x).into_expr())
                 .collect(),
         ),
     );
@@ -131,22 +131,22 @@ fn apply_dep_initial_distinct(
         distinct_agg_node.into_plan_node(),
         DfReprPlanNode::from_group(right.into()),
         Expr::from_rel_node(cond.into()).unwrap(),
-        ExprList::from_rel_node(extern_cols.into()).unwrap(),
+        ListPred::from_rel_node(extern_cols.into()).unwrap(),
         JoinType::Cross,
     );
 
     // Our join condition is going to make sure that all of the correlated columns
     // in the right side are equal to their equivalent columns in the left side.
     // (they will have the same index, just shifted over)
-    let join_cond = LogOpExpr::new(
+    let join_cond = LogOpPred::new(
         LogOpType::And,
-        ExprList::new(
+        ListPred::new(
             (0..correlated_col_indices.len())
                 .map(|i| {
                     assert!(i + left_schema_size < left_schema_size + right_schema_size);
-                    BinOpExpr::new(
-                        ColumnRefExpr::new(i).into_expr(),
-                        ColumnRefExpr::new(i + left_schema_size).into_expr(),
+                    BinOpPred::new(
+                        ColumnRefPred::new(i).into_expr(),
+                        ColumnRefPred::new(i + left_schema_size).into_expr(),
                         BinOpType::Eq,
                     )
                     .into_expr()
@@ -168,13 +168,13 @@ fn apply_dep_initial_distinct(
     // plus the *right side of the right side*)
     let new_proj = LogicalProjection::new(
         DfReprPlanNode::from_rel_node(new_join.into_rel_node()).unwrap(),
-        ExprList::new(
+        ListPred::new(
             (0..left_schema_size)
                 .chain(
                     (left_schema_size + correlated_col_indices.len())
                         ..(left_schema_size + correlated_col_indices.len() + right_schema_size),
                 )
-                .map(|x| ColumnRefExpr::new(x).into_expr())
+                .map(|x| ColumnRefPred::new(x).into_expr())
                 .collect(),
         ),
     );
@@ -209,7 +209,7 @@ fn apply_dep_join_past_proj(
 ) -> Vec<PlanNode<DfNodeType>> {
     // TODO: can we have external columns in projection node? I don't think so?
     // Cross join should always have true cond
-    assert!(cond == *ConstantExpr::bool(true).into_rel_node());
+    assert!(cond == *ConstantPred::bool(true).into_rel_node());
     let left_schema_len = optimizer
         .get_property::<SchemaPropertyBuilder>(left.clone().into(), 0)
         .len();
@@ -218,10 +218,10 @@ fn apply_dep_join_past_proj(
         .len();
 
     let right_cols_proj =
-        (0..right_schema_len).map(|x| ColumnRefExpr::new(x + left_schema_len).into_expr());
+        (0..right_schema_len).map(|x| ColumnRefPred::new(x + left_schema_len).into_expr());
 
-    let left_cols_proj = (0..left_schema_len).map(|x| ColumnRefExpr::new(x).into_expr());
-    let new_proj_exprs = ExprList::new(
+    let left_cols_proj = (0..left_schema_len).map(|x| ColumnRefPred::new(x).into_expr());
+    let new_proj_exprs = ListPred::new(
         left_cols_proj
             .chain(right_cols_proj)
             .map(|x| x.into_expr())
@@ -232,7 +232,7 @@ fn apply_dep_join_past_proj(
         DfReprPlanNode::from_group(left.into()),
         DfReprPlanNode::from_group(right.into()),
         Expr::from_rel_node(cond.into()).unwrap(),
-        ExprList::from_rel_node(extern_cols.into()).unwrap(),
+        ListPred::from_rel_node(extern_cols.into()).unwrap(),
         JoinType::Cross,
     );
     let new_proj = LogicalProjection::new(
@@ -269,12 +269,12 @@ fn apply_dep_join_past_filter(
     }: DepJoinPastFilterPicks,
 ) -> Vec<PlanNode<DfNodeType>> {
     // Cross join should always have true cond
-    assert!(cond == *ConstantExpr::bool(true).into_rel_node());
+    assert!(cond == *ConstantPred::bool(true).into_rel_node());
     let left_schema_len = optimizer
         .get_property::<SchemaPropertyBuilder>(left.clone().into(), 0)
         .len();
 
-    let correlated_col_indices = ExprList::from_rel_node(extern_cols.clone().into())
+    let correlated_col_indices = ListPred::from_rel_node(extern_cols.clone().into())
         .unwrap()
         .to_vec()
         .into_iter()
@@ -303,7 +303,7 @@ fn apply_dep_join_past_filter(
         DfReprPlanNode::from_group(left.into()),
         DfReprPlanNode::from_group(right.into()),
         Expr::from_rel_node(cond.into()).unwrap(),
-        ExprList::new(
+        ListPred::new(
             correlated_col_indices
                 .into_iter()
                 .map(|x| ExternColumnRefExpr::new(x).into_expr())
@@ -353,16 +353,16 @@ fn apply_dep_join_past_agg(
     }: DepJoinPastAggPicks,
 ) -> Vec<PlanNode<DfNodeType>> {
     // Cross join should always have true cond
-    assert!(cond == *ConstantExpr::bool(true).into_rel_node());
+    assert!(cond == *ConstantPred::bool(true).into_rel_node());
 
     // TODO: OUTER JOIN TRANSFORMATION
 
-    let extern_cols = ExprList::from_rel_node(extern_cols.into()).unwrap();
+    let extern_cols = ListPred::from_rel_node(extern_cols.into()).unwrap();
     let correlated_col_indices = extern_cols
         .to_vec()
         .into_iter()
         .map(|x| {
-            ColumnRefExpr::new(
+            ColumnRefPred::new(
                 ExternColumnRefExpr::from_rel_node(x.into_rel_node())
                     .unwrap()
                     .index(),
@@ -371,9 +371,9 @@ fn apply_dep_join_past_agg(
         })
         .collect::<Vec<Expr>>();
 
-    let groups = ExprList::from_rel_node(groups.clone().into()).unwrap();
+    let groups = ListPred::from_rel_node(groups.clone().into()).unwrap();
 
-    let new_groups = ExprList::new(
+    let new_groups = ListPred::new(
         groups
             .to_vec()
             .into_iter()
@@ -388,9 +388,9 @@ fn apply_dep_join_past_agg(
             .collect(),
     );
 
-    let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
+    let exprs = ListPred::from_rel_node(exprs.into()).unwrap();
 
-    let new_exprs = ExprList::new(
+    let new_exprs = ListPred::new(
         exprs
             .to_vec()
             .into_iter()
@@ -439,7 +439,7 @@ fn apply_dep_join_eliminate_at_scan(
     // Technically we can convert as soon as we clear the last externcolumnref...
 
     // Cross join should always have true cond
-    assert!(cond == *ConstantExpr::bool(true).into_rel_node());
+    assert!(cond == *ConstantPred::bool(true).into_rel_node());
 
     if right.typ != DfNodeType::Scan {
         return vec![];
@@ -450,7 +450,7 @@ fn apply_dep_join_eliminate_at_scan(
     let new_join = LogicalJoin::new(
         DfReprPlanNode::from_group(left.into()),
         DfReprPlanNode::from_group(right.into()),
-        ConstantExpr::bool(true).into_expr(),
+        ConstantPred::bool(true).into_expr(),
         JoinType::Inner,
     );
 

@@ -294,6 +294,16 @@ pub struct PredNode<T: NodeType> {
     pub data: Option<Value>,
 }
 
+impl<T: NodeType> PredNode<T> {
+    pub fn child(&self, idx: usize) -> ArcPredNode<T> {
+        self.children[idx].clone()
+    }
+
+    pub fn unwrap_data(&self) -> Value {
+        self.data.clone().unwrap()
+    }
+}
+
 /// Metadata for a rel node.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlanNodeMeta {

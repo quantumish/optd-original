@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::explain::Insertable;
 
-use super::{ArcDfPlanNode, ConstantExpr, DfNodeType, DfPlanNode, DfReprPlanNode};
+use super::{ArcDfPlanNode, ConstantPred, DfNodeType, DfPlanNode, DfReprPlanNode};
 
 use crate::properties::schema::Schema;
 
@@ -42,8 +42,8 @@ impl LogicalEmptyRelation {
                 typ: DfNodeType::EmptyRelation,
                 children: vec![],
                 predicates: vec![
-                    ConstantExpr::bool(produce_one_row).into(),
-                    ConstantExpr::serialized(serialized_data).into(),
+                    ConstantPred::bool(produce_one_row).into(),
+                    ConstantPred::serialized(serialized_data).into(),
                 ],
             }
             .into(),
@@ -51,11 +51,11 @@ impl LogicalEmptyRelation {
     }
 
     pub fn produce_one_row(&self) -> bool {
-        ConstantExpr::from(self.0.predicates[0]).value().as_bool()
+        ConstantPred::from(self.0.predicates[0]).value().as_bool()
     }
 
     pub fn empty_relation_schema(&self) -> Schema {
-        let serialized_data = ConstantExpr::from(self.0.predicates[1]).value().as_slice();
+        let serialized_data = ConstantPred::from(self.0.predicates[1]).value().as_slice();
         bincode::deserialize(serialized_data.as_ref()).unwrap()
     }
 }
@@ -86,11 +86,11 @@ impl DfReprPlanNode for PhysicalEmptyRelation {
 
 impl PhysicalEmptyRelation {
     pub fn produce_one_row(&self) -> bool {
-        ConstantExpr::from(self.0.predicates[0]).value().as_bool()
+        ConstantPred::from(self.0.predicates[0]).value().as_bool()
     }
 
     pub fn empty_relation_schema(&self) -> Schema {
-        let serialized_data = ConstantExpr::from(self.0.predicates[1]).value().as_slice();
+        let serialized_data = ConstantPred::from(self.0.predicates[1]).value().as_slice();
         bincode::deserialize(serialized_data.as_ref()).unwrap()
     }
 }

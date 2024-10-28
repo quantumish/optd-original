@@ -12,7 +12,7 @@ use crate::{
         stats::{Distribution, MostCommonValues},
         DEFAULT_NUM_DISTINCT,
     },
-    plan_nodes::{DfNodeType, ExprList, DfReprPlanNode},
+    plan_nodes::{DfNodeType, ListPred, DfReprPlanNode},
     properties::column_ref::{BaseTableColumnRef, ColumnRef, ColumnRefPropertyBuilder},
 };
 
@@ -55,7 +55,7 @@ impl<
                 "ExprList expression should be the only expression in the GROUP BY group"
             );
             let group_by = group_by_exprs.pop().unwrap();
-            let group_by = ExprList::from_rel_node(group_by).unwrap();
+            let group_by = ListPred::from_rel_node(group_by).unwrap();
             if group_by.is_empty() {
                 1.0
             } else {

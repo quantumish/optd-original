@@ -3,7 +3,9 @@ use std::fmt::Display;
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
+use crate::plan_nodes::{
+    ArcDfPlanNode, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum SortOrderType {
@@ -18,26 +20,26 @@ impl Display for SortOrderType {
 }
 
 #[derive(Clone, Debug)]
-pub struct SortOrderExpr(Expr);
+pub struct SortOrderPred(pub ArcDfPredNode);
 
-impl SortOrderExpr {
-    pub fn new(order: SortOrderType, child: Expr) -> Self {
-        SortOrderExpr(Expr(
-            PlanNode {
-                typ: DfNodeType::SortOrder(order),
+impl SortOrderPred {
+    pub fn new(order: SortOrderType, child: ArcDfPredNode) -> Self {
+        SortOrderPred(
+            DfPredNode {
+                typ: DfPredType::SortOrder(order),
                 children: vec![child.into_rel_node()],
                 data: None,
             }
             .into(),
-        ))
+        )
     }
 
-    pub fn child(&self) -> Expr {
-        Expr::from_rel_node(self.0.child(0)).unwrap()
+    pub fn child(&self) -> ArcDfPredNode {
+        self.0.child(0)
     }
 
     pub fn order(&self) -> SortOrderType {
-        if let DfNodeType::SortOrder(order) = self.0.typ() {
+        if let DfPredType::SortOrder(order) = self.0.typ() {
             order
         } else {
             panic!("not a sort order expr")
@@ -45,19 +47,19 @@ impl SortOrderExpr {
     }
 }
 
-impl DfReprPlanNode for SortOrderExpr {
-    fn into_rel_node(self) -> ArcDfPlanNode {
-        self.0.into_rel_node()
+impl DfReprPredNode for SortOrderPred {
+    fn into_pred_node(self) -> ArcDfPredNode {
+        self.0
     }
 
-    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
-        if !matches!(rel_node.typ, DfNodeType::SortOrder(_)) {
+    fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {
+        if !matches!(pred_node.typ, DfPredType::SortOrder(_)) {
             return None;
         }
-        Expr::from_rel_node(rel_node).map(Self)
+        Some(Self(pred_node))
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "SortOrder",
             vec![("order", self.order().to_string().into())],

@@ -11,7 +11,7 @@ use optd_core::optimizer::Optimizer;
 
 use super::project_transpose_common::ProjectionMapping;
 use crate::plan_nodes::{
-    ColumnRefExpr, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ExprList, JoinType,
+    ColumnRefPred, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ListPred, JoinType,
     LogicalJoin, LogicalProjection,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
@@ -40,7 +40,7 @@ fn apply_projection_pull_up_join(
     let left = Arc::new(left.clone());
     let right = Arc::new(right.clone());
 
-    let list = ExprList::from_rel_node(Arc::new(list)).unwrap();
+    let list = ListPred::from_rel_node(Arc::new(list)).unwrap();
 
     let projection = LogicalProjection::new(DfReprPlanNode::from_group(left.clone()), list.clone());
 
@@ -53,7 +53,7 @@ fn apply_projection_pull_up_join(
     let right_schema = optimizer.get_property::<SchemaPropertyBuilder>(right.clone(), 0);
     let mut new_projection_exprs = list.to_vec();
     for i in 0..right_schema.len() {
-        let col: Expr = ColumnRefExpr::new(i + left_schema.len()).into_expr();
+        let col: Expr = ColumnRefPred::new(i + left_schema.len()).into_expr();
         new_projection_exprs.push(col);
     }
     let node = LogicalProjection::new(
@@ -67,7 +67,7 @@ fn apply_projection_pull_up_join(
             JoinType::Inner,
         )
         .into_plan_node(),
-        ExprList::new(new_projection_exprs),
+        ListPred::new(new_projection_exprs),
     );
     vec![node.into_rel_node().as_ref().clone()]
 }

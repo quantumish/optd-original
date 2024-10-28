@@ -1,24 +1,26 @@
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
+use crate::plan_nodes::{
+    ArcDfPlanNode, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode,
+};
 
 #[derive(Clone, Debug)]
-pub struct ColumnRefExpr(pub Expr);
+pub struct ColumnRefPred(pub ArcDfPredNode);
 
-impl ColumnRefExpr {
+impl ColumnRefPred {
     /// Creates a new `ColumnRef` expression.
-    pub fn new(column_idx: usize) -> ColumnRefExpr {
+    pub fn new(column_idx: usize) -> ColumnRefPred {
         // this conversion is always safe since usize is at most u64
         let u64_column_idx = column_idx as u64;
-        ColumnRefExpr(Expr(
-            PlanNode {
-                typ: DfNodeType::ColumnRef,
+        ColumnRefPred(
+            DfPredNode {
+                typ: DfPredType::ColumnRef,
                 children: vec![],
                 data: Some(Value::UInt64(u64_column_idx)),
             }
             .into(),
-        ))
+        )
     }
 
     fn get_data_usize(&self) -> usize {
@@ -31,19 +33,19 @@ impl ColumnRefExpr {
     }
 }
 
-impl DfReprPlanNode for ColumnRefExpr {
-    fn into_rel_node(self) -> ArcDfPlanNode {
-        self.0.into_rel_node()
+impl DfReprPredNode for ColumnRefPred {
+    fn into_pred_node(self) -> ArcDfPredNode {
+        self.0
     }
 
-    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
-        if rel_node.typ != DfNodeType::ColumnRef {
+    fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {
+        if pred_node.typ != DfPredType::ColumnRef {
             return None;
         }
-        Expr::from_rel_node(rel_node).map(Self)
+        Some(Self(pred_node))
     }
 
-    fn dispatch_explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::display(&format!("#{}", self.index()))
     }
 }

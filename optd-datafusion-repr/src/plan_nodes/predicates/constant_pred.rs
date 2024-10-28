@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use arrow_schema::{DataType, IntervalUnit};
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap, SerializableOrderedF64, Value};
 use pretty_xmlish::Pretty;
 use serde::{Deserialize, Serialize};
 
-use crate::plan_nodes::{ArcDfPlanNode, DfNodeType, DfReprPlanNode, Expr};
+use crate::plan_nodes::{ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum ConstantType {
@@ -89,23 +91,23 @@ impl ConstantType {
 }
 
 #[derive(Clone, Debug)]
-pub struct ConstantExpr(pub Expr);
+pub struct ConstantPred(pub ArcDfPredNode);
 
-impl ConstantExpr {
+impl ConstantPred {
     pub fn new(value: Value) -> Self {
         let typ = ConstantType::get_data_type_from_value(&value);
         Self::new_with_type(value, typ)
     }
 
     pub fn new_with_type(value: Value, typ: ConstantType) -> Self {
-        ConstantExpr(Expr(
-            PlanNode {
-                typ: DfNodeType::Constant(typ),
+        ConstantPred(
+            DfPredNode {
+                typ: DfPredType::Constant(typ),
                 children: vec![],
                 data: Some(value),
             }
             .into(),
-        ))
+        )
     }
 
     pub fn bool(value: bool) -> Self {
@@ -183,7 +185,7 @@ impl ConstantExpr {
     }
 
     pub fn constant_type(&self) -> ConstantType {
-        if let DfNodeType::Constant(typ) = self.0.typ() {
+        if let DfPredType::Constant(typ) = self.0.typ() {
             typ
         } else {
             panic!("not a constant")
@@ -191,19 +193,19 @@ impl ConstantExpr {
     }
 }
 
-impl DfReprPlanNode for ConstantExpr {
-    fn into_rel_node(self) -> ArcDfPlanNode {
+impl DfReprPredNode for ConstantPred {
+    fn into_pred_node(self) -> ArcDfPredNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
-        if let DfNodeType::Constant(_) = rel_node.typ {
-            return Expr::from_rel_node(rel_node).map(Self);
+    fn from_pred_node(rel_node: ArcDfPredNode) -> Option<Self> {
+        if let DfPredType::Constant(_) = rel_node.typ {
+            Some(Self(rel_node))
         }
         None
     }
 
-    fn dispatch_explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         if self.constant_type() == ConstantType::IntervalMonthDateNano {
             let value = self.value().as_i128();
             let month = (value >> 96) as u32;

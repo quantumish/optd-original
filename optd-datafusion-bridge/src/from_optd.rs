@@ -23,11 +23,11 @@ use datafusion::{
 use optd_core::nodes::PlanNodeMetaMap;
 use optd_datafusion_repr::{
     plan_nodes::{
-        ArcDfPlanNode, BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr,
-        ConstantType, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ExprList, FuncExpr,
-        FuncType, InListExpr, JoinType, LikeExpr, LogOpExpr, LogOpType, PhysicalAgg,
+        ArcDfPlanNode, BetweenPred, BinOpPred, BinOpType, CastPred, ColumnRefPred, ConstantPred,
+        ConstantType, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, FuncPred, FuncType,
+        InListPred, JoinType, LikePred, ListPred, LogOpPred, LogOpType, PhysicalAgg,
         PhysicalEmptyRelation, PhysicalFilter, PhysicalHashJoin, PhysicalLimit,
-        PhysicalNestedLoopJoin, PhysicalProjection, PhysicalScan, PhysicalSort, SortOrderExpr,
+        PhysicalNestedLoopJoin, PhysicalProjection, PhysicalScan, PhysicalSort, SortOrderPred,
         SortOrderType,
     },
     properties::schema::Schema as OptdSchema,
@@ -62,7 +62,7 @@ impl OptdPlanContext<'_> {
 
     fn conv_from_optd_sort_order_expr(
         &mut self,
-        sort_expr: SortOrderExpr,
+        sort_expr: SortOrderPred,
         context: &SchemaRef,
     ) -> Result<physical_expr::PhysicalSortExpr> {
         let expr = Self::conv_from_optd_expr(sort_expr.child(), context)?;
@@ -86,7 +86,7 @@ impl OptdPlanContext<'_> {
         expr: Expr,
         context: &SchemaRef,
     ) -> Result<Arc<dyn AggregateExpr>> {
-        let expr = FuncExpr::from_rel_node(expr.into_rel_node()).unwrap();
+        let expr = FuncPred::from_rel_node(expr.into_rel_node()).unwrap();
         let typ = expr.func();
         let FuncType::Agg(func) = typ else {
             unreachable!()
@@ -110,14 +110,14 @@ impl OptdPlanContext<'_> {
     fn conv_from_optd_expr(expr: Expr, context: &SchemaRef) -> Result<Arc<dyn PhysicalExpr>> {
         match expr.typ() {
             DfNodeType::ColumnRef => {
-                let expr = ColumnRefExpr::from_rel_node(expr.into_rel_node()).unwrap();
+                let expr = ColumnRefPred::from_rel_node(expr.into_rel_node()).unwrap();
                 let idx = expr.index();
                 Ok(Arc::new(
                     datafusion::physical_plan::expressions::Column::new("<expr>", idx),
                 ))
             }
             DfNodeType::Constant(typ) => {
-                let expr = ConstantExpr::from_rel_node(expr.into_rel_node()).unwrap();
+                let expr = ConstantPred::from_rel_node(expr.into_rel_node()).unwrap();
                 let value = expr.value();
                 let value = match typ {
                     ConstantType::Bool => ScalarValue::Boolean(Some(value.as_bool())),
@@ -146,7 +146,7 @@ impl OptdPlanContext<'_> {
                 ))
             }
             DfNodeType::Func(_) => {
-                let expr = FuncExpr::from_rel_node(expr.into_rel_node()).unwrap();
+                let expr = FuncPred::from_rel_node(expr.into_rel_node()).unwrap();
                 let func = expr.func();
                 let args = expr
                     .children()
@@ -178,7 +178,7 @@ impl OptdPlanContext<'_> {
             }
             DfNodeType::Sort => unreachable!(),
             DfNodeType::LogOp(typ) => {
-                let expr = LogOpExpr::from_rel_node(expr.into_rel_node()).unwrap();
+                let expr = LogOpPred::from_rel_node(expr.into_rel_node()).unwrap();
                 let mut children = expr.children().into_iter();
                 let first_expr = Self::conv_from_optd_expr(children.next().unwrap(), context)?;
                 let op = match typ {
@@ -195,7 +195,7 @@ impl OptdPlanContext<'_> {
                 })
             }
             DfNodeType::BinOp(op) => {
-                let expr = BinOpExpr::from_rel_node(expr.into_rel_node()).unwrap();
+                let expr = BinOpPred::from_rel_node(expr.into_rel_node()).unwrap();
                 let left = Self::conv_from_optd_expr(expr.left_child(), context)?;
                 let right = Self::conv_from_optd_expr(expr.right_child(), context)?;
                 let op = match op {
@@ -219,13 +219,13 @@ impl OptdPlanContext<'_> {
             }
             DfNodeType::Between => {
                 // TODO: should we just convert between to x <= c1 and x >= c2?
-                let expr = BetweenExpr::from_rel_node(expr.into_rel_node()).unwrap();
+                let expr = BetweenPred::from_rel_node(expr.into_rel_node()).unwrap();
                 Self::conv_from_optd_expr(
-                    LogOpExpr::new(
+                    LogOpPred::new(
                         LogOpType::And,
-                        ExprList::new(vec![
-                            BinOpExpr::new(expr.child(), expr.lower(), BinOpType::Geq).into_expr(),
-                            BinOpExpr::new(expr.child(), expr.upper(), BinOpType::Leq).into_expr(),
+                        ListPred::new(vec![
+                            BinOpPred::new(expr.child(), expr.lower(), BinOpType::Geq).into_expr(),
+                            BinOpPred::new(expr.child(), expr.upper(), BinOpType::Leq).into_expr(),
                         ]),
                     )
                     .into_expr(),
@@ -233,7 +233,7 @@ impl OptdPlanContext<'_> {
                 )
             }
             DfNodeType::Cast => {
-                let expr = CastExpr::from_rel_node(expr.into_rel_node()).unwrap();
+                let expr = CastPred::from_rel_node(expr.into_rel_node()).unwrap();
                 let child = Self::conv_from_optd_expr(expr.child(), context)?;
                 Ok(Arc::new(
                     datafusion::physical_plan::expressions::CastExpr::new(
@@ -244,7 +244,7 @@ impl OptdPlanContext<'_> {
                 ))
             }
             DfNodeType::Like => {
-                let expr = LikeExpr::from_rel_node(expr.into_rel_node()).unwrap();
+                let expr = LikePred::from_rel_node(expr.into_rel_node()).unwrap();
                 let child = Self::conv_from_optd_expr(expr.child(), context)?;
                 let pattern = Self::conv_from_optd_expr(expr.pattern(), context)?;
                 Ok(Arc::new(
@@ -257,7 +257,7 @@ impl OptdPlanContext<'_> {
                 ))
             }
             DfNodeType::InList => {
-                let expr = InListExpr::from_rel_node(expr.into_rel_node()).unwrap();
+                let expr = InListPred::from_rel_node(expr.into_rel_node()).unwrap();
                 let child = Self::conv_from_optd_expr(expr.child(), context)?;
                 let list = expr
                     .list()
@@ -329,7 +329,7 @@ impl OptdPlanContext<'_> {
         // Limit skip/fetch expressions are only allowed to be constant int
         assert!(node.skip().typ() == DfNodeType::Constant(ConstantType::UInt64));
         // Conversion from u64 -> usize could fail (also the case in into_optd)
-        let skip = ConstantExpr::from_rel_node(node.skip().into_rel_node())
+        let skip = ConstantPred::from_rel_node(node.skip().into_rel_node())
             .unwrap()
             .value()
             .as_u64()
@@ -337,7 +337,7 @@ impl OptdPlanContext<'_> {
             .unwrap();
 
         assert!(node.fetch().typ() == DfNodeType::Constant(ConstantType::UInt64));
-        let fetch = ConstantExpr::from_rel_node(node.fetch().into_rel_node())
+        let fetch = ConstantPred::from_rel_node(node.fetch().into_rel_node())
             .unwrap()
             .value()
             .as_u64();
@@ -367,7 +367,7 @@ impl OptdPlanContext<'_> {
             .into_iter()
             .map(|expr| {
                 self.conv_from_optd_sort_order_expr(
-                    SortOrderExpr::from_rel_node(expr.into_rel_node()).unwrap(),
+                    SortOrderPred::from_rel_node(expr.into_rel_node()).unwrap(),
                     &input_exec.schema(),
                 )
             })
@@ -494,10 +494,10 @@ impl OptdPlanContext<'_> {
         assert_eq!(left_exprs.len(), right_exprs.len());
         let mut on = Vec::with_capacity(left_exprs.len());
         for (left_expr, right_expr) in left_exprs.into_iter().zip(right_exprs.into_iter()) {
-            let Some(left_expr) = ColumnRefExpr::from_rel_node(left_expr.into_rel_node()) else {
+            let Some(left_expr) = ColumnRefPred::from_rel_node(left_expr.into_rel_node()) else {
                 bail!("left expr is not column ref")
             };
-            let Some(right_expr) = ColumnRefExpr::from_rel_node(right_expr.into_rel_node()) else {
+            let Some(right_expr) = ColumnRefPred::from_rel_node(right_expr.into_rel_node()) else {
                 bail!("right expr is not column ref")
             };
             on.push((

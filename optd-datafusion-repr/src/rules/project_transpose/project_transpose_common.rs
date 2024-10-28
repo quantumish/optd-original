@@ -1,4 +1,4 @@
-use crate::plan_nodes::{ColumnRefExpr, Expr, ExprList, DfReprPlanNode};
+use crate::plan_nodes::{ColumnRefPred, Expr, ListPred, DfReprPlanNode};
 
 /// This struct holds the mapping from original columns to projected columns.
 ///
@@ -21,11 +21,11 @@ pub struct ProjectionMapping {
 impl ProjectionMapping {
     // forward vec is mapped output schema -> col refs
     // backward vec is mapped col refs -> output schema
-    pub fn build(exprs: &ExprList) -> Option<Self> {
+    pub fn build(exprs: &ListPred) -> Option<Self> {
         let mut forward = vec![];
         let mut backward = vec![];
         for (i, expr) in exprs.to_vec().iter().enumerate() {
-            let col_expr = ColumnRefExpr::from_rel_node(expr.clone().into_rel_node())?;
+            let col_expr = ColumnRefPred::from_rel_node(expr.clone().into_rel_node())?;
             let col_idx = col_expr.index();
             forward.push(col_idx);
             if col_idx >= backward.len() {
@@ -99,7 +99,7 @@ impl ProjectionMapping {
     ///     Projection { exprs: [#0, #2] }
     /// ---->
     /// Projection { exprs: [#2, #0] }
-    pub fn rewrite_projection(&self, exprs: &ExprList, is_top_mapped: bool) -> Option<ExprList> {
+    pub fn rewrite_projection(&self, exprs: &ListPred, is_top_mapped: bool) -> Option<ListPred> {
         if exprs.is_empty() {
             return None;
         }
@@ -112,12 +112,12 @@ impl ProjectionMapping {
             }
         } else {
             for i in exprs.to_vec() {
-                let col_ref = ColumnRefExpr::from_rel_node(i.into_rel_node()).unwrap();
+                let col_ref = ColumnRefPred::from_rel_node(i.into_rel_node()).unwrap();
                 let col_idx = self.original_col_maps_to(col_ref.index()).unwrap();
-                let col: Expr = ColumnRefExpr::new(col_idx).into_expr();
+                let col: Expr = ColumnRefPred::new(col_idx).into_expr();
                 new_projection_exprs.push(col);
             }
         }
-        Some(ExprList::new(new_projection_exprs))
+        Some(ListPred::new(new_projection_exprs))
     }
 }

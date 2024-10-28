@@ -5,7 +5,7 @@ use pretty_xmlish::Pretty;
 use crate::explain::Insertable;
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap, PredNode, Value};
 
-use super::{ArcDfPlanNode, ConstantExpr, DfNodeType, DfPlanNode, DfPredType, DfReprPlanNode};
+use super::{ArcDfPlanNode, ConstantPred, DfNodeType, DfPlanNode, DfPredType, DfReprPlanNode};
 
 #[derive(Clone, Debug)]
 pub struct LogicalScan(pub ArcDfPlanNode);
@@ -36,7 +36,7 @@ impl LogicalScan {
             DfPlanNode {
                 typ: DfNodeType::Scan,
                 children: vec![],
-                predicates: vec![ConstantExpr::string(table).into()],
+                predicates: vec![ConstantPred::string(table).into()],
             }
             .into(),
         )
@@ -80,7 +80,7 @@ impl DfReprPlanNode for PhysicalScan {
 
 impl PhysicalScan {
     pub fn table(&self) -> Arc<str> {
-        ConstantExpr::from_plan_node(self.0.predicates.first().unwrap())
+        ConstantPred::from_plan_node(self.0.predicates.first().unwrap())
             .value()
             .as_str()
     }

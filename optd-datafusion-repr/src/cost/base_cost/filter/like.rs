@@ -9,7 +9,7 @@ use crate::{
         },
         OptCostModel,
     },
-    plan_nodes::{ColumnRefExpr, ConstantExpr, DfNodeType, LikeExpr, DfReprPlanNode},
+    plan_nodes::{ColumnRefPred, ConstantPred, DfNodeType, DfReprPlanNode, LikePred},
     properties::column_ref::{BaseTableColumnRef, BaseTableColumnRefs, ColumnRef},
 };
 
@@ -39,7 +39,7 @@ impl<
     /// part of the pattern.
     pub(super) fn get_like_selectivity(
         &self,
-        like_expr: &LikeExpr,
+        like_expr: &LikePred,
         column_refs: &BaseTableColumnRefs,
     ) -> f64 {
         let child = like_expr.child();
@@ -55,14 +55,14 @@ impl<
             return UNIMPLEMENTED_SEL;
         }
 
-        let col_ref_idx = ColumnRefExpr::from_rel_node(child.into_rel_node())
+        let col_ref_idx = ColumnRefPred::from_rel_node(child.into_rel_node())
             .unwrap()
             .index();
 
         if let ColumnRef::BaseTableColumnRef(BaseTableColumnRef { table, col_idx }) =
             &column_refs[col_ref_idx]
         {
-            let pattern = ConstantExpr::from_rel_node(pattern.into_rel_node())
+            let pattern = ConstantPred::from_rel_node(pattern.into_rel_node())
                 .expect("we already checked pattern is a constant")
                 .value()
                 .as_str();

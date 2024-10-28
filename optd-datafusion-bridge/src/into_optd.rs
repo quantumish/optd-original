@@ -7,11 +7,11 @@ use datafusion::{
 use datafusion_expr::Subquery;
 use optd_core::nodes::PlanNode;
 use optd_datafusion_repr::plan_nodes::{
-    BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, DfNodeType,
-    DfReprPlanNode, Expr, ExprList, ExternColumnRefExpr, FuncExpr, FuncType, InListExpr, JoinType,
-    LikeExpr, LogOpExpr, LogOpType, LogicalAgg, LogicalEmptyRelation, LogicalFilter, LogicalJoin,
-    LogicalLimit, LogicalProjection, LogicalScan, LogicalSort, DfReprPlanNode, ArcDfPlanNode,
-    RawDependentJoin, SortOrderExpr, SortOrderType,
+    ArcDfPlanNode, BetweenPred, BinOpPred, BinOpType, CastPred, ColumnRefPred, ConstantPred,
+    DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ExternColumnRefExpr, FuncPred, FuncType,
+    InListPred, JoinType, LikePred, ListPred, LogOpPred, LogOpType, LogicalAgg,
+    LogicalEmptyRelation, LogicalFilter, LogicalJoin, LogicalLimit, LogicalProjection, LogicalScan,
+    LogicalSort, RawDependentJoin, SortOrderPred, SortOrderType,
 };
 use optd_datafusion_repr::properties::schema::Schema as OptdSchema;
 
@@ -34,8 +34,8 @@ impl OptdPlanContext<'_> {
             let dep_join = RawDependentJoin::new(
                 node,
                 subquery_root,
-                ConstantExpr::bool(true).into_expr(),
-                ExprList::new(
+                ConstantPred::bool(true).into_expr(),
+                ListPred::new(
                     outer_ref_columns
                         .iter()
                         .filter_map(|col| {
@@ -59,7 +59,10 @@ impl OptdPlanContext<'_> {
         Ok(node)
     }
 
-    fn conv_into_optd_table_scan(&mut self, node: &logical_plan::TableScan) -> Result<DfReprPlanNode> {
+    fn conv_into_optd_table_scan(
+        &mut self,
+        node: &logical_plan::TableScan,
+    ) -> Result<DfReprPlanNode> {
         let table_name = node.table_name.to_string();
         if node.fetch.is_some() {
             bail!("fetch")
@@ -72,9 +75,9 @@ impl OptdPlanContext<'_> {
         if let Some(ref projection) = node.projection {
             let mut exprs = Vec::with_capacity(projection.len());
             for &p in projection {
-                exprs.push(ColumnRefExpr::new(p).into_expr());
+                exprs.push(ColumnRefPred::new(p).into_expr());
             }
-            let projection = LogicalProjection::new(scan.into_plan_node(), ExprList::new(exprs));
+            let projection = LogicalProjection::new(scan.into_plan_node(), ListPred::new(exprs));
             return Ok(projection.into_plan_node());
         }
         Ok(scan.into_plan_node())
@@ -97,16 +100,16 @@ impl OptdPlanContext<'_> {
                 match node.op {
                     Operator::And => {
                         let op = LogOpType::And;
-                        let expr_list = ExprList::new(vec![left, right]);
+                        let expr_list = ListPred::new(vec![left, right]);
                         return Ok(
-                            LogOpExpr::new_flattened_nested_logical(op, expr_list).into_expr()
+                            LogOpPred::new_flattened_nested_logical(op, expr_list).into_expr()
                         );
                     }
                     Operator::Or => {
                         let op = LogOpType::Or;
-                        let expr_list = ExprList::new(vec![left, right]);
+                        let expr_list = ListPred::new(vec![left, right]);
                         return Ok(
-                            LogOpExpr::new_flattened_nested_logical(op, expr_list).into_expr()
+                            LogOpPred::new_flattened_nested_logical(op, expr_list).into_expr()
                         );
                     }
                     _ => {}
@@ -125,11 +128,11 @@ impl OptdPlanContext<'_> {
                     Operator::Divide => BinOpType::Div,
                     op => unimplemented!("{}", op),
                 };
-                Ok(BinOpExpr::new(left, right, op).into_expr())
+                Ok(BinOpPred::new(left, right, op).into_expr())
             }
             Expr::Column(col) => {
                 let idx = context.index_of_column(col)?;
-                Ok(ColumnRefExpr::new(idx).into_expr())
+                Ok(ColumnRefPred::new(idx).into_expr())
             }
             Expr::OuterReferenceColumn(_, col) => {
                 let idx = dep_ctx.unwrap().index_of_column(col)?;
@@ -138,59 +141,59 @@ impl OptdPlanContext<'_> {
             Expr::Literal(x) => match x {
                 ScalarValue::UInt8(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::uint8(*x).into_expr())
+                    Ok(ConstantPred::uint8(*x).into_expr())
                 }
                 ScalarValue::UInt16(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::uint16(*x).into_expr())
+                    Ok(ConstantPred::uint16(*x).into_expr())
                 }
                 ScalarValue::UInt32(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::uint32(*x).into_expr())
+                    Ok(ConstantPred::uint32(*x).into_expr())
                 }
                 ScalarValue::UInt64(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::uint64(*x).into_expr())
+                    Ok(ConstantPred::uint64(*x).into_expr())
                 }
                 ScalarValue::Int8(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::int8(*x).into_expr())
+                    Ok(ConstantPred::int8(*x).into_expr())
                 }
                 ScalarValue::Int16(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::int16(*x).into_expr())
+                    Ok(ConstantPred::int16(*x).into_expr())
                 }
                 ScalarValue::Int32(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::int32(*x).into_expr())
+                    Ok(ConstantPred::int32(*x).into_expr())
                 }
                 ScalarValue::Int64(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::int64(*x).into_expr())
+                    Ok(ConstantPred::int64(*x).into_expr())
                 }
                 ScalarValue::Float64(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::float64(*x).into_expr())
+                    Ok(ConstantPred::float64(*x).into_expr())
                 }
                 ScalarValue::Utf8(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::string(x).into_expr())
+                    Ok(ConstantPred::string(x).into_expr())
                 }
                 ScalarValue::Date32(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::date(*x as i64).into_expr())
+                    Ok(ConstantPred::date(*x as i64).into_expr())
                 }
                 ScalarValue::IntervalMonthDayNano(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::interval_month_day_nano(*x).into_expr())
+                    Ok(ConstantPred::interval_month_day_nano(*x).into_expr())
                 }
                 ScalarValue::Decimal128(x, _, _) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::decimal(*x as f64).into_expr())
+                    Ok(ConstantPred::decimal(*x as f64).into_expr())
                 }
                 ScalarValue::Boolean(x) => {
                     let x = x.as_ref().unwrap();
-                    Ok(ConstantExpr::bool(*x).into_expr())
+                    Ok(ConstantPred::bool(*x).into_expr())
                 }
                 _ => bail!("{:?}", x),
             },
@@ -199,11 +202,11 @@ impl OptdPlanContext<'_> {
             }
             Expr::ScalarFunction(x) => {
                 let args = self.conv_into_optd_expr_list(&x.args, context, dep_ctx, subqueries)?;
-                Ok(FuncExpr::new(FuncType::new_scalar(x.fun), args).into_expr())
+                Ok(FuncPred::new(FuncType::new_scalar(x.fun), args).into_expr())
             }
             Expr::AggregateFunction(x) => {
                 let args = self.conv_into_optd_expr_list(&x.args, context, dep_ctx, subqueries)?;
-                Ok(FuncExpr::new(FuncType::new_agg(x.fun.clone()), args).into_expr())
+                Ok(FuncPred::new(FuncType::new_agg(x.fun.clone()), args).into_expr())
             }
             Expr::Case(x) => {
                 let when_then_expr = &x.when_then_expr;
@@ -220,16 +223,16 @@ impl OptdPlanContext<'_> {
                     subqueries,
                 )?;
                 assert!(x.expr.is_none());
-                Ok(FuncExpr::new(
+                Ok(FuncPred::new(
                     FuncType::Case,
-                    ExprList::new(vec![when_expr, then_expr, else_expr]),
+                    ListPred::new(vec![when_expr, then_expr, else_expr]),
                 )
                 .into_expr())
             }
             Expr::Sort(x) => {
                 let expr =
                     self.conv_into_optd_expr(x.expr.as_ref(), context, dep_ctx, subqueries)?;
-                Ok(SortOrderExpr::new(
+                Ok(SortOrderPred::new(
                     if x.asc {
                         SortOrderType::Asc
                     } else {
@@ -246,32 +249,32 @@ impl OptdPlanContext<'_> {
                 let high =
                     self.conv_into_optd_expr(x.high.as_ref(), context, dep_ctx, subqueries)?;
                 assert!(!x.negated, "unimplemented");
-                Ok(BetweenExpr::new(expr, low, high).into_expr())
+                Ok(BetweenPred::new(expr, low, high).into_expr())
             }
             Expr::Cast(x) => {
                 let expr =
                     self.conv_into_optd_expr(x.expr.as_ref(), context, dep_ctx, subqueries)?;
-                Ok(CastExpr::new(expr, x.data_type.clone()).into_expr())
+                Ok(CastPred::new(expr, x.data_type.clone()).into_expr())
             }
             Expr::Like(x) => {
                 let expr =
                     self.conv_into_optd_expr(x.expr.as_ref(), context, dep_ctx, subqueries)?;
                 let pattern =
                     self.conv_into_optd_expr(x.pattern.as_ref(), context, dep_ctx, subqueries)?;
-                Ok(LikeExpr::new(x.negated, x.case_insensitive, expr, pattern).into_expr())
+                Ok(LikePred::new(x.negated, x.case_insensitive, expr, pattern).into_expr())
             }
             Expr::InList(x) => {
                 let expr =
                     self.conv_into_optd_expr(x.expr.as_ref(), context, dep_ctx, subqueries)?;
                 let list = self.conv_into_optd_expr_list(&x.list, context, dep_ctx, subqueries)?;
-                Ok(InListExpr::new(expr, list, x.negated).into_expr())
+                Ok(InListPred::new(expr, list, x.negated).into_expr())
             }
             Expr::ScalarSubquery(sq) => {
                 // This relies on a left-deep tree of dependent joins being
                 // generated below this node, in response to all pushed subqueries.
                 let new_column_ref_idx = context.fields().len() + subqueries.len();
                 subqueries.push(sq);
-                Ok(ColumnRefExpr::new(new_column_ref_idx).into_expr())
+                Ok(ColumnRefPred::new(new_column_ref_idx).into_expr())
             }
             _ => bail!("Unsupported expression: {:?}", expr),
         }
@@ -319,12 +322,12 @@ impl OptdPlanContext<'_> {
         context: &DFSchema,
         dep_ctx: Option<&DFSchema>,
         subqueries: &mut Vec<&'a Subquery>,
-    ) -> Result<ExprList> {
+    ) -> Result<ListPred> {
         let exprs = exprs
             .iter()
             .map(|expr| self.conv_into_optd_expr(expr, context, dep_ctx, subqueries))
             .collect::<Result<Vec<_>>>()?;
-        Ok(ExprList::new(exprs))
+        Ok(ListPred::new(exprs))
     }
 
     fn conv_into_optd_sort(
@@ -375,8 +378,8 @@ impl OptdPlanContext<'_> {
 
     fn add_column_offset(offset: usize, expr: Expr) -> Expr {
         if expr.typ() == DfNodeType::ColumnRef {
-            let expr = ColumnRefExpr::from_rel_node(expr.into_rel_node()).unwrap();
-            return ColumnRefExpr::new(expr.index() + offset).into_expr();
+            let expr = ColumnRefPred::from_rel_node(expr.into_rel_node()).unwrap();
+            return ColumnRefPred::new(expr.index() + offset).into_expr();
         }
         let rel_node = expr.into_rel_node();
         let children = rel_node
@@ -427,7 +430,7 @@ impl OptdPlanContext<'_> {
                 self.conv_into_optd_expr(right, node.right.schema(), dep_ctx, &mut subqueries)?;
             let right = Self::add_column_offset(node.left.schema().fields().len(), right);
             let op = BinOpType::Eq;
-            let expr = BinOpExpr::new(left, right, op).into_expr();
+            let expr = BinOpPred::new(left, right, op).into_expr();
             log_ops.push(expr);
         }
         if node.filter.is_some() {
@@ -448,15 +451,15 @@ impl OptdPlanContext<'_> {
             Ok(LogicalJoin::new(
                 left,
                 right,
-                ConstantExpr::bool(true).into_expr(),
+                ConstantPred::bool(true).into_expr(),
                 join_type,
             ))
         } else if log_ops.len() == 1 {
             Ok(LogicalJoin::new(left, right, log_ops.remove(0), join_type))
         } else {
-            let expr_list = ExprList::new(log_ops);
+            let expr_list = ListPred::new(log_ops);
             // the expr from filter is already flattened in conv_into_optd_expr
-            let log_op = LogOpExpr::new_flattened_nested_logical(LogOpType::And, expr_list);
+            let log_op = LogOpPred::new_flattened_nested_logical(LogOpType::And, expr_list);
             Ok(LogicalJoin::new(left, right, log_op.into_expr(), join_type))
         }
     }
@@ -471,7 +474,7 @@ impl OptdPlanContext<'_> {
         Ok(LogicalJoin::new(
             left,
             right,
-            ConstantExpr::bool(true).into_expr(),
+            ConstantPred::bool(true).into_expr(),
             JoinType::Cross,
         ))
     }
@@ -503,8 +506,8 @@ impl OptdPlanContext<'_> {
         };
         Ok(LogicalLimit::new(
             input,
-            ConstantExpr::uint64(converted_skip).into_expr(),
-            ConstantExpr::uint64(converted_fetch).into_expr(),
+            ConstantPred::uint64(converted_skip).into_expr(),
+            ConstantPred::uint64(converted_fetch).into_expr(),
         ))
     }
 

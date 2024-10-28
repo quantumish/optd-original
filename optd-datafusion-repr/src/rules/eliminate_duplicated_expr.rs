@@ -6,8 +6,8 @@ use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
 use crate::plan_nodes::{
-    DfNodeType, DfReprPlanNode, Expr, ExprList, LogicalAgg, LogicalSort, DfReprPlanNode, SortOrderExpr,
-    SortOrderType,
+    DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ListPred, LogicalAgg, LogicalSort,
+    SortOrderPred, SortOrderType,
 };
 
 use super::macros::define_rule;
@@ -41,9 +41,9 @@ fn apply_eliminate_duplicated_sort_expr(
         .children
         .iter()
         .map(|x| match x.typ {
-            DfNodeType::SortOrder(_) => SortOrderExpr::new(
+            DfNodeType::SortOrder(_) => SortOrderPred::new(
                 SortOrderType::Asc,
-                SortOrderExpr::from_rel_node(x.clone()).unwrap().child(),
+                SortOrderPred::from_rel_node(x.clone()).unwrap().child(),
             )
             .into_rel_node(),
             _ => x.clone(),
@@ -66,7 +66,7 @@ fn apply_eliminate_duplicated_sort_expr(
     if dedup_expr.len() != sort_keys.len() {
         let node = LogicalSort::new(
             DfReprPlanNode::from_group(child.into()),
-            ExprList::new(dedup_expr),
+            ListPred::new(dedup_expr),
         );
         return vec![node.into_rel_node().as_ref().clone()];
     }
@@ -108,8 +108,8 @@ fn apply_eliminate_duplicated_agg_expr(
     if dedup_expr.len() != groups.children.len() {
         let node = LogicalAgg::new(
             DfReprPlanNode::from_group(child.into()),
-            ExprList::from_group(exprs.into()),
-            ExprList::new(dedup_expr),
+            ListPred::from_group(exprs.into()),
+            ListPred::new(dedup_expr),
         );
         return vec![node.into_rel_node().as_ref().clone()];
     }

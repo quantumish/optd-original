@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use super::macros::define_rule;
 use crate::plan_nodes::{
-    ConstantExpr, ConstantType, DfNodeType, DfReprPlanNode, Expr, ExprList, JoinType, LogOpExpr,
-    LogOpType, LogicalEmptyRelation, LogicalJoin, DfReprPlanNode,
+    ConstantPred, ConstantType, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ListPred,
+    JoinType, LogOpPred, LogOpType, LogicalEmptyRelation, LogicalJoin,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 use crate::ArcDfPlanNode;
@@ -23,7 +23,7 @@ define_rule!(
 //    - Replaces the And operator with False if any operand is False
 //    - Removes Duplicates
 fn simplify_log_expr(log_expr: ArcDfPlanNode, changed: &mut bool) -> ArcDfPlanNode {
-    let log_expr = LogOpExpr::from_rel_node(log_expr).unwrap();
+    let log_expr = LogOpPred::from_rel_node(log_expr).unwrap();
     let op = log_expr.op_type();
     // we need a new children vec to output deterministic order
     let mut new_children_set = HashSet::new();
@@ -46,14 +46,14 @@ fn simplify_log_expr(log_expr: ArcDfPlanNode, changed: &mut bool) -> ArcDfPlanNo
                 }
                 if op == LogOpType::Or {
                     // replace whole exprList with True
-                    return ConstantExpr::bool(true).into_rel_node().clone();
+                    return ConstantPred::bool(true).into_rel_node().clone();
                 }
                 unreachable!("no other type in logOp");
             }
             // FalseExpr
             if op == LogOpType::And {
                 // replace whole exprList with False
-                return ConstantExpr::bool(false).into_rel_node().clone();
+                return ConstantPred::bool(false).into_rel_node().clone();
             }
             if op == LogOpType::Or {
                 // skip False in Or
@@ -67,10 +67,10 @@ fn simplify_log_expr(log_expr: ArcDfPlanNode, changed: &mut bool) -> ArcDfPlanNo
     }
     if new_children.is_empty() {
         if op == LogOpType::And {
-            return ConstantExpr::bool(true).into_rel_node().clone();
+            return ConstantPred::bool(true).into_rel_node().clone();
         }
         if op == LogOpType::Or {
-            return ConstantExpr::bool(false).into_rel_node().clone();
+            return ConstantPred::bool(false).into_rel_node().clone();
         }
         unreachable!("no other type in logOp");
     }
@@ -86,7 +86,7 @@ fn simplify_log_expr(log_expr: ArcDfPlanNode, changed: &mut bool) -> ArcDfPlanNo
     if children_size != new_children.len() {
         *changed = true;
     }
-    LogOpExpr::new(op, ExprList::new(new_children))
+    LogOpPred::new(op, ListPred::new(new_children))
         .into_rel_node()
         .clone()
 }

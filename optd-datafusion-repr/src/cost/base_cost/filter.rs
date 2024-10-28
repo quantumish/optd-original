@@ -13,8 +13,8 @@ use crate::{
         UNIMPLEMENTED_SEL,
     },
     plan_nodes::{
-        BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, ConstantType, DfNodeType, Expr,
-        InListExpr, LikeExpr, LogOpType, DfReprPlanNode, ArcDfPlanNode, UnOpType,
+        ArcDfPlanNode, BinOpType, CastPred, ColumnRefPred, ConstantPred, ConstantType, DfNodeType,
+        DfReprPlanNode, Expr, InListPred, LikePred, LogOpType, UnOpType,
     },
     properties::{
         column_ref::{
@@ -132,14 +132,14 @@ impl<
             DfNodeType::Between => UNIMPLEMENTED_SEL,
             DfNodeType::Cast => unimplemented!("check bool type or else panic"),
             DfNodeType::Like => {
-                let like_expr = LikeExpr::from_rel_node(expr_tree).unwrap();
+                let like_expr = LikePred::from_rel_node(expr_tree).unwrap();
                 self.get_like_selectivity(&like_expr, column_refs)
             }
             DfNodeType::DataType(_) => {
                 panic!("the selectivity of a data type is not defined")
             }
             DfNodeType::InList => {
-                let in_list_expr = InListExpr::from_rel_node(expr_tree).unwrap();
+                let in_list_expr = InListPred::from_rel_node(expr_tree).unwrap();
                 self.get_in_list_selectivity(&in_list_expr, column_refs)
             }
             _ => unreachable!(
@@ -200,7 +200,7 @@ impl<
         left: ArcDfPlanNode,
         right: ArcDfPlanNode,
         schema: &Schema,
-    ) -> (Vec<ColumnRefExpr>, Vec<Value>, Vec<ArcDfPlanNode>, bool) {
+    ) -> (Vec<ColumnRefPred>, Vec<Value>, Vec<ArcDfPlanNode>, bool) {
         let mut col_ref_exprs = vec![];
         let mut values = vec![];
         let mut non_col_ref_exprs = vec![];
@@ -214,9 +214,9 @@ impl<
             if uncasted_left.as_ref().typ == DfNodeType::Cast
                 && uncasted_right.as_ref().typ == DfNodeType::Cast
             {
-                let left_cast_expr = CastExpr::from_rel_node(uncasted_left)
+                let left_cast_expr = CastPred::from_rel_node(uncasted_left)
                     .expect("we already checked that the type is Cast");
-                let right_cast_expr = CastExpr::from_rel_node(uncasted_right)
+                let right_cast_expr = CastPred::from_rel_node(uncasted_right)
                     .expect("we already checked that the type is Cast");
                 assert!(left_cast_expr.cast_to() == right_cast_expr.cast_to());
                 uncasted_left = left_cast_expr.child().into_rel_node();
@@ -231,15 +231,15 @@ impl<
                     (uncasted_right, uncasted_left)
                 };
 
-                let cast_expr = CastExpr::from_rel_node(cast_node)
+                let cast_expr = CastPred::from_rel_node(cast_node)
                     .expect("we already checked that the type is Cast");
                 let cast_expr_child = cast_expr.child().into_rel_node();
                 let cast_expr_cast_to = cast_expr.cast_to();
 
                 let should_break = match cast_expr_child.typ {
                     DfNodeType::Constant(_) => {
-                        cast_node = ConstantExpr::new(
-                            ConstantExpr::from_rel_node(cast_expr_child)
+                        cast_node = ConstantPred::new(
+                            ConstantPred::from_rel_node(cast_expr_child)
                                 .expect("we already checked that the type is Constant")
                                 .value()
                                 .convert_to_type(cast_expr_cast_to),
@@ -248,7 +248,7 @@ impl<
                         false
                     }
                     DfNodeType::ColumnRef => {
-                        let col_ref_expr = ColumnRefExpr::from_rel_node(cast_expr_child)
+                        let col_ref_expr = ColumnRefPred::from_rel_node(cast_expr_child)
                             .expect("we already checked that the type is ColumnRef");
                         let col_ref_idx = col_ref_expr.index();
                         cast_node = col_ref_expr.into_rel_node();
@@ -265,7 +265,7 @@ impl<
                                 true
                             }
                             _ => {
-                                non_cast_node = CastExpr::new(
+                                non_cast_node = CastPred::new(
                                     Expr::from_rel_node(non_cast_node).unwrap(),
                                     invert_cast_data_type.clone(),
                                 )
@@ -296,14 +296,14 @@ impl<
             DfNodeType::ColumnRef => {
                 is_left_col_ref = true;
                 col_ref_exprs.push(
-                    ColumnRefExpr::from_rel_node(uncasted_left)
+                    ColumnRefPred::from_rel_node(uncasted_left)
                         .expect("we already checked that the type is ColumnRef"),
                 );
             }
             DfNodeType::Constant(_) => {
                 is_left_col_ref = false;
                 values.push(
-                    ConstantExpr::from_rel_node(uncasted_left)
+                    ConstantPred::from_rel_node(uncasted_left)
                         .expect("we already checked that the type is Constant")
                         .value(),
                 )
@@ -316,12 +316,12 @@ impl<
         match uncasted_right.as_ref().typ {
             DfNodeType::ColumnRef => {
                 col_ref_exprs.push(
-                    ColumnRefExpr::from_rel_node(uncasted_right)
+                    ColumnRefPred::from_rel_node(uncasted_right)
                         .expect("we already checked that the type is ColumnRef"),
                 );
             }
             DfNodeType::Constant(_) => values.push(
-                ConstantExpr::from_rel_node(uncasted_right)
+                ConstantPred::from_rel_node(uncasted_right)
                     .expect("we already checked that the type is Constant")
                     .value(),
             ),

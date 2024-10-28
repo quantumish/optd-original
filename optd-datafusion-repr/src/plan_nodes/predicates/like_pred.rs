@@ -3,32 +3,37 @@ use std::sync::Arc;
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
+use crate::plan_nodes::{ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode};
 
 #[derive(Clone, Debug)]
-pub struct LikeExpr(pub Expr);
+pub struct LikePred(pub ArcDfPredNode);
 
-impl LikeExpr {
-    pub fn new(negated: bool, case_insensitive: bool, expr: Expr, pattern: Expr) -> Self {
+impl LikePred {
+    pub fn new(
+        negated: bool,
+        case_insensitive: bool,
+        child: ArcDfPredNode,
+        pattern: ArcDfPredNode,
+    ) -> Self {
         // TODO: support multiple values in data.
         let negated = if negated { 1 } else { 0 };
         let case_insensitive = if case_insensitive { 1 } else { 0 };
-        LikeExpr(Expr(
-            PlanNode {
-                typ: DfNodeType::Like,
-                children: vec![expr.into_rel_node(), pattern.into_rel_node()],
+        LikePred(
+            DfPredNode {
+                typ: DfPredType::Like,
+                children: vec![child.into_rel_node(), pattern.into_rel_node()],
                 data: Some(Value::Serialized(Arc::new([negated, case_insensitive]))),
             }
             .into(),
-        ))
+        )
     }
 
-    pub fn child(&self) -> Expr {
-        Expr(self.0.child(0))
+    pub fn child(&self) -> ArcDfPredNode {
+        self.0.child(0)
     }
 
-    pub fn pattern(&self) -> Expr {
-        Expr(self.0.child(1))
+    pub fn pattern(&self) -> ArcDfPredNode {
+        self.0.child(0)
     }
 
     /// `true` for `NOT LIKE`.
@@ -47,19 +52,19 @@ impl LikeExpr {
     }
 }
 
-impl DfReprPlanNode for LikeExpr {
-    fn into_rel_node(self) -> ArcDfPlanNode {
+impl DfReprPredNode for LikePred {
+    fn into_pred_node(self) -> ArcDfPredNode {
         self.0.into_rel_node()
     }
 
-    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
-        if !matches!(rel_node.typ, DfNodeType::Like) {
+    fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {
+        if !matches!(pred_node.typ, DfPredType::Like) {
             return None;
         }
-        Expr::from_rel_node(rel_node).map(Self)
+        Some(Self(pred_node))
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             "Like",
             vec![

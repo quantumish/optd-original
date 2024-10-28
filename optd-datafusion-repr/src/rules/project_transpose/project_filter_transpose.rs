@@ -6,14 +6,14 @@ use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
 use super::project_transpose_common::ProjectionMapping;
 use crate::plan_nodes::{
-    DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ExprList, LogicalFilter, LogicalProjection,
+    DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ListPred, LogicalFilter, LogicalProjection,
 };
 use crate::rules::macros::define_rule;
 
-fn merge_exprs(first: ExprList, second: ExprList) -> ExprList {
+fn merge_exprs(first: ListPred, second: ListPred) -> ListPred {
     let mut res_vec = first.to_vec();
     res_vec.extend(second.to_vec());
-    ExprList::new(res_vec)
+    ListPred::new(res_vec)
 }
 
 define_rule!(
@@ -30,7 +30,7 @@ fn apply_projection_filter_transpose(
     ProjectFilterTransposeRulePicks { child, cond, exprs }: ProjectFilterTransposeRulePicks,
 ) -> Vec<PlanNode<DfNodeType>> {
     // get columns out of cond
-    let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
+    let exprs = ListPred::from_rel_node(exprs.into()).unwrap();
     let exprs_vec = exprs.clone().to_vec();
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
     let cond_col_refs = cond_as_expr.get_column_refs();
@@ -42,9 +42,9 @@ fn apply_projection_filter_transpose(
         };
     }
 
-    let dedup_cond_col_refs = ExprList::new(dedup_cond_col_refs);
+    let dedup_cond_col_refs = ListPred::new(dedup_cond_col_refs);
 
-    let bottom_proj_exprs: ExprList = merge_exprs(exprs.clone(), dedup_cond_col_refs.clone());
+    let bottom_proj_exprs: ListPred = merge_exprs(exprs.clone(), dedup_cond_col_refs.clone());
     let Some(mapping) = ProjectionMapping::build(&bottom_proj_exprs) else {
         return vec![];
     };
@@ -84,7 +84,7 @@ fn apply_filter_project_transpose(
 ) -> Vec<PlanNode<DfNodeType>> {
     let child = DfReprPlanNode::from_group(child.into());
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
-    let exprs = ExprList::from_rel_node(exprs.into()).unwrap();
+    let exprs = ListPred::from_rel_node(exprs.into()).unwrap();
 
     let proj_col_map = ProjectionMapping::build(&exprs).unwrap();
     let rewritten_cond = proj_col_map.rewrite_filter_cond(cond_as_expr.clone(), false);
@@ -102,8 +102,8 @@ mod tests {
 
     use crate::{
         plan_nodes::{
-            BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, DfNodeType, DfReprPlanNode,
-            ExprList, LogOpExpr, LogOpType, LogicalFilter, LogicalProjection, LogicalScan,
+            BinOpPred, BinOpType, ColumnRefPred, ConstantPred, DfNodeType, DfReprPlanNode,
+            ListPred, LogOpPred, LogOpType, LogicalFilter, LogicalProjection, LogicalScan,
         },
         rules::{FilterProjectTransposeRule, ProjectFilterTransposeRule},
         testing::new_test_optimizer,
@@ -118,27 +118,27 @@ mod tests {
 
         let scan = LogicalScan::new("customer".into());
 
-        let filter_expr = BinOpExpr::new(
-            ColumnRefExpr::new(0).into_expr(),
-            ConstantExpr::int32(5).into_expr(),
+        let filter_expr = BinOpPred::new(
+            ColumnRefPred::new(0).into_expr(),
+            ConstantPred::int32(5).into_expr(),
             BinOpType::Eq,
         )
         .into_expr();
 
         let filter = LogicalFilter::new(scan.into_plan_node(), filter_expr);
 
-        let proj_exprs = ExprList::new(vec![
-            ColumnRefExpr::new(2).into_expr(),
-            ColumnRefExpr::new(0).into_expr(),
+        let proj_exprs = ListPred::new(vec![
+            ColumnRefPred::new(2).into_expr(),
+            ColumnRefPred::new(0).into_expr(),
         ]);
 
         let proj = LogicalProjection::new(filter.into_plan_node(), proj_exprs.clone());
 
         let plan = test_optimizer.optimize(proj.into_rel_node()).unwrap();
 
-        let res_filter_expr = BinOpExpr::new(
-            ColumnRefExpr::new(1).into_expr(),
-            ConstantExpr::int32(5).into_expr(),
+        let res_filter_expr = BinOpPred::new(
+            ColumnRefPred::new(1).into_expr(),
+            ConstantPred::int32(5).into_expr(),
             BinOpType::Eq,
         )
         .into_expr()
@@ -160,31 +160,31 @@ mod tests {
 
         let scan = LogicalScan::new("region".into());
 
-        let filter_expr = BinOpExpr::new(
-            ColumnRefExpr::new(2).into_expr(),
-            ConstantExpr::int32(5).into_expr(),
+        let filter_expr = BinOpPred::new(
+            ColumnRefPred::new(2).into_expr(),
+            ConstantPred::int32(5).into_expr(),
             BinOpType::Eq,
         )
         .into_expr();
 
         let filter = LogicalFilter::new(scan.into_plan_node(), filter_expr);
 
-        let proj_exprs = ExprList::new(vec![ColumnRefExpr::new(1).into_expr()]);
+        let proj_exprs = ListPred::new(vec![ColumnRefPred::new(1).into_expr()]);
 
-        let res_filter_expr: Arc<optd_core::nodes::PlanNode<DfNodeType>> = BinOpExpr::new(
-            ColumnRefExpr::new(1).into_expr(),
-            ConstantExpr::int32(5).into_expr(),
+        let res_filter_expr: Arc<optd_core::nodes::PlanNode<DfNodeType>> = BinOpPred::new(
+            ColumnRefPred::new(1).into_expr(),
+            ConstantPred::int32(5).into_expr(),
             BinOpType::Eq,
         )
         .into_expr()
         .into_rel_node();
 
         let res_top_proj_exprs: Arc<optd_core::nodes::PlanNode<DfNodeType>> =
-            ExprList::new(vec![ColumnRefExpr::new(0).into_expr()]).into_rel_node();
+            ListPred::new(vec![ColumnRefPred::new(0).into_expr()]).into_rel_node();
 
-        let res_bot_proj_exprs = ExprList::new(vec![
-            ColumnRefExpr::new(1).into_expr(),
-            ColumnRefExpr::new(2).into_expr(),
+        let res_bot_proj_exprs = ListPred::new(vec![
+            ColumnRefPred::new(1).into_expr(),
+            ColumnRefPred::new(2).into_expr(),
         ])
         .into_rel_node();
 
@@ -214,18 +214,18 @@ mod tests {
 
         let scan = LogicalScan::new("customer".into());
 
-        let filter_expr = LogOpExpr::new(
+        let filter_expr = LogOpPred::new(
             LogOpType::And,
-            ExprList::new(vec![
-                BinOpExpr::new(
-                    ColumnRefExpr::new(5).into_expr(),
-                    ConstantExpr::int32(3).into_expr(),
+            ListPred::new(vec![
+                BinOpPred::new(
+                    ColumnRefPred::new(5).into_expr(),
+                    ConstantPred::int32(3).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
-                BinOpExpr::new(
-                    ConstantExpr::int32(6).into_expr(),
-                    ColumnRefExpr::new(0).into_expr(),
+                BinOpPred::new(
+                    ConstantPred::int32(6).into_expr(),
+                    ColumnRefPred::new(0).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
@@ -234,11 +234,11 @@ mod tests {
         .into_expr();
 
         let filter = LogicalFilter::new(scan.into_plan_node(), filter_expr);
-        let proj_exprs = ExprList::new(vec![
-            ColumnRefExpr::new(0).into_expr(),
-            ColumnRefExpr::new(4).into_expr(),
-            ColumnRefExpr::new(5).into_expr(),
-            ColumnRefExpr::new(7).into_expr(),
+        let proj_exprs = ListPred::new(vec![
+            ColumnRefPred::new(0).into_expr(),
+            ColumnRefPred::new(4).into_expr(),
+            ColumnRefPred::new(5).into_expr(),
+            ColumnRefPred::new(7).into_expr(),
         ]);
 
         let proj =
@@ -246,18 +246,18 @@ mod tests {
 
         let plan = test_optimizer.optimize(proj).unwrap();
 
-        let res_filter_expr = LogOpExpr::new(
+        let res_filter_expr = LogOpPred::new(
             LogOpType::And,
-            ExprList::new(vec![
-                BinOpExpr::new(
-                    ColumnRefExpr::new(2).into_expr(),
-                    ConstantExpr::int32(3).into_expr(),
+            ListPred::new(vec![
+                BinOpPred::new(
+                    ColumnRefPred::new(2).into_expr(),
+                    ConstantPred::int32(3).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
-                BinOpExpr::new(
-                    ConstantExpr::int32(6).into_expr(),
-                    ColumnRefExpr::new(0).into_expr(),
+                BinOpPred::new(
+                    ConstantPred::int32(6).into_expr(),
+                    ColumnRefPred::new(0).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
@@ -280,18 +280,18 @@ mod tests {
 
         let scan = LogicalScan::new("customer".into());
 
-        let filter_expr = LogOpExpr::new(
+        let filter_expr = LogOpPred::new(
             LogOpType::And,
-            ExprList::new(vec![
-                BinOpExpr::new(
-                    ColumnRefExpr::new(5).into_expr(),
-                    ConstantExpr::int32(3).into_expr(),
+            ListPred::new(vec![
+                BinOpPred::new(
+                    ColumnRefPred::new(5).into_expr(),
+                    ConstantPred::int32(3).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
-                BinOpExpr::new(
-                    ConstantExpr::int32(6).into_expr(),
-                    ColumnRefExpr::new(2).into_expr(),
+                BinOpPred::new(
+                    ConstantPred::int32(6).into_expr(),
+                    ColumnRefPred::new(2).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
@@ -300,11 +300,11 @@ mod tests {
         .into_expr();
 
         let filter = LogicalFilter::new(scan.into_plan_node(), filter_expr);
-        let proj_exprs = ExprList::new(vec![
-            ColumnRefExpr::new(0).into_expr(),
-            ColumnRefExpr::new(4).into_expr(),
-            ColumnRefExpr::new(5).into_expr(),
-            ColumnRefExpr::new(7).into_expr(),
+        let proj_exprs = ListPred::new(vec![
+            ColumnRefPred::new(0).into_expr(),
+            ColumnRefPred::new(4).into_expr(),
+            ColumnRefPred::new(5).into_expr(),
+            ColumnRefPred::new(7).into_expr(),
         ]);
 
         let proj =
@@ -312,18 +312,18 @@ mod tests {
 
         let plan = test_optimizer.optimize(proj).unwrap();
 
-        let res_filter_expr = LogOpExpr::new(
+        let res_filter_expr = LogOpPred::new(
             LogOpType::And,
-            ExprList::new(vec![
-                BinOpExpr::new(
-                    ColumnRefExpr::new(2).into_expr(),
-                    ConstantExpr::int32(3).into_expr(),
+            ListPred::new(vec![
+                BinOpPred::new(
+                    ColumnRefPred::new(2).into_expr(),
+                    ConstantPred::int32(3).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
-                BinOpExpr::new(
-                    ConstantExpr::int32(6).into_expr(),
-                    ColumnRefExpr::new(4).into_expr(),
+                BinOpPred::new(
+                    ConstantPred::int32(6).into_expr(),
+                    ColumnRefPred::new(4).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
@@ -332,20 +332,20 @@ mod tests {
         .into_expr()
         .into_rel_node();
 
-        let top_proj_exprs = ExprList::new(vec![
-            ColumnRefExpr::new(0).into_expr(),
-            ColumnRefExpr::new(1).into_expr(),
-            ColumnRefExpr::new(2).into_expr(),
-            ColumnRefExpr::new(3).into_expr(),
+        let top_proj_exprs = ListPred::new(vec![
+            ColumnRefPred::new(0).into_expr(),
+            ColumnRefPred::new(1).into_expr(),
+            ColumnRefPred::new(2).into_expr(),
+            ColumnRefPred::new(3).into_expr(),
         ])
         .into_rel_node();
 
-        let bot_proj_exprs = ExprList::new(vec![
-            ColumnRefExpr::new(0).into_expr(),
-            ColumnRefExpr::new(4).into_expr(),
-            ColumnRefExpr::new(5).into_expr(),
-            ColumnRefExpr::new(7).into_expr(),
-            ColumnRefExpr::new(2).into_expr(),
+        let bot_proj_exprs = ListPred::new(vec![
+            ColumnRefPred::new(0).into_expr(),
+            ColumnRefPred::new(4).into_expr(),
+            ColumnRefPred::new(5).into_expr(),
+            ColumnRefPred::new(7).into_expr(),
+            ColumnRefPred::new(2).into_expr(),
         ])
         .into_rel_node();
 
@@ -367,12 +367,12 @@ mod tests {
         let scan = LogicalScan::new("customer".into());
         let proj = LogicalProjection::new(
             scan.into_plan_node(),
-            ExprList::new(vec![ColumnRefExpr::new(0).into_expr()]),
+            ListPred::new(vec![ColumnRefPred::new(0).into_expr()]),
         );
 
-        let filter_expr = BinOpExpr::new(
-            ColumnRefExpr::new(0).into_expr(),
-            ConstantExpr::int32(5).into_expr(),
+        let filter_expr = BinOpPred::new(
+            ColumnRefPred::new(0).into_expr(),
+            ConstantPred::int32(5).into_expr(),
             BinOpType::Eq,
         )
         .into_expr();
@@ -391,28 +391,28 @@ mod tests {
         let scan = LogicalScan::new("customer".into());
         let proj = LogicalProjection::new(
             scan.into_plan_node(),
-            ExprList::new(vec![
-                ColumnRefExpr::new(0).into_expr(),
-                ColumnRefExpr::new(4).into_expr(),
-                ColumnRefExpr::new(5).into_expr(),
-                ColumnRefExpr::new(7).into_expr(),
+            ListPred::new(vec![
+                ColumnRefPred::new(0).into_expr(),
+                ColumnRefPred::new(4).into_expr(),
+                ColumnRefPred::new(5).into_expr(),
+                ColumnRefPred::new(7).into_expr(),
             ]),
         );
 
-        let filter_expr = LogOpExpr::new(
+        let filter_expr = LogOpPred::new(
             LogOpType::And,
-            ExprList::new(vec![
-                BinOpExpr::new(
+            ListPred::new(vec![
+                BinOpPred::new(
                     // This one should be pushed to the left child
-                    ColumnRefExpr::new(1).into_expr(),
-                    ConstantExpr::int32(5).into_expr(),
+                    ColumnRefPred::new(1).into_expr(),
+                    ConstantPred::int32(5).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
-                BinOpExpr::new(
+                BinOpPred::new(
                     // This one should be pushed to the right child
-                    ColumnRefExpr::new(3).into_expr(),
-                    ConstantExpr::int32(6).into_expr(),
+                    ColumnRefPred::new(3).into_expr(),
+                    ConstantPred::int32(6).into_expr(),
                     BinOpType::Eq,
                 )
                 .into_expr(),
@@ -427,17 +427,17 @@ mod tests {
         let plan_filter = LogicalFilter::from_rel_node(plan.child(0)).unwrap();
         assert!(matches!(plan_filter.0.typ(), DfNodeType::Filter));
         let plan_filter_expr =
-            LogOpExpr::from_rel_node(plan_filter.cond().into_rel_node()).unwrap();
+            LogOpPred::from_rel_node(plan_filter.cond().into_rel_node()).unwrap();
         assert!(matches!(plan_filter_expr.op_type(), LogOpType::And));
-        let op_0 = BinOpExpr::from_rel_node(plan_filter_expr.children()[0].clone().into_rel_node())
+        let op_0 = BinOpPred::from_rel_node(plan_filter_expr.children()[0].clone().into_rel_node())
             .unwrap();
         let col_0 =
-            ColumnRefExpr::from_rel_node(op_0.left_child().clone().into_rel_node()).unwrap();
+            ColumnRefPred::from_rel_node(op_0.left_child().clone().into_rel_node()).unwrap();
         assert_eq!(col_0.index(), 4);
-        let op_1 = BinOpExpr::from_rel_node(plan_filter_expr.children()[1].clone().into_rel_node())
+        let op_1 = BinOpPred::from_rel_node(plan_filter_expr.children()[1].clone().into_rel_node())
             .unwrap();
         let col_1 =
-            ColumnRefExpr::from_rel_node(op_1.left_child().clone().into_rel_node()).unwrap();
+            ColumnRefPred::from_rel_node(op_1.left_child().clone().into_rel_node()).unwrap();
         assert_eq!(col_1.index(), 7);
     }
 }

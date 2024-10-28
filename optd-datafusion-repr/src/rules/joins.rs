@@ -8,8 +8,8 @@ use optd_core::rules::{Rule, RuleMatcher};
 
 use super::macros::{define_impl_rule, define_rule};
 use crate::plan_nodes::{
-    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ConstantType, DfNodeType, DfReprPlanNode,
-    DfReprPlanNode, Expr, ExprList, JoinType, LogOpType, LogicalEmptyRelation, LogicalJoin,
+    BinOpPred, BinOpType, ColumnRefPred, ConstantPred, ConstantType, DfNodeType, DfReprPlanNode,
+    DfReprPlanNode, Expr, ListPred, JoinType, LogOpType, LogicalEmptyRelation, LogicalJoin,
     LogicalProjection, PhysicalHashJoin,
 };
 use crate::properties::schema::{Schema, SchemaPropertyBuilder};
@@ -44,13 +44,13 @@ fn apply_join_commute(
     );
     let mut proj_expr = Vec::with_capacity(left_schema.len() + right_schema.len());
     for i in 0..left_schema.len() {
-        proj_expr.push(ColumnRefExpr::new(right_schema.len() + i).into_expr());
+        proj_expr.push(ColumnRefPred::new(right_schema.len() + i).into_expr());
     }
     for i in 0..right_schema.len() {
-        proj_expr.push(ColumnRefExpr::new(i).into_expr());
+        proj_expr.push(ColumnRefPred::new(i).into_expr());
     }
     let node =
-        LogicalProjection::new(node.into_plan_node(), ExprList::new(proj_expr)).into_rel_node();
+        LogicalProjection::new(node.into_plan_node(), ListPred::new(proj_expr)).into_rel_node();
     vec![node.as_ref().clone()]
 }
 
@@ -75,7 +75,7 @@ fn apply_eliminate_join(
                     let node = LogicalJoin::new(
                         DfReprPlanNode::from_group(left.into()),
                         DfReprPlanNode::from_group(right.into()),
-                        ConstantExpr::bool(true).into_expr(),
+                        ConstantPred::bool(true).into_expr(),
                         JoinType::Cross,
                     );
                     return vec![node.into_rel_node().as_ref().clone()];
@@ -172,14 +172,14 @@ fn apply_hash_join(
                 optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(left.clone()), 0);
             // let right_schema =
             //     optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(right.clone()), 0);
-            let op = BinOpExpr::from_rel_node(Arc::new(cond.clone())).unwrap();
+            let op = BinOpPred::from_rel_node(Arc::new(cond.clone())).unwrap();
             let left_expr: Expr = op.left_child();
             let right_expr = op.right_child();
-            let Some(mut left_expr) = ColumnRefExpr::from_rel_node(left_expr.into_rel_node())
+            let Some(mut left_expr) = ColumnRefPred::from_rel_node(left_expr.into_rel_node())
             else {
                 return vec![];
             };
-            let Some(mut right_expr) = ColumnRefExpr::from_rel_node(right_expr.into_rel_node())
+            let Some(mut right_expr) = ColumnRefPred::from_rel_node(right_expr.into_rel_node())
             else {
                 return vec![];
             };
@@ -197,12 +197,12 @@ fn apply_hash_join(
             };
 
             if can_convert {
-                let right_expr = ColumnRefExpr::new(right_expr.index() - left_schema.len());
+                let right_expr = ColumnRefPred::new(right_expr.index() - left_schema.len());
                 let node = PhysicalHashJoin::new(
                     DfReprPlanNode::from_group(left.into()),
                     DfReprPlanNode::from_group(right.into()),
-                    ExprList::new(vec![left_expr.into_expr()]),
-                    ExprList::new(vec![right_expr.into_expr()]),
+                    ListPred::new(vec![left_expr.into_expr()]),
+                    ListPred::new(vec![right_expr.into_expr()]),
                     JoinType::Inner,
                 );
                 return vec![node.into_rel_node().as_ref().clone()];
@@ -228,14 +228,14 @@ fn apply_hash_join(
             let mut left_exprs = vec![];
             let mut right_exprs = vec![];
             for child in cond.children {
-                let bin_op = BinOpExpr::from_rel_node(child.clone()).unwrap();
+                let bin_op = BinOpPred::from_rel_node(child.clone()).unwrap();
                 let left_expr: Expr = bin_op.left_child();
                 let right_expr = bin_op.right_child();
-                let Some(mut left_expr) = ColumnRefExpr::from_rel_node(left_expr.into_rel_node())
+                let Some(mut left_expr) = ColumnRefPred::from_rel_node(left_expr.into_rel_node())
                 else {
                     return vec![];
                 };
-                let Some(mut right_expr) = ColumnRefExpr::from_rel_node(right_expr.into_rel_node())
+                let Some(mut right_expr) = ColumnRefPred::from_rel_node(right_expr.into_rel_node())
                 else {
                     return vec![];
                 };
@@ -254,7 +254,7 @@ fn apply_hash_join(
                 if !can_convert {
                     return vec![];
                 }
-                let right_expr = ColumnRefExpr::new(right_expr.index() - left_schema.len());
+                let right_expr = ColumnRefPred::new(right_expr.index() - left_schema.len());
                 right_exprs.push(right_expr.into_expr());
                 left_exprs.push(left_expr.into_expr());
             }
@@ -262,8 +262,8 @@ fn apply_hash_join(
             let node = PhysicalHashJoin::new(
                 DfReprPlanNode::from_group(left.into()),
                 DfReprPlanNode::from_group(right.into()),
-                ExprList::new(left_exprs),
-                ExprList::new(right_exprs),
+                ListPred::new(left_exprs),
+                ListPred::new(right_exprs),
                 JoinType::Inner,
             );
             return vec![node.into_rel_node().as_ref().clone()];
@@ -275,13 +275,13 @@ fn apply_hash_join(
             optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(left.clone()), 0);
         // let right_schema =
         //     optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(right.clone()), 0);
-        let op = BinOpExpr::from_rel_node(Arc::new(cond.clone())).unwrap();
+        let op = BinOpPred::from_rel_node(Arc::new(cond.clone())).unwrap();
         let left_expr: Expr = op.left_child();
         let right_expr = op.right_child();
-        let Some(mut left_expr) = ColumnRefExpr::from_rel_node(left_expr.into_rel_node()) else {
+        let Some(mut left_expr) = ColumnRefPred::from_rel_node(left_expr.into_rel_node()) else {
             return vec![];
         };
-        let Some(mut right_expr) = ColumnRefExpr::from_rel_node(right_expr.into_rel_node()) else {
+        let Some(mut right_expr) = ColumnRefPred::from_rel_node(right_expr.into_rel_node()) else {
             return vec![];
         };
         let can_convert = if left_expr.index() < left_schema.len()
@@ -296,12 +296,12 @@ fn apply_hash_join(
         };
 
         if can_convert {
-            let right_expr = ColumnRefExpr::new(right_expr.index() - left_schema.len());
+            let right_expr = ColumnRefPred::new(right_expr.index() - left_schema.len());
             let node = PhysicalHashJoin::new(
                 DfReprPlanNode::from_group(left.into()),
                 DfReprPlanNode::from_group(right.into()),
-                ExprList::new(vec![left_expr.into_expr()]),
-                ExprList::new(vec![right_expr.into_expr()]),
+                ListPred::new(vec![left_expr.into_expr()]),
+                ListPred::new(vec![right_expr.into_expr()]),
                 JoinType::Inner,
             );
             return vec![node.into_rel_node().as_ref().clone()];

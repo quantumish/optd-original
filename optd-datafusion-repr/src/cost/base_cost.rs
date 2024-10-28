@@ -242,8 +242,8 @@ mod tests {
     use crate::{
         cost::base_cost::stats::*,
         plan_nodes::{
-            BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, Expr, ExprList,
-            InListExpr, LikeExpr, LogOpExpr, LogOpType, DfReprPlanNode, ArcDfPlanNode, UnOpExpr,
+            ArcDfPlanNode, BinOpPred, BinOpType, CastPred, ColumnRefPred, ConstantPred,
+            DfReprPlanNode, Expr, InListPred, LikePred, ListPred, LogOpPred, LogOpType, UnOpPred,
             UnOpType,
         },
     };
@@ -457,15 +457,15 @@ mod tests {
     pub fn col_ref(idx: u64) -> ArcDfPlanNode {
         // this conversion is always safe because idx was originally a usize
         let idx_as_usize = idx as usize;
-        ColumnRefExpr::new(idx_as_usize).into_rel_node()
+        ColumnRefPred::new(idx_as_usize).into_rel_node()
     }
 
     pub fn cnst(value: Value) -> ArcDfPlanNode {
-        ConstantExpr::new(value).into_rel_node()
+        ConstantPred::new(value).into_rel_node()
     }
 
     pub fn cast(child: ArcDfPlanNode, cast_type: DataType) -> ArcDfPlanNode {
-        CastExpr::new(
+        CastPred::new(
             Expr::from_rel_node(child).expect("child should be an Expr"),
             cast_type,
         )
@@ -473,7 +473,7 @@ mod tests {
     }
 
     pub fn bin_op(op_type: BinOpType, left: ArcDfPlanNode, right: ArcDfPlanNode) -> ArcDfPlanNode {
-        BinOpExpr::new(
+        BinOpPred::new(
             Expr::from_rel_node(left).expect("left should be an Expr"),
             Expr::from_rel_node(right).expect("right should be an Expr"),
             op_type,
@@ -482,9 +482,9 @@ mod tests {
     }
 
     pub fn log_op(op_type: LogOpType, children: Vec<ArcDfPlanNode>) -> ArcDfPlanNode {
-        LogOpExpr::new(
+        LogOpPred::new(
             op_type,
-            ExprList::new(
+            ListPred::new(
                 children
                     .into_iter()
                     .map(|opt_rel_node_ref| {
@@ -497,17 +497,17 @@ mod tests {
     }
 
     pub fn un_op(op_type: UnOpType, child: ArcDfPlanNode) -> ArcDfPlanNode {
-        UnOpExpr::new(
+        UnOpPred::new(
             Expr::from_rel_node(child).expect("child should be an Expr"),
             op_type,
         )
         .into_rel_node()
     }
 
-    pub fn in_list(col_ref_idx: u64, list: Vec<Value>, negated: bool) -> InListExpr {
-        InListExpr::new(
+    pub fn in_list(col_ref_idx: u64, list: Vec<Value>, negated: bool) -> InListPred {
+        InListPred::new(
             Expr::from_rel_node(col_ref(col_ref_idx)).unwrap(),
-            ExprList::new(
+            ListPred::new(
                 list.into_iter()
                     .map(|v| Expr::from_rel_node(cnst(v)).unwrap())
                     .collect_vec(),
@@ -516,8 +516,8 @@ mod tests {
         )
     }
 
-    pub fn like(col_ref_idx: u64, pattern: &str, negated: bool) -> LikeExpr {
-        LikeExpr::new(
+    pub fn like(col_ref_idx: u64, pattern: &str, negated: bool) -> LikePred {
+        LikePred::new(
             negated,
             false,
             Expr::from_rel_node(col_ref(col_ref_idx)).unwrap(),

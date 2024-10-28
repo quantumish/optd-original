@@ -6,7 +6,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     cost::base_cost::stats::{Distribution, MostCommonValues},
-    plan_nodes::{ConstantExpr, ConstantType, DfReprPlanNode, DfNodeType},
+    plan_nodes::{ConstantPred, ConstantType, DfReprPlanNode, DfNodeType},
 };
 
 use super::{OptCostModel, DEFAULT_UNK_SEL};
@@ -37,7 +37,7 @@ impl<
                 ),
                 "fetch type can only be UInt64"
             );
-            let fetch = ConstantExpr::from_rel_node(fetch_expr)
+            let fetch = ConstantPred::from_rel_node(fetch_expr)
                 .unwrap()
                 .value()
                 .as_u64();

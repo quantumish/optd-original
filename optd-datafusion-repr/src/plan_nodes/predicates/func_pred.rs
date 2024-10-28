@@ -1,9 +1,12 @@
-use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
+use optd_core::nodes::{ArcPredNode, PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
+use crate::plan_nodes::{
+    ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPredNode, DfPredType, DfReprPlanNode,
+    DfReprPredNode,
+};
 
-use super::ExprList;
+use super::ListPred;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum FuncType {
@@ -29,33 +32,33 @@ impl FuncType {
 }
 
 #[derive(Clone, Debug)]
-pub struct FuncExpr(Expr);
+pub struct FuncPred(pub ArcDfPredNode);
 
-impl FuncExpr {
-    pub fn new(func_id: FuncType, argv: ExprList) -> Self {
-        FuncExpr(Expr(
-            PlanNode {
-                typ: DfNodeType::Func(func_id),
+impl FuncPred {
+    pub fn new(func_id: FuncType, argv: ListPred) -> Self {
+        FuncPred(
+            DfPredNode {
+                typ: DfPredType::Func(func_id),
                 children: vec![argv.into_rel_node()],
                 data: None,
             }
             .into(),
-        ))
+        )
     }
 
     /// Gets the i-th argument of the function.
-    pub fn arg_at(&self, i: usize) -> Expr {
+    pub fn arg_at(&self, i: usize) -> ArcDfPredNode {
         self.children().child(i)
     }
 
     /// Get all children.
-    pub fn children(&self) -> ExprList {
-        ExprList::from_rel_node(self.0.child(0)).unwrap()
+    pub fn children(&self) -> ListPred {
+        ListPred::from_rel_node(self.0.child(0)).unwrap()
     }
 
     /// Gets the function id.
     pub fn func(&self) -> FuncType {
-        if let DfNodeType::Func(func_id) = &self.clone().into_rel_node().typ {
+        if let DfPredType::Func(func_id) = self.0.typ {
             func_id.clone()
         } else {
             panic!("not a function")
@@ -63,19 +66,19 @@ impl FuncExpr {
     }
 }
 
-impl DfReprPlanNode for FuncExpr {
-    fn into_rel_node(self) -> ArcDfPlanNode {
-        self.0.into_rel_node()
+impl DfReprPredNode for FuncPred {
+    fn into_pred_node(self) -> ArcDfPredNode {
+        self.0.into_pred_node()
     }
 
-    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
-        if !matches!(rel_node.typ, DfNodeType::Func(_)) {
+    fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {
+        if !matches!(pred_node.typ, DfNodeType::Func(_)) {
             return None;
         }
-        Expr::from_rel_node(rel_node).map(Self)
+        Some(Self(pred_node))
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             self.func().to_string(),
             vec![],

@@ -3,9 +3,12 @@ use std::fmt::Display;
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{DfNodeType, Expr, DfReprPlanNode, ArcDfPlanNode};
+use crate::plan_nodes::{
+    ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPredNode, DfPredType, DfReprPlanNode,
+    DfReprPredNode,
+};
 
-use super::ExprList;
+use super::ListPred;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum LogOpType {
@@ -20,22 +23,18 @@ impl Display for LogOpType {
 }
 
 #[derive(Clone, Debug)]
-pub struct LogOpExpr(pub Expr);
+pub struct LogOpPred(pub ArcDfPredNode);
 
-impl LogOpExpr {
-    pub fn new(op_type: LogOpType, expr_list: ExprList) -> Self {
-        LogOpExpr(Expr(
-            PlanNode {
-                typ: DfNodeType::LogOp(op_type),
-                children: expr_list
-                    .to_vec()
-                    .into_iter()
-                    .map(|x| x.into_rel_node())
-                    .collect(),
+impl LogOpPred {
+    pub fn new(op_type: LogOpType, preds: Vec<ArcDfPredNode>) -> Self {
+        LogOpPred(
+            DfPredNode {
+                typ: DfPredType::LogOp(op_type),
+                children: preds,
                 data: None,
             }
             .into(),
-        ))
+        )
     }
 
     /// flatten_nested_logical is a helper function to flatten nested logical operators with same op type
@@ -43,39 +42,34 @@ impl LogOpExpr {
     ///    (a OR (b OR c)) => ExprList([a, b, c])
     /// It assume the children of the input expr_list are already flattened
     ///  and can only be used in bottom up manner
-    pub fn new_flattened_nested_logical(op: LogOpType, expr_list: ExprList) -> Self {
+    pub fn new_flattened_nested_logical(op: LogOpType, expr_list: ListPred) -> Self {
         // Since we assume that we are building the children bottom up,
         // there is no need to call flatten_nested_logical recursively
         let mut new_expr_list = Vec::new();
         for child in expr_list.to_vec() {
-            if let DfNodeType::LogOp(child_op) = child.typ() {
+            if let DfPredType::LogOp(child_op) = child.typ() {
                 if child_op == op {
                     let child_log_op_expr =
-                        LogOpExpr::from_rel_node(child.into_rel_node()).unwrap();
+                        LogOpPred::from_rel_node(child.into_rel_node()).unwrap();
                     new_expr_list.extend(child_log_op_expr.children().to_vec());
                     continue;
                 }
             }
             new_expr_list.push(child.clone());
         }
-        LogOpExpr::new(op, ExprList::new(new_expr_list))
+        LogOpPred::new(op, new_expr_list)
     }
 
-    pub fn children(&self) -> Vec<Expr> {
-        self.0
-             .0
-            .children
-            .iter()
-            .map(|x| Expr::from_rel_node(x.clone()).unwrap())
-            .collect()
+    pub fn children(&self) -> Vec<ArcDfPredNode> {
+        self.0.children
     }
 
-    pub fn child(&self, idx: usize) -> Expr {
-        Expr::from_rel_node(self.0.child(idx)).unwrap()
+    pub fn child(&self, idx: usize) -> ArcDfPredNode {
+        self.0.child(idx)
     }
 
     pub fn op_type(&self) -> LogOpType {
-        if let DfNodeType::LogOp(op_type) = self.clone().into_rel_node().typ {
+        if let DfPredType::LogOp(op_type) = self.0.typ {
             op_type
         } else {
             panic!("not a log op")
@@ -83,19 +77,19 @@ impl LogOpExpr {
     }
 }
 
-impl DfReprPlanNode for LogOpExpr {
-    fn into_rel_node(self) -> ArcDfPlanNode {
-        self.0.into_rel_node()
+impl DfReprPredNode for LogOpPred {
+    fn into_pred_node(self) -> ArcDfPredNode {
+        self.0
     }
 
-    fn from_rel_node(rel_node: ArcDfPlanNode) -> Option<Self> {
-        if !matches!(rel_node.typ, DfNodeType::LogOp(_)) {
+    fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {
+        if !matches!(pred_node.typ, DfPredType::LogOp(_)) {
             return None;
         }
-        Expr::from_rel_node(rel_node).map(Self)
+        Some(Self(pred_node))
     }
 
-    fn dispatch_explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
+    fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::simple_record(
             self.op_type().to_string(),
             vec![],

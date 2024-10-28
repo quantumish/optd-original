@@ -1,5 +1,5 @@
-use super::expr::ExprList;
 use super::macros::define_plan_node;
+use super::predicates::ListPred;
 
 use super::{ArcDfPlanNode, DfNodeType, DfPlanNode, DfReprPlanNode};
 
@@ -11,8 +11,8 @@ define_plan_node!(
     Agg, [
         { 0, child: ArcDfPlanNode }
     ], [
-        { 0, exprs: ExprList },
-        { 1, groups: ExprList }
+        { 0, exprs: ListPred },
+        { 1, groups: ListPred }
     ]
 );
 
@@ -24,7 +24,7 @@ define_plan_node!(
     PhysicalAgg, [
         { 0, child: ArcDfPlanNode }
     ], [
-        { 0, aggrs: ExprList },
-        { 1, groups: ExprList }
+        { 0, aggrs: ListPred },
+        { 1, groups: ListPred }
     ]
 );

@@ -3,11 +3,11 @@
 mod agg;
 mod apply;
 mod empty_relation;
-mod expr;
 mod filter;
 mod join;
 mod limit;
 pub(super) mod macros;
+mod predicates;
 mod projection;
 mod scan;
 mod sort;
@@ -29,19 +29,19 @@ use optd_core::{
 pub use agg::{LogicalAgg, PhysicalAgg};
 pub use apply::{ApplyType, LogicalApply};
 pub use empty_relation::{LogicalEmptyRelation, PhysicalEmptyRelation};
-pub use expr::{
-    BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, ConstantType,
-    DataTypeExpr, ExprList, FuncExpr, FuncType, InListExpr, LikeExpr, LogOpExpr, LogOpType,
-    SortOrderExpr, SortOrderType, UnOpExpr, UnOpType,
-};
 pub use filter::{LogicalFilter, PhysicalFilter};
 pub use join::{JoinType, LogicalJoin, PhysicalHashJoin, PhysicalNestedLoopJoin};
 pub use limit::{LogicalLimit, PhysicalLimit};
+pub use predicates::{
+    BetweenPred, BinOpPred, BinOpType, CastPred, ColumnRefPred, ConstantPred, ConstantType,
+    DataTypePred, ExternColumnRefPred, FuncPred, FuncType, InListPred, LikePred, ListPred,
+    LogOpPred, LogOpType, SortOrderPred, SortOrderType, UnOpPred, UnOpType,
+};
 use pretty_xmlish::{Pretty, PrettyConfig};
 pub use projection::{LogicalProjection, PhysicalProjection};
 pub use scan::{LogicalScan, PhysicalScan};
 pub use sort::{LogicalSort, PhysicalSort};
-pub use subquery::{DependentJoin, ExternColumnRefExpr, RawDependentJoin}; // Add missing import
+pub use subquery::{DependentJoin, RawDependentJoin}; // Add missing import
 
 use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 
@@ -146,3 +146,23 @@ pub trait DfReprPlanNode: 'static + Clone {
 
 pub type DfPredNode = PredNode<DfNodeType>;
 pub type ArcDfPredNode = ArcPredNode<DfNodeType>;
+
+pub trait DfReprPredNode: 'static + Clone {
+    fn into_pred_node(self) -> ArcDfPredNode;
+
+    fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self>;
+
+    fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static>;
+
+    fn explain_to_string(&self, meta_map: Option<&PlanNodeMetaMap>) -> String {
+        let mut config = PrettyConfig {
+            need_boundaries: false,
+            reduced_spaces: false,
+            width: 300,
+            ..Default::default()
+        };
+        let mut out = String::new();
+        config.unicode(&mut out, &self.explain(meta_map));
+        out
+    }
+}
