@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::DataType;
-use optd_core::nodes::PlanNode;
+use optd_core::nodes::{PlanNode, PlanNodeOrGroup};
 use optd_core::optimizer::Optimizer;
 use optd_core::rules::{Rule, RuleMatcher};
 
@@ -56,20 +56,20 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
     fn apply(
         &self,
         _optimizer: &O,
-        mut input: HashMap<usize, PlanNode<DfNodeType>>,
+        mut input: HashMap<usize, PlanNodeOrGroup<DfNodeType>>,
     ) -> Vec<PlanNode<DfNodeType>> {
         let PlanNode {
             typ,
-            data,
             children,
-        } = input.remove(&0).unwrap();
+            predicates,
+        } = input.remove(&0).unwrap().unwrap_plan_node();
 
         match typ {
             DfNodeType::Apply(x) => {
                 let node = PlanNode {
                     typ: DfNodeType::PhysicalNestedLoopJoin(x.to_join_type()),
                     children,
-                    data,
+                    predicates,
                 };
                 vec![node]
             }
@@ -77,7 +77,7 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
                 let node = PlanNode {
                     typ: DfNodeType::PhysicalNestedLoopJoin(x),
                     children,
-                    data,
+                    predicates,
                 };
                 vec![node]
             }
@@ -85,7 +85,7 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
                 let node = PlanNode {
                     typ: DfNodeType::PhysicalScan,
                     children,
-                    data,
+                    predicates,
                 };
                 vec![node]
             }
@@ -93,7 +93,7 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
                 let node = PlanNode {
                     typ: DfNodeType::PhysicalFilter,
                     children,
-                    data,
+                    predicates,
                 };
                 vec![node]
             }
@@ -101,7 +101,7 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
                 let node = PlanNode {
                     typ: DfNodeType::PhysicalProjection,
                     children,
-                    data,
+                    predicates,
                 };
                 vec![node]
             }
@@ -109,7 +109,7 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
                 let node = PlanNode {
                     typ: DfNodeType::PhysicalSort,
                     children,
-                    data,
+                    predicates,
                 };
                 vec![node]
             }
@@ -117,7 +117,7 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
                 let node = PlanNode {
                     typ: DfNodeType::PhysicalAgg,
                     children,
-                    data,
+                    predicates,
                 };
                 vec![node]
             }
@@ -125,7 +125,7 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
                 let node = PlanNode {
                     typ: DfNodeType::PhysicalEmptyRelation,
                     children,
-                    data,
+                    predicates,
                 };
                 vec![node]
             }
@@ -133,7 +133,7 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
                 let node = PlanNode {
                     typ: DfNodeType::PhysicalLimit,
                     children,
-                    data,
+                    predicates,
                 };
                 vec![node]
             }

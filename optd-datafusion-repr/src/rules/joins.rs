@@ -9,8 +9,8 @@ use optd_core::rules::{Rule, RuleMatcher};
 use super::macros::{define_impl_rule, define_rule};
 use crate::plan_nodes::{
     BinOpPred, BinOpType, ColumnRefPred, ConstantPred, ConstantType, DfNodeType, DfReprPlanNode,
-    DfReprPlanNode, Expr, ListPred, JoinType, LogOpType, LogicalEmptyRelation, LogicalJoin,
-    LogicalProjection, PhysicalHashJoin,
+    JoinType, ListPred, LogOpType, LogicalEmptyRelation, LogicalJoin, LogicalProjection,
+    PhysicalHashJoin,
 };
 use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 
@@ -18,7 +18,7 @@ use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 define_rule!(
     JoinCommuteRule,
     apply_join_commute,
-    (Join(JoinType::Inner), left, right, [cond])
+    (DfNodeType::Join(JoinType::Inner), left, right, [cond])
 );
 
 fn apply_join_commute(
