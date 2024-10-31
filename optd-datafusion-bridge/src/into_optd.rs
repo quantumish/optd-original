@@ -479,8 +479,8 @@ impl OptdPlanContext<'_> {
         &mut self,
         _: &logical_plan::EmptyRelation,
     ) -> Result<LogicalValues> {
-        // Datafusion empty relation is converted to values with no columns in optd
-        Ok(LogicalValues::new(Vec::new()))
+        // Datafusion empty relation is converted to values with no columns and one row in optd
+        Ok(LogicalValues::new(vec![Vec::new()]))
     }
 
     fn conv_into_optd_limit(

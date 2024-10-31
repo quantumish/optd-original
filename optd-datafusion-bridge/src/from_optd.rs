@@ -363,7 +363,9 @@ impl OptdPlanContext<'_> {
         _: &RelNodeMetaMap,
     ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
         // should be mapped to projection + empty relation, but now we only support the case for empty relations
-        assert!(node.values().as_list().is_empty());
+        assert!(
+            node.values().as_list().len() == 1 && node.values().as_list()[0].as_list().is_empty()
+        );
         Ok(Arc::new(datafusion::physical_plan::empty::EmptyExec::new(
             true,
             Schema::empty().into(),

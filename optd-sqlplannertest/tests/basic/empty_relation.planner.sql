@@ -18,12 +18,12 @@ LogicalProjection
 ├── exprs:Add
 │   ├── 64(i64)
 │   └── 1(i64)
-└── LogicalValues { values: [] }
+└── LogicalValues { values: [[]] }
 PhysicalProjection
 ├── exprs:Add
 │   ├── 64(i64)
 │   └── 1(i64)
-└── PhysicalValues { values: [] }
+└── PhysicalValues { values: [[]] }
 65
 65
 65
