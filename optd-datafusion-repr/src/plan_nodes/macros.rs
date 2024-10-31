@@ -46,9 +46,9 @@ macro_rules! define_plan_node {
         impl $struct_name {
             pub fn new(
                 $($child_name : $child_meta_typ,)*
-                $($attr_name : $attr_meta_typ),*
-                $($data_name: $data_typ)?
-                $(, $inner_name : $inner_typ)?
+                $($attr_name : $attr_meta_typ,)*
+                $($data_name : $data_typ,)*
+                $($inner_name : $inner_typ,)*
             ) -> $struct_name {
                 #[allow(unused_mut, unused)]
                 let mut data = None;
@@ -82,7 +82,7 @@ macro_rules! define_plan_node {
             )*
 
             $(
-                pub fn $inner_name(&self) -> JoinType {
+                pub fn $inner_name(&self) -> $inner_typ {
                     if let OptRelNodeTyp :: $variant ($inner_name) = self.0 .0.typ {
                         return $inner_name;
                     } else {

@@ -3,10 +3,9 @@ use std::sync::Arc;
 
 use super::macros::define_rule;
 use crate::plan_nodes::{
-    ConstantExpr, ConstantType, Expr, ExprList, JoinType, LogOpExpr, LogOpType,
+    ConstantExpr, ConstantType, EmptyRelationType, Expr, ExprList, JoinType, LogOpExpr, LogOpType,
     LogicalEmptyRelation, LogicalJoin, OptRelNode, OptRelNodeTyp, PlanNode,
 };
-use crate::properties::schema::SchemaPropertyBuilder;
 use crate::OptRelNodeRef;
 use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{optimizer::Optimizer, rel_node::RelNode};
@@ -162,7 +161,7 @@ define_rule!(
 ///     - Filter node w/ false pred -> EmptyRelation
 ///     - Filter node w/ true pred  -> Eliminate from the tree
 fn apply_eliminate_filter(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    _optimizer: &impl Optimizer<OptRelNodeTyp>,
     EliminateFilterRulePicks { child, cond }: EliminateFilterRulePicks,
 ) -> Vec<RelNode<OptRelNodeTyp>> {
     if let OptRelNodeTyp::Constant(ConstantType::Bool) = cond.typ {
@@ -174,9 +173,10 @@ fn apply_eliminate_filter(
             } else {
                 // If the condition is false, replace this node with the empty relation,
                 // since it will never yield tuples.
-                let schema =
-                    optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(child.clone()), 0);
-                let node = LogicalEmptyRelation::new(false, schema);
+                let node = LogicalEmptyRelation::new(
+                    PlanNode::from_group(child.into()),
+                    EmptyRelationType::Empty,
+                );
                 return vec![node.into_rel_node().as_ref().clone()];
             }
         }

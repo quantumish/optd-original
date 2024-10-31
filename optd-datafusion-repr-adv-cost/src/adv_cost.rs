@@ -143,7 +143,7 @@ impl<
                     .unwrap_or(1) as f64;
                 Self::cost(row_cnt, 0.0, row_cnt)
             }
-            OptRelNodeTyp::PhysicalEmptyRelation => Self::cost(0.5, 0.01, 0.0),
+            OptRelNodeTyp::PhysicalEmptyRelation(_) => Self::cost(0.5, 0.01, 0.0), // TODO: consider produce_one_row?
             OptRelNodeTyp::PhysicalLimit => Self::get_limit_cost(children, context, optimizer),
             OptRelNodeTyp::PhysicalFilter => self.get_filter_cost(children, context, optimizer),
             OptRelNodeTyp::PhysicalNestedLoopJoin(join_typ) => {

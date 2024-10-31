@@ -139,6 +139,9 @@ impl DatafusionOptimizer {
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
             EliminateFilterRule::new(),
         )));
+        rule_wrappers.push(RuleWrapper::new_cascades(
+            Arc::new(EliminateJoinRule::new()),
+        ));
         rule_wrappers.push(RuleWrapper::new_cascades(Arc::new(
             ProjectFilterTransposeRule::new(),
         )));

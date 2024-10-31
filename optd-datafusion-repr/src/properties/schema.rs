@@ -4,7 +4,7 @@ use std::sync::Arc;
 use optd_core::property::PropertyBuilder;
 
 use super::DEFAULT_NAME;
-use crate::plan_nodes::{ConstantType, EmptyRelationData, FuncType, OptRelNodeTyp};
+use crate::plan_nodes::{ConstantType, FuncType, OptRelNodeTyp};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Field {
@@ -72,6 +72,7 @@ impl PropertyBuilder<OptRelNodeTyp> for SchemaPropertyBuilder {
                 self.catalog.get(&name)
             }
             OptRelNodeTyp::Projection => children[1].clone(),
+            OptRelNodeTyp::EmptyRelation(_) => children[0].clone(),
             OptRelNodeTyp::Filter => children[0].clone(),
             OptRelNodeTyp::RawDepJoin(join_type)
             | OptRelNodeTyp::Join(join_type)
@@ -87,12 +88,6 @@ impl PropertyBuilder<OptRelNodeTyp> for SchemaPropertyBuilder {
                     LeftSemi | LeftAnti => children[0].clone(),
                     RightSemi | RightAnti => children[1].clone(),
                 }
-            }
-            OptRelNodeTyp::EmptyRelation => {
-                let data = data.unwrap().as_slice();
-                let empty_relation_data: EmptyRelationData =
-                    bincode::deserialize(data.as_ref()).unwrap();
-                empty_relation_data.schema
             }
             OptRelNodeTyp::ColumnRef => {
                 let data_typ = ConstantType::get_data_type_from_value(&data.unwrap());

@@ -9,11 +9,10 @@ use optd_core::rel_node::RelNode;
 use optd_datafusion_repr::plan_nodes::{
     BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, Expr, ExprList,
     ExternColumnRefExpr, FuncExpr, FuncType, InListExpr, JoinType, LikeExpr, LogOpExpr, LogOpType,
-    LogicalAgg, LogicalEmptyRelation, LogicalFilter, LogicalJoin, LogicalLimit, LogicalProjection,
-    LogicalScan, LogicalSort, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode, RawDependentJoin,
-    SortOrderExpr, SortOrderType,
+    LogicalAgg, LogicalFilter, LogicalJoin, LogicalLimit, LogicalProjection, LogicalScan,
+    LogicalSort, LogicalValues, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PlanNode,
+    RawDependentJoin, SortOrderExpr, SortOrderType,
 };
-use optd_datafusion_repr::properties::schema::Schema as OptdSchema;
 
 use crate::OptdPlanContext;
 
@@ -478,14 +477,10 @@ impl OptdPlanContext<'_> {
 
     fn conv_into_optd_empty_relation(
         &mut self,
-        node: &logical_plan::EmptyRelation,
-    ) -> Result<LogicalEmptyRelation> {
-        // empty_relation from datafusion always have an empty schema
-        let empty_schema = OptdSchema { fields: vec![] };
-        Ok(LogicalEmptyRelation::new(
-            node.produce_one_row,
-            empty_schema,
-        ))
+        _: &logical_plan::EmptyRelation,
+    ) -> Result<LogicalValues> {
+        // Datafusion empty relation is converted to values with no columns in optd
+        Ok(LogicalValues::new(Vec::new()))
     }
 
     fn conv_into_optd_limit(

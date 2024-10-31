@@ -10,6 +10,7 @@ use std::{
 
 use arrow_schema::DataType;
 use chrono::NaiveDate;
+use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -69,6 +70,7 @@ pub enum Value {
     Bool(bool),
     Date32(i32),
     Decimal128(i128),
+    List(Arc<[Self]>),
     Serialized(Arc<[u8]>),
 }
 
@@ -89,6 +91,7 @@ impl std::fmt::Display for Value {
             Self::Bool(x) => write!(f, "{x}"),
             Self::Date32(x) => write!(f, "{x}(date32)"),
             Self::Decimal128(x) => write!(f, "{x}(decimal128)"),
+            Self::List(x) => write!(f, "[{}]", x.iter().map(|x| x.to_string()).join(",")),
             Self::Serialized(x) => write!(f, "<len:{}>", x.len()),
         }
     }
@@ -183,7 +186,14 @@ impl Value {
         }
     }
 
-    pub fn as_slice(&self) -> Arc<[u8]> {
+    pub fn as_list(&self) -> &[Value] {
+        match self {
+            Value::List(i) => i,
+            _ => panic!("Value is not a list"),
+        }
+    }
+
+    pub fn as_serialized_slice(&self) -> Arc<[u8]> {
         match self {
             Value::Serialized(i) => i.clone(),
             _ => panic!("Value is not a serialized"),

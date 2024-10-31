@@ -5,7 +5,7 @@ use optd_core::optimizer::Optimizer;
 use optd_core::rel_node::RelNode;
 use optd_core::rules::{Rule, RuleMatcher};
 
-use crate::plan_nodes::{JoinType, OptRelNodeTyp};
+use crate::plan_nodes::{EmptyRelationType, JoinType, OptRelNodeTyp};
 
 pub struct PhysicalConversionRule {
     matcher: RuleMatcher<OptRelNodeTyp>,
@@ -41,8 +41,14 @@ impl PhysicalConversionRule {
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Filter)),
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Sort)),
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Agg)),
-            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::EmptyRelation)),
+            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::EmptyRelation(
+                EmptyRelationType::Empty,
+            ))),
+            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::EmptyRelation(
+                EmptyRelationType::OneRow,
+            ))),
             Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Limit)),
+            Arc::new(PhysicalConversionRule::new(OptRelNodeTyp::Values)),
         ]
     }
 }
@@ -120,9 +126,17 @@ impl<O: Optimizer<OptRelNodeTyp>> Rule<OptRelNodeTyp, O> for PhysicalConversionR
                 };
                 vec![node]
             }
-            OptRelNodeTyp::EmptyRelation => {
+            OptRelNodeTyp::EmptyRelation(typ) => {
                 let node = RelNode {
-                    typ: OptRelNodeTyp::PhysicalEmptyRelation,
+                    typ: OptRelNodeTyp::PhysicalEmptyRelation(typ),
+                    children,
+                    data,
+                };
+                vec![node]
+            }
+            OptRelNodeTyp::Values => {
+                let node = RelNode {
+                    typ: OptRelNodeTyp::PhysicalValues,
                     children,
                     data,
                 };

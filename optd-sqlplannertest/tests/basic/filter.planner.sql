@@ -16,7 +16,8 @@ select * from t1 where false;
 LogicalProjection { exprs: [ #0, #1 ] }
 └── LogicalFilter { cond: false }
     └── LogicalScan { table: t1 }
-PhysicalEmptyRelation { produce_one_row: false }
+PhysicalEmptyRelation { rel_type: Empty }
+└── PhysicalScan { table: t1 }
 */
 
 -- Test EliminateFilterRule (replace true filter with child)
@@ -46,7 +47,10 @@ LogicalProjection { exprs: [ #0, #1, #2, #3 ] }
     └── LogicalJoin { join_type: Cross, cond: true }
         ├── LogicalScan { table: t1 }
         └── LogicalScan { table: t2 }
-PhysicalEmptyRelation { produce_one_row: false }
+PhysicalEmptyRelation { rel_type: Empty }
+└── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+    ├── PhysicalScan { table: t1 }
+    └── PhysicalScan { table: t2 }
 */
 
 -- Test SimplifyFilterRule (skip true filter for and)
@@ -178,7 +182,10 @@ LogicalProjection { exprs: [ #0, #1, #2, #3 ] }
     │   └── false
     ├── LogicalScan { table: t1 }
     └── LogicalScan { table: t2 }
-PhysicalEmptyRelation { produce_one_row: false }
+PhysicalEmptyRelation { rel_type: Empty }
+└── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+    ├── PhysicalScan { table: t1 }
+    └── PhysicalScan { table: t2 }
 */
 
 -- Test SimplifyJoinCondRule (skip true filter for and)

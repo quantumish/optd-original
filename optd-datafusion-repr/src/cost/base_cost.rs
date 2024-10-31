@@ -112,7 +112,7 @@ impl CostModel<OptRelNodeTyp> for OptCostModel {
                 let selectivity = 0.001;
                 Self::cost((row_cnt * selectivity).max(1.0), compute_cost, 0.0)
             }
-            OptRelNodeTyp::PhysicalEmptyRelation => Self::cost(0.5, 0.01, 0.0),
+            OptRelNodeTyp::PhysicalEmptyRelation(_) => Self::cost(0.5, 0.01, 0.0),
             OptRelNodeTyp::PhysicalFilter => {
                 let (row_cnt, _, _) = Self::cost_tuple(&children[0]);
                 let (_, compute_cost, _) = Self::cost_tuple(&children[1]);
@@ -159,6 +159,7 @@ impl CostModel<OptRelNodeTyp> for OptCostModel {
                 let (_, compute_cost_2, _) = Self::cost_tuple(&children[2]);
                 Self::cost(row_cnt, row_cnt * (compute_cost_1 + compute_cost_2), 0.0)
             }
+            OptRelNodeTyp::PhysicalValues => Self::cost(1.0, 0.01, 0.0),
             OptRelNodeTyp::List => {
                 let compute_cost = children
                     .iter()
@@ -180,6 +181,7 @@ impl CostModel<OptRelNodeTyp> for OptCostModel {
                     .sum::<f64>();
                 Self::cost(1.0, compute_cost + 1.0, 0.0)
             }
+            x if x.is_logical() => unreachable!("cannot compute cost for logical node {}", x),
             x => unimplemented!("cannot compute cost for {}", x),
         }
     }

@@ -18,12 +18,12 @@ LogicalProjection
 ├── exprs:Add
 │   ├── 64(i64)
 │   └── 1(i64)
-└── LogicalEmptyRelation { produce_one_row: true }
+└── LogicalValues { values: [] }
 PhysicalProjection
 ├── exprs:Add
 │   ├── 64(i64)
 │   └── 1(i64)
-└── PhysicalEmptyRelation { produce_one_row: true }
+└── PhysicalValues { values: [] }
 65
 65
 65
@@ -39,7 +39,13 @@ LogicalProjection { exprs: [ #0, #1, #2, #3 ] }
 └── LogicalJoin { join_type: Inner, cond: false }
     ├── LogicalScan { table: t1 }
     └── LogicalScan { table: t2 }
-LogicalEmptyRelation { produce_one_row: false }
-PhysicalEmptyRelation { produce_one_row: false }
+LogicalEmptyRelation { rel_type: Empty }
+└── LogicalJoin { join_type: Cross, cond: true }
+    ├── LogicalScan { table: t1 }
+    └── LogicalScan { table: t2 }
+PhysicalEmptyRelation { rel_type: Empty }
+└── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+    ├── PhysicalScan { table: t1 }
+    └── PhysicalScan { table: t2 }
 */
 

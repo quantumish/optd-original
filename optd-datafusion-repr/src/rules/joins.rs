@@ -8,11 +8,11 @@ use optd_core::rules::{Rule, RuleMatcher};
 
 use super::macros::{define_impl_rule, define_rule};
 use crate::plan_nodes::{
-    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ConstantType, Expr, ExprList, JoinType,
-    LogOpType, LogicalEmptyRelation, LogicalJoin, LogicalProjection, OptRelNode, OptRelNodeTyp,
-    PhysicalHashJoin, PlanNode,
+    BinOpExpr, BinOpType, ColumnRefExpr, ConstantExpr, ConstantType, EmptyRelationType, Expr,
+    ExprList, JoinType, LogOpType, LogicalEmptyRelation, LogicalJoin, LogicalProjection,
+    OptRelNode, OptRelNodeTyp, PhysicalHashJoin, PlanNode,
 };
-use crate::properties::schema::{Schema, SchemaPropertyBuilder};
+use crate::properties::schema::SchemaPropertyBuilder;
 
 // A join B -> B join A
 define_rule!(
@@ -69,31 +69,34 @@ fn apply_eliminate_join(
 ) -> Vec<RelNode<OptRelNodeTyp>> {
     if let OptRelNodeTyp::Constant(const_type) = cond.typ {
         if const_type == ConstantType::Bool {
-            if let Some(data) = cond.data {
+            if let Some(ref data) = cond.data {
                 if data.as_bool() {
                     // change it to cross join if filter is always true
                     let node = LogicalJoin::new(
                         PlanNode::from_group(left.into()),
                         PlanNode::from_group(right.into()),
                         ConstantExpr::bool(true).into_expr(),
-                        JoinType::Cross,
+                        JoinType::Cross, /* TODO: is this correct? */
                     );
                     return vec![node.into_rel_node().as_ref().clone()];
                 } else {
-                    // No need to handle schema here, as all exprs in the same group
-                    // will have same logical properties
-                    let mut left_fields = optimizer
-                        .get_property::<SchemaPropertyBuilder>(Arc::new(left.clone()), 0)
-                        .fields;
-                    let right_fields = optimizer
-                        .get_property::<SchemaPropertyBuilder>(Arc::new(right.clone()), 0)
-                        .fields;
-                    left_fields.extend(right_fields);
-                    let new_schema = Schema {
-                        fields: left_fields,
-                    };
-                    let node = LogicalEmptyRelation::new(false, new_schema);
-                    return vec![node.into_rel_node().as_ref().clone()];
+                    // (join inner a b false) = (empty (join cross a b true))
+                    // we have to add the extra join, otherwise we will have a group !x = (empty !x),
+                    // that breaks the cost model and physical conversion.
+                    let node = LogicalEmptyRelation::new(
+                        LogicalJoin::new(
+                            PlanNode::from_group(left.into()),
+                            PlanNode::from_group(right.into()),
+                            ConstantExpr::bool(true).into_expr(),
+                            JoinType::Cross,
+                        )
+                        .into_plan_node(),
+                        EmptyRelationType::Empty,
+                    )
+                    .into_rel_node()
+                    .as_ref()
+                    .clone();
+                    return vec![node];
                 }
             }
         }

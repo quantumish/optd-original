@@ -1,14 +1,13 @@
 use std::collections::HashSet;
 use std::{ops::Deref, sync::Arc};
 
-use crate::plan_nodes::{BinOpType, EmptyRelationData, JoinType, LogOpType, OptRelNodeTyp};
+use crate::plan_nodes::{BinOpType, JoinType, LogOpType, OptRelNodeTyp};
 use anyhow::anyhow;
 use optd_core::property::PropertyBuilder;
 use union_find::disjoint_sets::DisjointSets;
 use union_find::union_find::UnionFind;
 
 use super::schema::Catalog;
-use super::DEFAULT_NAME;
 
 pub type BaseTableColumnRefs = Vec<ColumnRef>;
 
@@ -294,17 +293,6 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
                     .collect();
                 GroupColumnRefs::new(column_refs, None)
             }
-            OptRelNodeTyp::EmptyRelation => {
-                let data = data.unwrap().as_slice();
-                let empty_relation_data: EmptyRelationData =
-                    bincode::deserialize(data.as_ref()).unwrap();
-                let schema = empty_relation_data.schema;
-                let column_cnt = schema.fields.len();
-                let column_refs = (0..column_cnt)
-                    .map(|i| ColumnRef::base_table_column_ref(DEFAULT_NAME.to_string(), i))
-                    .collect();
-                GroupColumnRefs::new(column_refs, None)
-            }
             OptRelNodeTyp::ColumnRef => {
                 let col_ref_idx = data.unwrap().as_u64();
                 // this is always safe since col_ref_idx was initially a usize in ColumnRefExpr::new()
@@ -433,7 +421,8 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
             OptRelNodeTyp::Filter
             | OptRelNodeTyp::Sort
             | OptRelNodeTyp::Limit
-            | OptRelNodeTyp::SortOrder(_) => children[0].clone(),
+            | OptRelNodeTyp::SortOrder(_)
+            | OptRelNodeTyp::EmptyRelation(_) => children[0].clone(),
             OptRelNodeTyp::Cast => {
                 // FIXME: we just assume the column value does not change.
                 children[0].clone()
@@ -473,6 +462,10 @@ impl PropertyBuilder<OptRelNodeTyp> for ColumnRefPropertyBuilder {
             | OptRelNodeTyp::InList
             | OptRelNodeTyp::ExternColumnRef => {
                 GroupColumnRefs::new(vec![ColumnRef::Derived], None)
+            }
+            OptRelNodeTyp::Values => {
+                let item_num = data.unwrap().as_list().len();
+                GroupColumnRefs::new(vec![ColumnRef::Derived; item_num], None)
             }
             _ => unimplemented!("Unsupported rel node type {:?}", typ),
         }

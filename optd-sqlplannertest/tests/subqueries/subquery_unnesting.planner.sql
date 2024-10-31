@@ -64,13 +64,9 @@ PhysicalProjection { exprs: [ #0, #1 ] }
             ├── aggrs:Agg(Sum)
             │   └── [ Cast { cast_to: Int64, expr: #2 } ]
             ├── groups: [ #1 ]
-            └── PhysicalFilter
-                ├── cond:Eq
-                │   ├── #1
-                │   └── #0
-                └── PhysicalNestedLoopJoin { join_type: Inner, cond: true }
-                    ├── PhysicalAgg { aggrs: [], groups: [ #0 ] }
-                    │   └── PhysicalScan { table: t1 }
-                    └── PhysicalScan { table: t2 }
+            └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ] }
+                ├── PhysicalAgg { aggrs: [], groups: [ #0 ] }
+                │   └── PhysicalScan { table: t1 }
+                └── PhysicalScan { table: t2 }
 */
 

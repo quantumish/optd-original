@@ -24,16 +24,19 @@ use optd_core::rel_node::RelNodeMetaMap;
 use optd_datafusion_repr::{
     plan_nodes::{
         BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, ConstantType,
-        Expr, ExprList, FuncExpr, FuncType, InListExpr, JoinType, LikeExpr, LogOpExpr, LogOpType,
-        OptRelNode, OptRelNodeRef, OptRelNodeTyp, PhysicalAgg, PhysicalEmptyRelation,
-        PhysicalFilter, PhysicalHashJoin, PhysicalLimit, PhysicalNestedLoopJoin,
-        PhysicalProjection, PhysicalScan, PhysicalSort, PlanNode, SortOrderExpr, SortOrderType,
+        EmptyRelationType, Expr, ExprList, FuncExpr, FuncType, InListExpr, JoinType, LikeExpr,
+        LogOpExpr, LogOpType, OptRelNode, OptRelNodeRef, OptRelNodeTyp, PhysicalAgg,
+        PhysicalEmptyRelation, PhysicalFilter, PhysicalHashJoin, PhysicalLimit,
+        PhysicalNestedLoopJoin, PhysicalProjection, PhysicalScan, PhysicalSort, PhysicalValues,
+        PlanNode, SortOrderExpr, SortOrderType,
     },
     properties::schema::Schema as OptdSchema,
 };
 
 use crate::{physical_collector::CollectorExec, OptdPlanContext};
 
+// TODO: ensure optd schema is the same as df schema
+#[allow(dead_code)]
 fn from_optd_schema(optd_schema: OptdSchema) -> Schema {
     let match_type = |typ: &ConstantType| typ.into_data_type();
     let mut fields = Vec::with_capacity(optd_schema.len());
@@ -354,6 +357,20 @@ impl OptdPlanContext<'_> {
     }
 
     #[async_recursion]
+    async fn conv_from_optd_values(
+        &mut self,
+        node: PhysicalValues,
+        _: &RelNodeMetaMap,
+    ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
+        // should be mapped to projection + empty relation, but now we only support the case for empty relations
+        assert!(node.values().as_list().is_empty());
+        Ok(Arc::new(datafusion::physical_plan::empty::EmptyExec::new(
+            true,
+            Schema::empty().into(),
+        )) as Arc<dyn ExecutionPlan + 'static>)
+    }
+
+    #[async_recursion]
     async fn conv_from_optd_sort(
         &mut self,
         node: PhysicalSort,
@@ -523,6 +540,19 @@ impl OptdPlanContext<'_> {
         )
     }
 
+    #[async_recursion]
+    async fn conv_from_optd_empty_relation(
+        &mut self,
+        node: PhysicalEmptyRelation,
+        meta: &RelNodeMetaMap,
+    ) -> Result<Arc<dyn ExecutionPlan + 'static>> {
+        let child = self.conv_from_optd_plan_node(node.child(), meta).await?;
+        Ok(Arc::new(datafusion::physical_plan::empty::EmptyExec::new(
+            node.rel_type() == EmptyRelationType::OneRow,
+            child.schema(),
+        )) as Arc<dyn ExecutionPlan + 'static>)
+    }
+
     async fn conv_from_optd_plan_node(
         &mut self,
         node: PlanNode,
@@ -573,17 +603,19 @@ impl OptdPlanContext<'_> {
                 )
                 .await?
             }
-            OptRelNodeTyp::PhysicalEmptyRelation => {
-                let physical_node = PhysicalEmptyRelation::from_rel_node(rel_node).unwrap();
-                let schema = physical_node.empty_relation_schema();
-                let datafusion_schema: Schema = from_optd_schema(schema);
-                Arc::new(datafusion::physical_plan::empty::EmptyExec::new(
-                    physical_node.produce_one_row(),
-                    Arc::new(datafusion_schema),
-                )) as Arc<dyn ExecutionPlan>
+            OptRelNodeTyp::PhysicalEmptyRelation(_) => {
+                self.conv_from_optd_empty_relation(
+                    PhysicalEmptyRelation::from_rel_node(rel_node).unwrap(),
+                    meta,
+                )
+                .await?
             }
             OptRelNodeTyp::PhysicalLimit => {
                 self.conv_from_optd_limit(PhysicalLimit::from_rel_node(rel_node).unwrap(), meta)
+                    .await?
+            }
+            OptRelNodeTyp::PhysicalValues => {
+                self.conv_from_optd_values(PhysicalValues::from_rel_node(rel_node).unwrap(), meta)
                     .await?
             }
             typ => unimplemented!("{}", typ),

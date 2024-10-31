@@ -12,6 +12,7 @@ mod projection;
 mod scan;
 mod sort;
 mod subquery;
+mod values;
 
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -25,7 +26,7 @@ use optd_core::{
 
 pub use agg::{LogicalAgg, PhysicalAgg};
 pub use apply::{ApplyType, LogicalApply};
-pub use empty_relation::{EmptyRelationData, LogicalEmptyRelation, PhysicalEmptyRelation};
+pub use empty_relation::{EmptyRelationType, LogicalEmptyRelation, PhysicalEmptyRelation};
 pub use expr::{
     BetweenExpr, BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, ConstantType,
     DataTypeExpr, ExprList, FuncExpr, FuncType, InListExpr, LikeExpr, LogOpExpr, LogOpType,
@@ -38,7 +39,8 @@ use pretty_xmlish::{Pretty, PrettyConfig};
 pub use projection::{LogicalProjection, PhysicalProjection};
 pub use scan::{LogicalScan, PhysicalScan};
 pub use sort::{LogicalSort, PhysicalSort};
-pub use subquery::{DependentJoin, ExternColumnRefExpr, RawDependentJoin}; // Add missing import
+pub use subquery::{DependentJoin, ExternColumnRefExpr, RawDependentJoin};
+pub use values::{LogicalValues, PhysicalValues}; // Add missing import
 
 use crate::properties::schema::{Schema, SchemaPropertyBuilder};
 
@@ -53,23 +55,25 @@ pub enum OptRelNodeTyp {
     Projection,
     Filter,
     Scan,
+    Values,
     Join(JoinType),
     RawDepJoin(JoinType),
     DepJoin(JoinType),
     Sort,
     Agg,
     Apply(ApplyType),
-    EmptyRelation,
+    EmptyRelation(EmptyRelationType),
     Limit,
     // Physical plan nodes
     PhysicalProjection,
     PhysicalFilter,
     PhysicalScan,
+    PhysicalValues,
     PhysicalSort,
     PhysicalAgg,
     PhysicalHashJoin(JoinType),
     PhysicalNestedLoopJoin(JoinType),
-    PhysicalEmptyRelation,
+    PhysicalEmptyRelation(EmptyRelationType),
     PhysicalLimit,
     // Expressions
     Constant(ConstantType),
@@ -100,8 +104,9 @@ impl OptRelNodeTyp {
                 | Self::Apply(_)
                 | Self::Sort
                 | Self::Agg
-                | Self::EmptyRelation
+                | Self::EmptyRelation(_)
                 | Self::Limit
+                | Self::Values
                 | Self::PhysicalProjection
                 | Self::PhysicalFilter
                 | Self::PhysicalNestedLoopJoin(_)
@@ -110,7 +115,8 @@ impl OptRelNodeTyp {
                 | Self::PhysicalAgg
                 | Self::PhysicalHashJoin(_)
                 | Self::PhysicalLimit
-                | Self::PhysicalEmptyRelation
+                | Self::PhysicalEmptyRelation(_)
+                | Self::PhysicalValues
         )
     }
 
@@ -155,8 +161,11 @@ impl RelNodeTyp for OptRelNodeTyp {
                 | Self::Apply(_)
                 | Self::Sort
                 | Self::Agg
-                | Self::EmptyRelation
+                | Self::EmptyRelation(_)
                 | Self::Limit
+                | Self::Values
+                | Self::DepJoin(_)
+                | Self::RawDepJoin(_)
         )
     }
 
@@ -440,13 +449,16 @@ pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pr
         OptRelNodeTyp::Scan => LogicalScan::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
+        OptRelNodeTyp::Values => LogicalValues::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
         OptRelNodeTyp::Filter => LogicalFilter::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
         OptRelNodeTyp::Apply(_) => LogicalApply::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
-        OptRelNodeTyp::EmptyRelation => LogicalEmptyRelation::from_rel_node(rel_node)
+        OptRelNodeTyp::EmptyRelation(_) => LogicalEmptyRelation::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
         OptRelNodeTyp::Limit => LogicalLimit::from_rel_node(rel_node)
@@ -456,6 +468,9 @@ pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pr
             .unwrap()
             .dispatch_explain(meta_map),
         OptRelNodeTyp::PhysicalScan => PhysicalScan::from_rel_node(rel_node)
+            .unwrap()
+            .dispatch_explain(meta_map),
+        OptRelNodeTyp::PhysicalValues => PhysicalValues::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
         OptRelNodeTyp::PhysicalNestedLoopJoin(_) => PhysicalNestedLoopJoin::from_rel_node(rel_node)
@@ -494,7 +509,7 @@ pub fn explain(rel_node: OptRelNodeRef, meta_map: Option<&RelNodeMetaMap>) -> Pr
         OptRelNodeTyp::LogOp(_) => LogOpExpr::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
-        OptRelNodeTyp::PhysicalEmptyRelation => PhysicalEmptyRelation::from_rel_node(rel_node)
+        OptRelNodeTyp::PhysicalEmptyRelation(_) => PhysicalEmptyRelation::from_rel_node(rel_node)
             .unwrap()
             .dispatch_explain(meta_map),
         OptRelNodeTyp::PhysicalLimit => PhysicalLimit::from_rel_node(rel_node)

@@ -16,6 +16,7 @@ select * from t1 LIMIT 0;
 LogicalLimit { skip: 0(u64), fetch: 0(u64) }
 └── LogicalProjection { exprs: [ #0, #1 ] }
     └── LogicalScan { table: t1 }
-PhysicalEmptyRelation { produce_one_row: false }
+PhysicalEmptyRelation { rel_type: Empty }
+└── PhysicalScan { table: t1 }
 */
 
