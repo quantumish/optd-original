@@ -136,6 +136,14 @@ impl<T: NodeType> CascadesOptimizer<T> {
         }
     }
 
+    pub fn get_pred_from_pred_id(&self, pred_id: PredId) -> ArcPredNode<T> {
+        self.state
+            .read()
+            .unwrap()
+            .memo
+            .get_pred_from_pred_id(pred_id)
+    }
+
     pub fn push_task(&self, task: Box<dyn Task<T>>) {
         self.tasks.lock().unwrap().push(task);
     }
@@ -158,19 +166,6 @@ impl<T: NodeType> CascadesOptimizer<T> {
         self.state.write().unwrap().explored_groups.insert(group_id);
     }
 
-    pub fn get_all_group_bindings(
-        &self,
-        group_id: GroupId,
-        binding_type: BindingType,
-    ) -> Vec<ArcPlanNode<T>> {
-        self.state.read().unwrap().memo.get_all_group_bindings(
-            group_id,
-            binding_type,
-            true,
-            Some(10),
-        )
-    }
-
     // TODO: Consider introducing a distinction between getting physical and logical exprs?
     pub fn get_all_exprs_in_group(&self, group_id: GroupId) -> Vec<ExprId> {
         self.state
@@ -178,21 +173,6 @@ impl<T: NodeType> CascadesOptimizer<T> {
             .unwrap()
             .memo
             .get_all_exprs_in_group(group_id)
-    }
-
-    pub fn get_all_expr_bindings(
-        &self,
-        expr_id: ExprId,
-        binding_type: BindingType,
-        level: Option<usize>,
-    ) -> Vec<ArcPlanNode<T>> {
-        // TODO: expr_bindings is not descriptive
-        // Additionally, arguments (to this and memo table) are not easy to understand
-        self.state
-            .read()
-            .unwrap()
-            .memo
-            .get_all_expr_bindings(expr_id, binding_type, false, level)
     }
 
     pub fn get_expr_memoed(&self, expr_id: ExprId) -> RelMemoNodeRef<T> {
@@ -236,19 +216,16 @@ impl<T: NodeType> CascadesOptimizer<T> {
     }
 
     pub fn add_expr_to_new_group(&self, expr: ArcPlanNode<T>) -> (GroupId, ExprId) {
-        self.state
-            .write()
-            .unwrap()
-            .memo
-            .add_new_group_expr(expr, None)
+        self.state.write().unwrap().memo.add_new_expr(expr) // TODO: match optim/memo naming
     }
 
-    pub fn add_expr_to_group(&self, expr: ArcPlanNode<T>, group_id: GroupId) -> (GroupId, ExprId) {
+    pub fn add_expr_to_group(&self, expr: ArcPlanNode<T>, group_id: GroupId) -> ExprId {
+        // TODO: match optim/memo naming
         self.state
             .write()
             .unwrap()
             .memo
-            .add_new_group_expr(expr, Some(group_id))
+            .add_expr_to_group(expr, group_id)
     }
 
     pub fn get_expr_info(&self, expr: ArcPlanNode<T>) -> (GroupId, ExprId) {

@@ -54,7 +54,6 @@ pub struct SemanticCorrelation {
 }
 
 impl SemanticCorrelation {
-    #[cfg(test)]
     pub fn new(eq_columns: EqBaseTableColumnSets) -> Self {
         Self {
             eq_columns: EqColumns::EqBaseTableColumnSets(eq_columns),
@@ -362,7 +361,9 @@ impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
                 GroupColumnRefs::new(column_refs, child.output_correlation.clone())
             }
             // Should account for all physical join types.
-            DfNodeType::Join(join_type) | DfNodeType::RawDepJoin(join_type)  | DfNodeType::DepJoin(join_type)=> {
+            OptRelNodeTyp::Join(join_type)
+            | OptRelNodeTyp::RawDepJoin(join_type)
+            | OptRelNodeTyp::DepJoin(join_type) => {
                 // Concatenate left and right children column refs.
                 let column_refs = Self::concat_children_col_refs(&children[0..2]);
                 // Merge the equal columns of two children as input correlation.
@@ -464,13 +465,15 @@ impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
                 };
                 GroupColumnRefs::new(column_refs, correlation)
             }
-            DfNodeType::Constant(_)
-            | DfNodeType::ExternColumnRef // TODO Possibly very very wrong---consult cost model team
-            | DfNodeType::Func(_)
-            | DfNodeType::DataType(_)
-            | DfNodeType::Between
-            | DfNodeType::Like
-            | DfNodeType::InList => GroupColumnRefs::new(vec![ColumnRef::Derived], None),
+            OptRelNodeTyp::Constant(_)
+            | OptRelNodeTyp::Func(_)
+            | OptRelNodeTyp::DataType(_)
+            | OptRelNodeTyp::Between
+            | OptRelNodeTyp::Like
+            | OptRelNodeTyp::InList
+            | OptRelNodeTyp::ExternColumnRef => {
+                GroupColumnRefs::new(vec![ColumnRef::Derived], None)
+            }
             _ => unimplemented!("Unsupported rel node type {:?}", typ),
         }
     }

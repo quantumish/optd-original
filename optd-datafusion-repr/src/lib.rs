@@ -3,9 +3,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
-use cost::{AdaptiveCostModel, DataFusionBaseTableStats, RuntimeAdaptionStorage, DEFAULT_DECAY};
+use cost::{AdaptiveCostModel, RuntimeAdaptionStorage};
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId},
+    cost::CostModel,
     heuristics::{ApplyOrder, HeuristicsOptimizer},
     nodes::PlanNodeMetaMap,
     optimizer::Optimizer,
@@ -20,11 +21,11 @@ use properties::{
 };
 use rules::{
     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
-    EliminateJoinRule, EliminateLimitRule, FilterAggTransposeRule, FilterCrossJoinTransposeRule,
-    FilterInnerJoinTransposeRule, FilterMergeRule, FilterProjectTransposeRule,
-    FilterSortTransposeRule, HashJoinRule, JoinAssocRule, JoinCommuteRule, PhysicalConversionRule,
-    ProjectFilterTransposeRule, ProjectMergeRule, ProjectionPullUpJoin, SimplifyFilterRule,
-    SimplifyJoinCondRule,
+    EliminateJoinRule, EliminateLimitRule, EliminateProjectRule, FilterAggTransposeRule,
+    FilterCrossJoinTransposeRule, FilterInnerJoinTransposeRule, FilterMergeRule,
+    FilterProjectTransposeRule, FilterSortTransposeRule, HashJoinRule, JoinAssocRule,
+    JoinCommuteRule, PhysicalConversionRule, ProjectFilterTransposeRule, ProjectMergeRule,
+    ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule,
 };
 
 pub use optd_core::nodes::Value;
@@ -43,7 +44,7 @@ mod testing;
 // mod expand;
 
 pub struct DatafusionOptimizer {
-    hueristic_optimizer: HeuristicsOptimizer<DfNodeType>,
+    heuristic_optimizer: HeuristicsOptimizer<DfNodeType>,
     cascades_optimizer: CascadesOptimizer<DfNodeType>,
     pub runtime_statistics: RuntimeAdaptionStorage,
     enable_adaptive: bool,
@@ -71,8 +72,8 @@ impl DatafusionOptimizer {
         &self.cascades_optimizer
     }
 
-    pub fn optd_hueristic_optimizer(&self) -> &HeuristicsOptimizer<DfNodeType> {
-        &self.hueristic_optimizer
+    pub fn optd_heuristic_optimizer(&self) -> &HeuristicsOptimizer<DfNodeType> {
+        &self.heuristic_optimizer
     }
 
     pub fn optd_optimizer_mut(&mut self) -> &mut CascadesOptimizer<DfNodeType> {
@@ -82,6 +83,7 @@ impl DatafusionOptimizer {
     pub fn default_heuristic_rules(
     ) -> Vec<Arc<dyn Rule<DfNodeType, HeuristicsOptimizer<DfNodeType>>>> {
         vec![
+            Arc::new(EliminateProjectRule::new()),
             Arc::new(SimplifyFilterRule::new()),
             Arc::new(SimplifyJoinCondRule::new()),
             Arc::new(EliminateFilterRule::new()),
@@ -126,10 +128,17 @@ impl DatafusionOptimizer {
     }
 
     /// Create an optimizer with partial explore (otherwise it's too slow).
-    pub fn new_physical(
+    pub fn new_physical(catalog: Arc<dyn Catalog>, enable_adaptive: bool) -> Self {
+        let cost_model = AdaptiveCostModel::new(50);
+        let map = cost_model.get_runtime_map();
+        Self::new_physical_with_cost_model(catalog, enable_adaptive, cost_model, map)
+    }
+
+    pub fn new_physical_with_cost_model(
         catalog: Arc<dyn Catalog>,
-        stats: DataFusionBaseTableStats,
         enable_adaptive: bool,
+        cost_model: impl CostModel<OptRelNodeTyp>,
+        runtime_map: RuntimeAdaptionStorage,
     ) -> Self {
         let (transformation_rules, implementation_rules) = Self::default_cascades_rules();
         let heuristic_rules = Self::default_heuristic_rules();
@@ -137,16 +146,15 @@ impl DatafusionOptimizer {
             Box::new(SchemaPropertyBuilder::new(catalog.clone())),
             Box::new(ColumnRefPropertyBuilder::new(catalog.clone())),
         ]);
-        let cost_model = AdaptiveCostModel::new(DEFAULT_DECAY, stats);
         Self {
-            runtime_statistics: cost_model.get_runtime_map(),
+            runtime_statistics: runtime_map,
             cascades_optimizer: CascadesOptimizer::new(
                 transformation_rules.into(),
                 implementation_rules.into(),
                 Arc::new(cost_model),
                 property_builders.clone(),
             ),
-            hueristic_optimizer: HeuristicsOptimizer::new_with_rules(
+            heuristic_optimizer: HeuristicsOptimizer::new_with_rules(
                 heuristic_rules,
                 ApplyOrder::TopDown, // uhh TODO reconsider
                 property_builders.clone(),
@@ -180,7 +188,7 @@ impl DatafusionOptimizer {
         // );
 
         // let cost_model =
-        //     DataFusionAdaptiveCostModel::new(1000, DataFusionBaseTableStats::default()); // very large decay
+        //     AdaptiveCostModel::new(1000);
         // let runtime_statistics = cost_model.get_runtime_map();
         // let optimizer = CascadesOptimizer::new(
         //     rule_wrappers,
@@ -204,7 +212,7 @@ impl DatafusionOptimizer {
     }
 
     pub fn heuristic_optimize(&mut self, root_rel: ArcDfPlanNode) -> ArcDfPlanNode {
-        self.hueristic_optimizer
+        self.heuristic_optimizer
             .optimize(root_rel)
             .expect("heuristics returns error")
     }

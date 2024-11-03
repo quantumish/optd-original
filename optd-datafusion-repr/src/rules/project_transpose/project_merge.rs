@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
-use crate::plan_nodes::{DfNodeType, DfReprPlanNode, ListPred, LogicalProjection, DfReprPlanNode};
+use crate::plan_nodes::{DfNodeType, DfReprPlanNode, DfReprPlanNode, ListPred, LogicalProjection};
 use crate::rules::macros::define_rule;
 
 use super::project_transpose_common::ProjectionMapping;
@@ -41,6 +41,38 @@ fn apply_projection_merge(
     vec![node.into_rel_node().as_ref().clone()]
 }
 
+// Proj child [identical columns] -> eliminate
+define_rule!(
+    EliminateProjectRule,
+    apply_eliminate_project,
+    (Projection, child, [expr])
+);
+
+fn apply_eliminate_project(
+    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    EliminateProjectRulePicks { child, expr }: EliminateProjectRulePicks,
+) -> Vec<RelNode<OptRelNodeTyp>> {
+    let exprs = ExprList::from_rel_node(expr.into()).unwrap();
+    let child_columns = optimizer
+        .get_property::<SchemaPropertyBuilder>(child.clone().into(), 0)
+        .len();
+    if child_columns != exprs.len() {
+        return Vec::new();
+    }
+    for i in 0..exprs.len() {
+        let child_expr = exprs.child(i);
+        if child_expr.typ() == OptRelNodeTyp::ColumnRef {
+            let child_expr = ColumnRefExpr::from_rel_node(child_expr.into_rel_node()).unwrap();
+            if child_expr.index() != i {
+                return Vec::new();
+            }
+        } else {
+            return Vec::new();
+        }
+    }
+    vec![child]
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -49,7 +81,7 @@ mod tests {
 
     use crate::{
         plan_nodes::{
-            ColumnRefPred, DfNodeType, ListPred, LogicalProjection, LogicalScan, DfReprPlanNode,
+            ColumnRefPred, DfNodeType, DfReprPlanNode, ListPred, LogicalProjection, LogicalScan,
         },
         rules::ProjectMergeRule,
         testing::new_test_optimizer,

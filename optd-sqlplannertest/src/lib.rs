@@ -10,7 +10,6 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use mimalloc::MiMalloc;
 use optd_datafusion_bridge::{DatafusionCatalog, OptdQueryPlanner};
-use optd_datafusion_repr::cost::BaseTableStats;
 use optd_datafusion_repr::DatafusionOptimizer;
 use regex::Regex;
 use std::collections::HashSet;
@@ -69,7 +68,6 @@ impl DatafusionDBMS {
             };
             let optimizer: DatafusionOptimizer = DatafusionOptimizer::new_physical(
                 Arc::new(DatafusionCatalog::new(state.catalog_list())),
-                BaseTableStats::default(),
                 false,
             );
             if !use_df_logical {
@@ -96,38 +94,40 @@ impl DatafusionDBMS {
                 .lock()
                 .unwrap();
             let optimizer = guard.as_mut().unwrap().optd_optimizer_mut();
-            if flags.disable_explore_limit {
-                optimizer.disable_explore_limit();
-            } else {
-                optimizer.enable_explore_limit();
-            }
-            let rules = optimizer.rules();
-            if flags.enable_logical_rules.is_empty() {
-                for r in 0..rules.len() {
-                    optimizer.enable_rule(r);
-                }
-            } else {
-                for (rule_id, rule) in rules.as_ref().iter().enumerate() {
-                    if rule.rule.is_impl_rule() {
-                        optimizer.enable_rule(rule_id);
-                    } else {
-                        optimizer.disable_rule(rule_id);
-                    }
-                }
-                let mut rules_to_enable = flags
-                    .enable_logical_rules
-                    .iter()
-                    .map(|x| x.as_str())
-                    .collect::<HashSet<_>>();
-                for (rule_id, rule) in rules.as_ref().iter().enumerate() {
-                    if rules_to_enable.remove(rule.rule.name()) {
-                        optimizer.enable_rule(rule_id);
-                    }
-                }
-                if !rules_to_enable.is_empty() {
-                    bail!("Unknown logical rule: {:?}", rules_to_enable);
-                }
-            }
+            // if flags.panic_on_budget { TODO reimplement
+            //     optimizer.panic_on_explore_limit(true);
+            // } else {
+            //     optimizer.panic_on_explore_limit(false);
+            // }
+            //     let rules = optimizer.rules(); TODO reimplement
+            //     if flags.enable_logical_rules.is_empty() {
+            //         for r in 0..rules.len() {
+            //             optimizer.enable_rule(r);
+            //         }
+            //         guard.as_mut().unwrap().enable_heuristic(true);
+            //     } else {
+            //         for (rule_id, rule) in rules.as_ref().iter().enumerate() {
+            //             if rule.rule.is_impl_rule() {
+            //                 optimizer.enable_rule(rule_id);
+            //             } else {
+            //                 optimizer.disable_rule(rule_id);
+            //             }
+            //         }
+            //         let mut rules_to_enable = flags
+            //             .enable_logical_rules
+            //             .iter()
+            //             .map(|x| x.as_str())
+            //             .collect::<HashSet<_>>();
+            //         for (rule_id, rule) in rules.as_ref().iter().enumerate() {
+            //             if rules_to_enable.remove(rule.rule.name()) {
+            //                 optimizer.enable_rule(rule_id);
+            //             }
+            //         }
+            //         if !rules_to_enable.is_empty() {
+            //             bail!("Unknown logical rule: {:?}", rules_to_enable);
+            //         }
+            //         guard.as_mut().unwrap().enable_heuristic(false);
+            //     }
         }
         let sql = unescape_input(sql)?;
         let dialect = Box::new(GenericDialect);
@@ -314,7 +314,7 @@ struct TestFlags {
     verbose: bool,
     enable_df_logical: bool,
     enable_logical_rules: Vec<String>,
-    disable_explore_limit: bool,
+    panic_on_budget: bool,
 }
 
 /// Extract the flags from a task. The flags are specified in square brackets.
@@ -335,10 +335,13 @@ fn extract_flags(task: &str) -> Result<TestFlags> {
             } else if flag == "use_df_logical" {
                 options.enable_df_logical = true;
             } else if flag.starts_with("logical_rules") {
-                options.enable_logical_rules =
-                    flag.split('+').skip(1).map(|x| x.to_string()).collect();
-            } else if flag == "disable_explore_limit" {
-                options.disable_explore_limit = true;
+                if let Some((_, flag)) = flag.split_once(':') {
+                    options.enable_logical_rules = flag.split('+').map(|x| x.to_string()).collect();
+                } else {
+                    bail!("Failed to parse logical_rules flag: {}", flag);
+                }
+            } else if flag == "panic_on_budget" {
+                options.panic_on_budget = true;
             } else {
                 bail!("Unknown flag: {}", flag);
             }

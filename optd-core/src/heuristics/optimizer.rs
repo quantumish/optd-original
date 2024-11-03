@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use itertools::Itertools;
 use std::any::Any;
 
@@ -128,19 +128,21 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
         let mut optimized_inputs = Vec::with_capacity(inputs.len());
         for input in inputs {
             let input = input.unwrap_plan_node();
-            optimized_inputs.push(self.optimize(input.clone())?);
+            optimized_inputs.push(self.optimize_inner(input.clone())?);
         }
         Ok(optimized_inputs)
     }
 
     fn apply_rules(&mut self, mut root_rel: ArcPlanNode<T>) -> Result<ArcPlanNode<T>> {
-        for rule in self.rules.as_ref() {
+        for rule in self.rules.clone().as_ref() {
+            // Properties only matter for applying rules, therefore applying it before each rule invoke.
             let matcher = rule.matcher();
             if let Some(picks) = match_and_pick(matcher, root_rel.clone()) {
                 let picks = picks
                     .into_iter()
                     .map(|(k, v)| (k, PlanNodeOrGroup::PlanNode(v.into())))
                     .collect(); // This is kinda ugly, but it works for now
+                self.infer_properties(root_rel.clone());
                 let mut results = rule.apply(self, picks);
                 assert!(results.len() <= 1);
                 if !results.is_empty() {
@@ -167,15 +169,9 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
                     }
                     .into(),
                 )?;
-                self.infer_properties(root_rel.clone());
-                self.properties.insert(
-                    node.clone(),
-                    self.properties.get(&root_rel.clone()).unwrap().clone(),
-                );
                 Ok(node)
             }
             ApplyOrder::TopDown => {
-                self.infer_properties(root_rel.clone());
                 let root_rel = self.apply_rules(root_rel)?;
                 let optimized_children = self
                     .optimize_inputs(&root_rel.children)?
@@ -188,11 +184,6 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
                     predicates: root_rel.predicates.clone(),
                 }
                 .into();
-                self.infer_properties(root_rel.clone());
-                self.properties.insert(
-                    node.clone(),
-                    self.properties.get(&root_rel.clone()).unwrap().clone(),
-                );
                 Ok(node)
             }
         }
@@ -235,8 +226,20 @@ impl<T: NodeType> Optimizer<T> for HeuristicsOptimizer<T> {
         root_rel: ArcPlanNode<T>,
         idx: usize,
     ) -> P::Prop {
-        let props = self.properties.get(&root_rel).unwrap();
+        let props = self
+            .properties
+            .get(&root_rel)
+            .with_context(|| format!("cannot obtain properties for {}", root_rel))
+            .unwrap();
         let prop = props[idx].as_ref();
-        prop.downcast_ref::<P::Prop>().unwrap().clone()
+        prop.downcast_ref::<P::Prop>()
+            .with_context(|| {
+                format!(
+                    "cannot downcast property at idx {} into provided property instance",
+                    idx
+                )
+            })
+            .unwrap()
+            .clone()
     }
 }

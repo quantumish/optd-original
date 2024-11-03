@@ -48,21 +48,10 @@ fn match_node<T: NodeType>(
             RuleMatcher::PickOne { pick_to, expand } => {
                 let group_id = node.children[idx];
                 let node = if *expand {
-                    let exprs = optimizer.get_all_exprs_in_group(group_id);
-
-                    let mut bindings = exprs
-                        .into_iter()
-                        .map(|expr| {
-                            optimizer
-                                .get_all_expr_bindings(expr, BindingType::Logical, None)
-                                .into_iter()
-                                .filter(|y| y.typ.is_logical())
-                                .collect_vec()
-                        })
-                        .flatten()
-                        .collect_vec();
-                    assert_eq!(bindings.len(), 1, "can only expand expression");
-                    PlanNodeOrGroup::PlanNode(bindings.remove(0).as_ref().clone().into())
+                    // TODO redesign
+                    // let binding = optimizer.get_pred_from_pred_id(group_id);
+                    // PlanNodeOrGroup::PlanNode(binding)
+                    todo!()
                 } else {
                     PlanNodeOrGroup::Group(group_id)
                 };
@@ -250,7 +239,7 @@ fn update_memo<T: NodeType>(
 ) -> Vec<ExprId> {
     let mut expr_ids = vec![];
     for new_expr in new_exprs {
-        let (_, expr_id) = optimizer.add_expr_to_group(new_expr, group_id);
+        let expr_id = optimizer.add_expr_to_group(new_expr, group_id);
         expr_ids.push(expr_id);
     }
     expr_ids

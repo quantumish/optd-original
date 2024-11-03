@@ -1,18 +1,15 @@
-use std::sync::Arc;
-
 use optd_core::{
     cascades::{BindingType, CascadesOptimizer, RelNodeContext},
     cost::Cost,
-    nodes::PlanNode,
 };
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
-    cost::base_cost::{
-        stats::{Distribution, MostCommonValues},
-        DEFAULT_NUM_DISTINCT,
-    },
-    plan_nodes::{DfNodeType, ListPred, DfReprPlanNode},
+use crate::adv_cost::{
+    stats::{Distribution, MostCommonValues},
+    DEFAULT_NUM_DISTINCT,
+};
+use optd_datafusion_repr::{
+    plan_nodes::{ExprList, OptRelNode, OptRelNodeTyp},
     properties::column_ref::{BaseTableColumnRef, ColumnRef, ColumnRefPropertyBuilder},
 };
 
@@ -48,14 +45,10 @@ impl<
     ) -> f64 {
         if let (Some(context), Some(optimizer)) = (context, optimizer) {
             let group_by_id = context.children_group_ids[2];
-            let mut group_by_exprs: Vec<Arc<PlanNode<DfNodeType>>> =
-                optimizer.get_all_group_bindings(group_by_id, BindingType::Both);
-            assert!(
-                group_by_exprs.len() == 1,
-                "ExprList expression should be the only expression in the GROUP BY group"
-            );
-            let group_by = group_by_exprs.pop().unwrap();
-            let group_by = ListPred::from_rel_node(group_by).unwrap();
+            let group_by = optimizer
+                .get_predicate_binding(group_by_id)
+                .expect("no expression found?");
+            let group_by = ExprList::from_rel_node(group_by).unwrap();
             if group_by.is_empty() {
                 1.0
             } else {
