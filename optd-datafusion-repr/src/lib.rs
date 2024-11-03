@@ -137,7 +137,7 @@ impl DatafusionOptimizer {
     pub fn new_physical_with_cost_model(
         catalog: Arc<dyn Catalog>,
         enable_adaptive: bool,
-        cost_model: impl CostModel<OptRelNodeTyp>,
+        cost_model: impl CostModel<DfNodeType>,
         runtime_map: RuntimeAdaptionStorage,
     ) -> Self {
         let (transformation_rules, implementation_rules) = Self::default_cascades_rules();

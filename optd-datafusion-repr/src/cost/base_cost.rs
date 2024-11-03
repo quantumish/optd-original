@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use crate::plan_nodes::OptRelNodeTyp;
+use crate::plan_nodes::{ArcDfPredNode, ConstantPred, DfNodeType, DfReprPredNode};
 use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, RelNodeContext},
     cost::{Cost, CostModel},
-    nodes::{NodeType, PlanNode, Value},
+    nodes::{ArcPredNode, NodeType, PlanNode, Value},
 };
 
 fn compute_plan_node_cost<T: NodeType, C: CostModel<T>>(
@@ -23,7 +23,7 @@ fn compute_plan_node_cost<T: NodeType, C: CostModel<T>>(
     cost
 }
 
-pub struct OptCostModel {
+pub struct DfCostModel {
     table_stat: HashMap<String, usize>,
 }
 
@@ -31,7 +31,11 @@ pub const ROW_COUNT: usize = 1;
 pub const COMPUTE_COST: usize = 2;
 pub const IO_COST: usize = 3;
 
-impl OptCostModel {
+impl DfCostModel {
+    pub fn new(table_stat: HashMap<String, usize>) -> Self {
+        Self { table_stat }
+    }
+
     pub fn row_cnt(Cost(cost): &Cost) -> f64 {
         cost[ROW_COUNT]
     }
@@ -61,9 +65,37 @@ impl OptCostModel {
             io_cost,
         ])
     }
+
+    fn compute_pred_cost(&self, pred: ArcPredNode<DfNodeType>) -> f64 {
+        match pred.typ {
+            DfNodeType::List => {
+                let compute_cost = pred
+                    .children
+                    .iter()
+                    .map(|child| {
+                        let (_, compute_cost, _) = Self::cost_tuple(child);
+                        compute_cost
+                    })
+                    .sum::<f64>();
+                Self::cost(1.0, compute_cost + 0.01, 0.0)
+            }
+            DfNodeType::ColumnRef => Self::cost(1.0, 0.01, 0.0),
+            _ => {
+                let compute_cost = pred
+                    .children
+                    .iter()
+                    .map(|child| {
+                        let (_, compute_cost, _) = Self::cost_tuple(child);
+                        compute_cost
+                    })
+                    .sum::<f64>();
+                Self::cost(1.0, compute_cost + 1.0, 0.0)
+            }
+        }
+    }
 }
 
-impl CostModel<OptRelNodeTyp> for OptCostModel {
+impl CostModel<DfNodeType> for DfCostModel {
     fn explain(&self, cost: &Cost) -> String {
         format!(
             "weighted={},row_cnt={},compute={},io={}",
@@ -92,14 +124,20 @@ impl CostModel<OptRelNodeTyp> for OptCostModel {
     fn compute_cost(
         &self,
         node: &DfNodeType,
-        data: &Option<Value>,
-        children: &[Cost],
+        predicates: &[ArcDfPredNode],
+        children_costs: &[Cost],
         _context: Option<RelNodeContext>,
-        _optimizer: Option<&CascadesOptimizer<OptRelNodeTyp>>,
+        _optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
+        let compute_cost = predicates
+            .iter()
+            .map(|pred| self.compute_pred_cost(pred))
+            .sum();
         match node {
-            OptRelNodeTyp::PhysicalScan => {
-                let table_name = data.as_ref().unwrap().as_str();
+            DfNodeType::PhysicalScan => {
+                let table_name = ConstantPred::from_pred_node(predicates[0])
+                    .unwrap()
+                    .as_str();
                 let row_cnt = self
                     .table_stat
                     .get(table_name.as_ref())
@@ -107,15 +145,15 @@ impl CostModel<OptRelNodeTyp> for OptCostModel {
                     .unwrap_or(1) as f64;
                 Self::cost(row_cnt, 0.0, row_cnt)
             }
-            OptRelNodeTyp::PhysicalLimit => {
-                let (row_cnt, compute_cost, _) = Self::cost_tuple(&children[0]);
+            DfNodeType::PhysicalLimit => {
+                let (row_cnt, compute_cost, _) = Self::cost_tuple(&children_costs[0]);
                 let selectivity = 0.001;
                 Self::cost((row_cnt * selectivity).max(1.0), compute_cost, 0.0)
             }
-            OptRelNodeTyp::PhysicalEmptyRelation => Self::cost(0.5, 0.01, 0.0),
-            OptRelNodeTyp::PhysicalFilter => {
-                let (row_cnt, _, _) = Self::cost_tuple(&children[0]);
-                let (_, compute_cost, _) = Self::cost_tuple(&children[1]);
+            DfNodeType::PhysicalEmptyRelation => Self::cost(0.5, 0.01, 0.0),
+            DfNodeType::PhysicalFilter => {
+                let (row_cnt, _, _) = Self::cost_tuple(&children_costs[0]);
+                let (_, compute_cost, _) = Self::cost_tuple(&children_costs[1]);
                 let selectivity = 0.001;
                 Self::cost(
                     (row_cnt * selectivity).max(1.0),
@@ -123,10 +161,10 @@ impl CostModel<OptRelNodeTyp> for OptCostModel {
                     0.0,
                 )
             }
-            OptRelNodeTyp::PhysicalNestedLoopJoin(_) => {
-                let (row_cnt_1, _, _) = Self::cost_tuple(&children[0]);
-                let (row_cnt_2, _, _) = Self::cost_tuple(&children[1]);
-                let (_, compute_cost, _) = Self::cost_tuple(&children[2]);
+            DfNodeType::PhysicalNestedLoopJoin(_) => {
+                let (row_cnt_1, _, _) = Self::cost_tuple(&children_costs[0]);
+                let (row_cnt_2, _, _) = Self::cost_tuple(&children_costs[1]);
+                let (_, compute_cost, _) = Self::cost_tuple(&children_costs[2]);
                 let selectivity = 0.01;
                 Self::cost(
                     (row_cnt_1 * row_cnt_2 * selectivity).max(1.0),
@@ -135,13 +173,13 @@ impl CostModel<OptRelNodeTyp> for OptCostModel {
                 )
             }
             DfNodeType::PhysicalProjection => {
-                let (row_cnt, _, _) = Self::cost_tuple(&children[0]);
-                let (_, compute_cost, _) = Self::cost_tuple(&children[1]);
+                let (row_cnt, _, _) = Self::cost_tuple(&children_costs[0]);
+                let (_, compute_cost, _) = Self::cost_tuple(&children_costs[1]);
                 Self::cost(row_cnt, compute_cost * row_cnt, 0.0)
             }
-            OptRelNodeTyp::PhysicalHashJoin(_) => {
-                let (row_cnt_1, _, _) = Self::cost_tuple(&children[0]);
-                let (row_cnt_2, _, _) = Self::cost_tuple(&children[1]);
+            DfNodeType::PhysicalHashJoin(_) => {
+                let (row_cnt_1, _, _) = Self::cost_tuple(&children_costs[0]);
+                let (row_cnt_2, _, _) = Self::cost_tuple(&children_costs[1]);
                 Self::cost(
                     row_cnt_1.min(row_cnt_2).max(1.0),
                     row_cnt_1 * 2.0 + row_cnt_2,
@@ -149,36 +187,15 @@ impl CostModel<OptRelNodeTyp> for OptCostModel {
                 )
             }
 
-            OptRelNodeTyp::PhysicalSort => {
-                let (row_cnt, _, _) = Self::cost_tuple(&children[0]);
+            DfNodeType::PhysicalSort => {
+                let (row_cnt, _, _) = Self::cost_tuple(&children_costs[0]);
                 Self::cost(row_cnt, row_cnt * row_cnt.ln_1p().max(1.0), 0.0)
             }
-            OptRelNodeTyp::PhysicalAgg => {
-                let (row_cnt, _, _) = Self::cost_tuple(&children[0]);
-                let (_, compute_cost_1, _) = Self::cost_tuple(&children[1]);
-                let (_, compute_cost_2, _) = Self::cost_tuple(&children[2]);
+            DfNodeType::PhysicalAgg => {
+                let (row_cnt, _, _) = Self::cost_tuple(&children_costs[0]);
+                let (_, compute_cost_1, _) = Self::cost_tuple(&children_costs[1]);
+                let (_, compute_cost_2, _) = Self::cost_tuple(&children_costs[2]);
                 Self::cost(row_cnt, row_cnt * (compute_cost_1 + compute_cost_2), 0.0)
-            }
-            OptRelNodeTyp::List => {
-                let compute_cost = children
-                    .iter()
-                    .map(|child| {
-                        let (_, compute_cost, _) = Self::cost_tuple(child);
-                        compute_cost
-                    })
-                    .sum::<f64>();
-                Self::cost(1.0, compute_cost + 0.01, 0.0)
-            }
-            DfNodeType::ColumnRef => Self::cost(1.0, 0.01, 0.0),
-            _ if node.is_expression() => {
-                let compute_cost = children
-                    .iter()
-                    .map(|child| {
-                        let (_, compute_cost, _) = Self::cost_tuple(child);
-                        compute_cost
-                    })
-                    .sum::<f64>();
-                Self::cost(1.0, compute_cost + 1.0, 0.0)
             }
             x => unimplemented!("cannot compute cost for {}", x),
         }
@@ -192,8 +209,4 @@ impl CostModel<OptRelNodeTyp> for OptCostModel {
     }
 }
 
-impl OptCostModel {
-    pub fn new(table_stat: HashMap<String, usize>) -> Self {
-        Self { table_stat }
-    }
-}
+impl DfCostModel {}

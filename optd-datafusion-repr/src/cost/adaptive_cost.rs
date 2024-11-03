@@ -3,11 +3,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{cost::OptCostModel, plan_nodes::DfNodeType};
+use crate::{
+    cost::DfCostModel,
+    plan_nodes::{ArcDfPredNode, DfNodeType},
+};
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId, RelNodeContext},
     cost::{Cost, CostModel},
-    nodes::{PlanNode, Value},
+    nodes::{PlanNode, PredNode, Value},
 };
 
 pub type RuntimeAdaptionStorage = Arc<Mutex<RuntimeAdaptionStorageInner>>;
@@ -20,7 +23,7 @@ pub struct RuntimeAdaptionStorageInner {
 
 pub struct AdaptiveCostModel {
     runtime_row_cnt: RuntimeAdaptionStorage,
-    base_model: OptCostModel,
+    base_model: DfCostModel,
     decay: usize,
 }
 
@@ -40,8 +43,8 @@ impl CostModel<DfNodeType> for AdaptiveCostModel {
     fn compute_cost(
         &self,
         node: &DfNodeType,
-        data: &Option<Value>,
-        children: &[Cost],
+        predicates: &[ArcDfPredNode],
+        children_costs: &[Cost],
         context: Option<RelNodeContext>,
         _optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
@@ -50,18 +53,18 @@ impl CostModel<DfNodeType> for AdaptiveCostModel {
             if let Some((runtime_row_cnt, iter)) = guard.history.get(&context.unwrap().group_id) {
                 if *iter + self.decay >= guard.iter_cnt {
                     let runtime_row_cnt = (*runtime_row_cnt).max(1) as f64;
-                    return OptCostModel::cost(runtime_row_cnt, 0.0, runtime_row_cnt);
+                    return DfCostModel::cost(runtime_row_cnt, 0.0, runtime_row_cnt);
                 } else {
-                    return OptCostModel::cost(1.0, 0.0, 1.0);
+                    return DfCostModel::cost(1.0, 0.0, 1.0);
                 }
             } else {
-                return OptCostModel::cost(1.0, 0.0, 1.0);
+                return DfCostModel::cost(1.0, 0.0, 1.0);
             }
         }
-        let (mut row_cnt, compute_cost, io_cost) = OptCostModel::cost_tuple(
+        let (mut row_cnt, compute_cost, io_cost) = DfCostModel::cost_tuple(
             &self
                 .base_model
-                .compute_cost(node, data, children, None, None),
+                .compute_cost(node, children_costs, predicates, None, None),
         );
         if let Some(context) = context {
             let guard = self.runtime_row_cnt.lock().unwrap();
@@ -72,7 +75,7 @@ impl CostModel<DfNodeType> for AdaptiveCostModel {
                 }
             }
         }
-        OptCostModel::cost(row_cnt, compute_cost, io_cost)
+        DfCostModel::cost(row_cnt, compute_cost, io_cost)
     }
 
     fn compute_plan_node_cost(&self, node: &PlanNode<DfNodeType>) -> Cost {
@@ -84,7 +87,7 @@ impl AdaptiveCostModel {
     pub fn new(decay: usize) -> Self {
         Self {
             runtime_row_cnt: Arc::new(Mutex::new(RuntimeAdaptionStorageInner::default())),
-            base_model: OptCostModel::new(HashMap::new()),
+            base_model: DfCostModel::new(HashMap::new()),
             decay,
         }
     }

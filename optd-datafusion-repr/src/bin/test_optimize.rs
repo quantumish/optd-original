@@ -5,10 +5,10 @@ use optd_core::{
     optimizer::Optimizer, rules::Rule,
 };
 use optd_datafusion_repr::{
-    cost::OptCostModel,
+    cost::DfCostModel,
     plan_nodes::{
-        BinOpPred, BinOpType, ColumnRefPred, ConstantPred, DfNodeType, DfReprPlanNode, JoinType,
-        LogicalFilter, LogicalJoin, LogicalScan, DfReprPlanNode,
+        BinOpPred, BinOpType, ColumnRefPred, ConstantPred, DfNodeType, DfReprPlanNode,
+        DfReprPlanNode, JoinType, LogicalFilter, LogicalJoin, LogicalScan,
     },
     rules::{HashJoinRule, JoinAssocRule, JoinCommuteRule, PhysicalConversionRule},
 };
@@ -38,7 +38,7 @@ pub fn main() {
     let mut optimizer = CascadesOptimizer::new(
         transform_rules.into(),
         impl_rules.into(),
-        Arc::new(OptCostModel::new(
+        Arc::new(DfCostModel::new(
             [("t1", 1000), ("t2", 100), ("t3", 10000)]
                 .into_iter()
                 .map(|(x, y)| (x.to_string(), y))

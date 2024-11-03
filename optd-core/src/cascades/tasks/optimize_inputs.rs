@@ -79,9 +79,15 @@ fn update_winner<T: NodeType>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>)
         children_group_ids: expr.children.clone(),
     };
     let input_cost = get_input_cost(&expr.children, optimizer);
+    let materialized_predicates = expr
+        .predicates
+        .iter()
+        .map(|x| optimizer.get_pred_from_pred_id(*x))
+        .collect::<Vec<_>>();
     let total_cost = cost.sum(
         &cost.compute_cost(
             &expr.typ,
+            &materialized_predicates,
             &input_cost,
             Some(context.clone()),
             Some(optimizer),

@@ -1,6 +1,6 @@
 use crate::{
     cascades::{CascadesOptimizer, RelNodeContext},
-    nodes::{NodeType, PlanNode, Value},
+    nodes::{ArcPredNode, NodeType, PlanNode, Value},
 };
 
 #[derive(Default, Clone, Debug, PartialOrd, PartialEq)]
@@ -10,12 +10,14 @@ pub trait CostModel<T: NodeType>: 'static + Send + Sync {
     fn compute_cost(
         &self,
         node: &T,
-        children: &[Cost], // TODO: Predicates are not passed into the cost model yet!
+        predicates: &[ArcPredNode<T>], // TODO: is there a better way?
+        children_costs: &[Cost],
         context: Option<RelNodeContext>,
         // one reason we need the optimizer is to traverse children nodes to build up an expression tree
         optimizer: Option<&CascadesOptimizer<T>>,
     ) -> Cost;
 
+    // TODO: Rename—confusing w/ predicates
     fn compute_plan_node_cost(&self, node: &PlanNode<T>) -> Cost;
 
     fn explain(&self, cost: &Cost) -> String;
