@@ -7,11 +7,11 @@ use optd_core::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
-    cost::base_cost::{
-        stats::{Distribution, MostCommonValues},
-        DEFAULT_NUM_DISTINCT,
-    },
+use crate::adv_cost::{
+    stats::{Distribution, MostCommonValues},
+    DEFAULT_NUM_DISTINCT,
+};
+use optd_datafusion_repr::{
     plan_nodes::{
         BinOpType, ColumnRefExpr, Expr, ExprList, JoinType, LogOpExpr, LogOpType, OptRelNode,
         OptRelNodeRef, OptRelNodeTyp,
@@ -49,14 +49,13 @@ impl<
                 optimizer.get_property_by_group::<ColumnRefPropertyBuilder>(context.group_id, 1);
             let column_refs = column_refs.base_table_column_refs();
             let expr_group_id = context.children_group_ids[2];
-            let expr_trees = optimizer.get_all_group_bindings(expr_group_id, BindingType::Both);
+            let expr_tree = optimizer
+                .get_predicate_binding(expr_group_id)
+                .expect("no expressions??");
             let input_correlation = self.get_input_correlation(&context, optimizer);
-            // there may be more than one expression tree in a group.
-            // see comment in OptRelNodeTyp::PhysicalFilter(_) for more information
-            let expr_tree = expr_trees.first().expect("expression missing");
             self.get_join_selectivity_from_expr_tree(
                 join_typ,
-                expr_tree.clone(),
+                expr_tree,
                 &schema,
                 column_refs,
                 input_correlation,
@@ -94,14 +93,14 @@ impl<
                 .get_property_by_group::<ColumnRefPropertyBuilder>(context.children_group_ids[0], 1)
                 .base_table_column_refs()
                 .len();
-            let left_keys_list =
-                optimizer.get_all_group_bindings(left_keys_group_id, BindingType::Both);
-            let right_keys_list =
-                optimizer.get_all_group_bindings(right_keys_group_id, BindingType::Both);
+            let left_keys = optimizer
+                .get_predicate_binding(left_keys_group_id)
+                .expect("no expression found?");
+            let right_keys = optimizer
+                .get_predicate_binding(right_keys_group_id)
+                .expect("no expression found?");
             // there may be more than one expression tree in a group.
             // see comment in OptRelNodeTyp::PhysicalFilter(_) for more information
-            let left_keys = left_keys_list.first().expect("left keys missing");
-            let right_keys = right_keys_list.first().expect("right keys missing");
             let input_correlation = self.get_input_correlation(&context, optimizer);
             self.get_join_selectivity_from_keys(
                 join_typ,
@@ -452,6 +451,10 @@ impl<
         predicate: &EqPredicate,
         past_eq_columns: &mut EqBaseTableColumnSets,
     ) -> f64 {
+        if predicate.left == predicate.right {
+            // self-join, TODO: is this correct?
+            return 1.0;
+        }
         // To find the adjustment, we need to know the selectivity of the graph before `predicate` is added.
         //
         // There are two cases: (1) adding `predicate` does not change the # of connected components, and
@@ -545,8 +548,8 @@ mod tests {
 
     use optd_core::rel_node::Value;
 
-    use crate::{
-        cost::base_cost::{tests::*, DEFAULT_EQ_SEL},
+    use crate::adv_cost::{tests::*, DEFAULT_EQ_SEL};
+    use optd_datafusion_repr::{
         plan_nodes::{BinOpType, JoinType, LogOpType, OptRelNodeRef},
         properties::{
             column_ref::{

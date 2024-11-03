@@ -174,46 +174,42 @@ PhysicalProjection
     ├── aggrs:Agg(Sum)
     │   └── [ #0 ]
     ├── groups: []
-    └── PhysicalProjection { exprs: [ #1 ] }
+    └── PhysicalProjection { exprs: [ #15 ] }
         └── PhysicalNestedLoopJoin
             ├── join_type: Inner
             ├── cond:And
             │   ├── Eq
-            │   │   ├── #2
-            │   │   └── #4
+            │   │   ├── #1
+            │   │   └── #11
             │   └── Lt
-            │       ├── Cast { cast_to: Decimal128(30, 15), expr: #0 }
-            │       └── #3
-            ├── PhysicalProjection { exprs: [ #1, #2, #3 ] }
-            │   └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ] }
-            │       ├── PhysicalProjection { exprs: [ #1, #4, #5 ] }
-            │       │   └── PhysicalScan { table: lineitem }
-            │       └── PhysicalProjection { exprs: [ #0 ] }
-            │           └── PhysicalProjection { exprs: [ #0, #3, #6 ] }
-            │               └── PhysicalFilter
-            │                   ├── cond:And
-            │                   │   ├── Eq
-            │                   │   │   ├── #3
-            │                   │   │   └── "Brand#13"
-            │                   │   └── Eq
-            │                   │       ├── #6
-            │                   │       └── "JUMBO PKG"
-            │                   └── PhysicalScan { table: part }
-            └── PhysicalProjection
-                ├── exprs:
-                │   ┌── Cast
-                │   │   ├── cast_to: Decimal128(30, 15)
-                │   │   ├── expr:Mul
-                │   │   │   ├── 0.2(float)
-                │   │   │   └── Cast { cast_to: Float64, expr: #1 }
+            │       ├── Cast { cast_to: Decimal128(30, 15), expr: #14 }
+            │       └── #0
+            ├── PhysicalProjection
+            │   ├── exprs:
+            │   │   ┌── Cast
+            │   │   │   ├── cast_to: Decimal128(30, 15)
+            │   │   │   ├── expr:Mul
+            │   │   │   │   ├── 0.2(float)
+            │   │   │   │   └── Cast { cast_to: Float64, expr: #1 }
 
-                │   └── #0
-                └── PhysicalAgg
-                    ├── aggrs:Agg(Avg)
-                    │   └── [ #1 ]
-                    ├── groups: [ #0 ]
-                    └── PhysicalProjection { exprs: [ #1, #4 ] }
-                        └── PhysicalScan { table: lineitem }
+            │   │   └── #0
+            │   └── PhysicalAgg
+            │       ├── aggrs:Agg(Avg)
+            │       │   └── [ #1 ]
+            │       ├── groups: [ #0 ]
+            │       └── PhysicalProjection { exprs: [ #1, #4 ] }
+            │           └── PhysicalScan { table: lineitem }
+            └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #1 ] }
+                ├── PhysicalFilter
+                │   ├── cond:And
+                │   │   ├── Eq
+                │   │   │   ├── #3
+                │   │   │   └── "Brand#13"
+                │   │   └── Eq
+                │   │       ├── #6
+                │   │       └── "JUMBO PKG"
+                │   └── PhysicalScan { table: part }
+                └── PhysicalScan { table: lineitem }
 */
 
 -- TPC-H Q19
@@ -321,76 +317,75 @@ LogicalProjection { exprs: [ #0 ] }
         └── LogicalJoin { join_type: Cross, cond: true }
             ├── LogicalScan { table: lineitem }
             └── LogicalScan { table: part }
-PhysicalProjection { exprs: [ #0 ] }
-└── PhysicalAgg
-    ├── aggrs:Agg(Sum)
-    │   └── Mul
-    │       ├── #5
-    │       └── Sub
-    │           ├── Cast { cast_to: Decimal128(20, 0), expr: 1(i64) }
-    │           └── #6
-    ├── groups: []
-    └── PhysicalNestedLoopJoin
-        ├── join_type: Inner
-        ├── cond:Or
-        │   ├── And
-        │   │   ├── Eq
-        │   │   │   ├── #16
-        │   │   │   └── #1
-        │   │   ├── Eq
-        │   │   │   ├── #19
-        │   │   │   └── "Brand#12"
-        │   │   ├── InList { expr: #22, list: [ "SM CASE", "SM BOX", "SM PACK", "SM PKG" ], negated: false }
-        │   │   ├── Geq
-        │   │   │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
-        │   │   │   └── Cast { cast_to: Decimal128(22, 2), expr: 1(i64) }
-        │   │   ├── Leq
-        │   │   │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
-        │   │   │   └── Cast { cast_to: Decimal128(22, 2), expr: 11(i64) }
-        │   │   ├── Between { expr: Cast { cast_to: Int64, expr: #21 }, lower: 1(i64), upper: 5(i64) }
-        │   │   ├── InList { expr: #14, list: [ "AIR", "AIR REG" ], negated: false }
-        │   │   └── Eq
-        │   │       ├── #13
-        │   │       └── "DELIVER IN PERSON"
-        │   ├── And
-        │   │   ├── Eq
-        │   │   │   ├── #16
-        │   │   │   └── #1
-        │   │   ├── Eq
-        │   │   │   ├── #19
-        │   │   │   └── "Brand#23"
-        │   │   ├── InList { expr: #22, list: [ "MED BAG", "MED BOX", "MED PKG", "MED PACK" ], negated: false }
-        │   │   ├── Geq
-        │   │   │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
-        │   │   │   └── Cast { cast_to: Decimal128(22, 2), expr: 10(i64) }
-        │   │   ├── Leq
-        │   │   │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
-        │   │   │   └── Cast { cast_to: Decimal128(22, 2), expr: 20(i64) }
-        │   │   ├── Between { expr: Cast { cast_to: Int64, expr: #21 }, lower: 1(i64), upper: 10(i64) }
-        │   │   ├── InList { expr: #14, list: [ "AIR", "AIR REG" ], negated: false }
-        │   │   └── Eq
-        │   │       ├── #13
-        │   │       └── "DELIVER IN PERSON"
-        │   └── And
-        │       ├── Eq
-        │       │   ├── #16
-        │       │   └── #1
-        │       ├── Eq
-        │       │   ├── #19
-        │       │   └── "Brand#34"
-        │       ├── InList { expr: #22, list: [ "LG CASE", "LG BOX", "LG PACK", "LG PKG" ], negated: false }
-        │       ├── Geq
-        │       │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
-        │       │   └── Cast { cast_to: Decimal128(22, 2), expr: 20(i64) }
-        │       ├── Leq
-        │       │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
-        │       │   └── Cast { cast_to: Decimal128(22, 2), expr: 30(i64) }
-        │       ├── Between { expr: Cast { cast_to: Int64, expr: #21 }, lower: 1(i64), upper: 15(i64) }
-        │       ├── InList { expr: #14, list: [ "AIR", "AIR REG" ], negated: false }
-        │       └── Eq
-        │           ├── #13
-        │           └── "DELIVER IN PERSON"
-        ├── PhysicalScan { table: lineitem }
-        └── PhysicalScan { table: part }
+PhysicalAgg
+├── aggrs:Agg(Sum)
+│   └── Mul
+│       ├── #5
+│       └── Sub
+│           ├── Cast { cast_to: Decimal128(20, 0), expr: 1(i64) }
+│           └── #6
+├── groups: []
+└── PhysicalNestedLoopJoin
+    ├── join_type: Inner
+    ├── cond:Or
+    │   ├── And
+    │   │   ├── Eq
+    │   │   │   ├── #16
+    │   │   │   └── #1
+    │   │   ├── Eq
+    │   │   │   ├── #19
+    │   │   │   └── "Brand#12"
+    │   │   ├── InList { expr: #22, list: [ "SM CASE", "SM BOX", "SM PACK", "SM PKG" ], negated: false }
+    │   │   ├── Geq
+    │   │   │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
+    │   │   │   └── Cast { cast_to: Decimal128(22, 2), expr: 1(i64) }
+    │   │   ├── Leq
+    │   │   │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
+    │   │   │   └── Cast { cast_to: Decimal128(22, 2), expr: 11(i64) }
+    │   │   ├── Between { expr: Cast { cast_to: Int64, expr: #21 }, lower: 1(i64), upper: 5(i64) }
+    │   │   ├── InList { expr: #14, list: [ "AIR", "AIR REG" ], negated: false }
+    │   │   └── Eq
+    │   │       ├── #13
+    │   │       └── "DELIVER IN PERSON"
+    │   ├── And
+    │   │   ├── Eq
+    │   │   │   ├── #16
+    │   │   │   └── #1
+    │   │   ├── Eq
+    │   │   │   ├── #19
+    │   │   │   └── "Brand#23"
+    │   │   ├── InList { expr: #22, list: [ "MED BAG", "MED BOX", "MED PKG", "MED PACK" ], negated: false }
+    │   │   ├── Geq
+    │   │   │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
+    │   │   │   └── Cast { cast_to: Decimal128(22, 2), expr: 10(i64) }
+    │   │   ├── Leq
+    │   │   │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
+    │   │   │   └── Cast { cast_to: Decimal128(22, 2), expr: 20(i64) }
+    │   │   ├── Between { expr: Cast { cast_to: Int64, expr: #21 }, lower: 1(i64), upper: 10(i64) }
+    │   │   ├── InList { expr: #14, list: [ "AIR", "AIR REG" ], negated: false }
+    │   │   └── Eq
+    │   │       ├── #13
+    │   │       └── "DELIVER IN PERSON"
+    │   └── And
+    │       ├── Eq
+    │       │   ├── #16
+    │       │   └── #1
+    │       ├── Eq
+    │       │   ├── #19
+    │       │   └── "Brand#34"
+    │       ├── InList { expr: #22, list: [ "LG CASE", "LG BOX", "LG PACK", "LG PKG" ], negated: false }
+    │       ├── Geq
+    │       │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
+    │       │   └── Cast { cast_to: Decimal128(22, 2), expr: 20(i64) }
+    │       ├── Leq
+    │       │   ├── Cast { cast_to: Decimal128(22, 2), expr: #4 }
+    │       │   └── Cast { cast_to: Decimal128(22, 2), expr: 30(i64) }
+    │       ├── Between { expr: Cast { cast_to: Int64, expr: #21 }, lower: 1(i64), upper: 15(i64) }
+    │       ├── InList { expr: #14, list: [ "AIR", "AIR REG" ], negated: false }
+    │       └── Eq
+    │           ├── #13
+    │           └── "DELIVER IN PERSON"
+    ├── PhysicalScan { table: lineitem }
+    └── PhysicalScan { table: part }
 */
 

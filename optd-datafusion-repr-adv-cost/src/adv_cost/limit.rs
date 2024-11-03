@@ -4,10 +4,8 @@ use optd_core::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
-    cost::base_cost::stats::{Distribution, MostCommonValues},
-    plan_nodes::{ConstantExpr, ConstantType, OptRelNode, OptRelNodeTyp},
-};
+use crate::adv_cost::stats::{Distribution, MostCommonValues};
+use optd_datafusion_repr::plan_nodes::{ConstantExpr, ConstantType, OptRelNode, OptRelNodeTyp};
 
 use super::{OptCostModel, DEFAULT_UNK_SEL};
 
@@ -23,13 +21,9 @@ impl<
     ) -> Cost {
         let (row_cnt, compute_cost, _) = Self::cost_tuple(&children[0]);
         let row_cnt = if let (Some(context), Some(optimizer)) = (context, optimizer) {
-            let mut fetch_expr =
-                optimizer.get_all_group_bindings(context.children_group_ids[2], BindingType::Both);
-            assert!(
-                fetch_expr.len() == 1,
-                "fetch expression should be the only expr in the group"
-            );
-            let fetch_expr = fetch_expr.pop().unwrap();
+            let fetch_expr = optimizer
+                .get_predicate_binding(context.children_group_ids[2])
+                .expect("no expression found?");
             assert!(
                 matches!(
                     fetch_expr.typ,
