@@ -6,13 +6,13 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use itertools::Itertools;
 use std::any::Any;
 use tracing::trace;
 
 use crate::{
-    cost::Cost,
+    cost::{Cost, Statistics},
     nodes::{
         ArcPlanNode, ArcPredNode, NodeType, PlanNode, PlanNodeMeta, PlanNodeMetaMap,
         PlanNodeOrGroup, PredNode, Value,
@@ -87,16 +87,49 @@ impl<T: NodeType> std::fmt::Display for MemoPredNode<T> {
     }
 }
 
-#[derive(Default, Debug, Clone)]
-pub struct Winner {
-    pub impossible: bool,
+#[derive(Debug, Clone)]
+pub struct WinnerInfo {
     pub expr_id: ExprId,
-    pub cost: Cost,
+    pub total_weighted_cost: f64,
+    pub operation_weighted_cost: f64,
+    pub total_cost: Cost,
+    pub operation_cost: Cost,
+    pub statistics: Arc<Statistics>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Winner {
+    Unknown,
+    Impossible,
+    Full(WinnerInfo),
+}
+
+impl Winner {
+    pub fn has_full_winner(&self) -> bool {
+        matches!(self, Self::Full { .. })
+    }
+
+    pub fn has_decided(&self) -> bool {
+        matches!(self, Self::Full { .. } | Self::Impossible)
+    }
+
+    pub fn as_full_winner(&self) -> Option<&WinnerInfo> {
+        match self {
+            Self::Full(info) => Some(info),
+            _ => None,
+        }
+    }
+}
+
+impl Default for Winner {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct GroupInfo {
-    pub winner: Option<Winner>,
+    pub winner: Winner,
 }
 
 pub(crate) struct Group {
@@ -535,14 +568,17 @@ impl<T: NodeType> Memo<T> {
     // TODO: I think the idea of a group info and the group cost/winner info should
     // be separated
     pub fn update_group_info(&mut self, group_id: GroupId, group_info: GroupInfo) {
-        if let Some(ref winner) = group_info.winner {
-            if !winner.impossible {
-                assert!(
-                    winner.cost.0[0] != 0.0,
-                    "{}",
-                    self.expr_id_to_expr_node[&winner.expr_id]
-                );
-            }
+        if let Winner::Full(WinnerInfo {
+            total_weighted_cost,
+            expr_id,
+            ..
+        }) = &group_info.winner
+        {
+            assert!(
+                *total_weighted_cost != 0.0,
+                "{}",
+                self.expr_id_to_expr_node[expr_id]
+            );
         }
         let grp = self.groups.get_mut(&group_id);
         grp.unwrap().info = group_info;
@@ -551,37 +587,28 @@ impl<T: NodeType> Memo<T> {
     pub fn get_best_group_binding(
         &self,
         group_id: GroupId,
-        meta: &mut Option<PlanNodeMetaMap>, // TODO: Document this?!
+        post_process: &mut impl FnMut(Arc<RelNode<T>>, GroupId, &WinnerInfo),
     ) -> Result<ArcPlanNode<T>> {
-        let info = self.get_group_info(group_id);
-        if let Some(winner) = info.winner {
-            if !winner.impossible {
-                let expr_id = winner.expr_id;
-                let expr = self.expr_id_to_expr_node[&expr_id].clone();
-                let mut children = Vec::with_capacity(expr.children.len());
-                for child in &expr.children {
-                    children.push(PlanNodeOrGroup::PlanNode(
-                        self.get_best_group_binding(*child, meta)?,
-                    ));
-                }
-                let mut predicates = Vec::with_capacity(expr.predicates.len());
-                for pred in &expr.predicates {
-                    predicates.push(self.get_pred_from_pred_id(*pred));
-                }
-                let node = Arc::new(PlanNode {
-                    typ: expr.typ.clone(),
-                    children,
-                    predicates,
-                });
-
-                if let Some(meta) = meta {
-                    meta.insert(
-                        node.as_ref() as *const _ as usize,
-                        PlanNodeMeta::new(group_id, winner.cost),
-                    );
-                }
-                return Ok(node);
+        if let Winner::Full(info @ WinnerInfo { expr_id, .. }) = info.winner {
+            let expr = self.expr_id_to_expr_node[&expr_id].clone();
+            let mut children = Vec::with_capacity(expr.children.len());
+            for child in &expr.children {
+                children.push(PlanNodeOrGroup::PlanNode(
+                    self.get_best_group_binding_inner(*child, post_process)
+                        .with_context(|| format!("when processing expr {}", expr_id))?,
+                ));
             }
+            let mut predicates = Vec::with_capacity(expr.predicates.len());
+            for pred in &expr.predicates {
+                predicates.push(self.get_pred_from_pred_id(*pred));
+            }
+            let node = Arc::new(PlanNode {
+                typ: expr.typ.clone(),
+                children,
+                predicates,
+            });
+            post_process(node.clone(), group_id, &info);
+            return Ok(node);
         }
         bail!("no best group binding for group {}", group_id)
     }
@@ -604,7 +631,7 @@ impl<T: NodeType> Memo<T> {
 
     pub fn clear_winner(&mut self) {
         for group in self.groups.values_mut() {
-            group.info.winner = None;
+            group.info.winner = Winner::Unknown;
         }
     }
 

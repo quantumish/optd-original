@@ -9,6 +9,8 @@ use clap::Parser;
 struct Cli {
     /// Optional list of directories to apply the test; if empty, apply all tests
     directories: Vec<String>,
+    #[clap(long)]
+    enable_advanced_cost_model: bool,
 }
 
 #[tokio::main]
@@ -17,11 +19,18 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    let enable_advanced_cost_model = cli.enable_advanced_cost_model;
     if cli.directories.is_empty() {
         println!("Running all tests");
         sqlplannertest::planner_test_apply(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"),
-            || async { optd_sqlplannertest::DatafusionDBMS::new().await },
+            move || async move {
+                if enable_advanced_cost_model {
+                    optd_sqlplannertest::DatafusionDBMS::new_advanced_cost().await
+                } else {
+                    optd_sqlplannertest::DatafusionDBMS::new().await
+                }
+            },
         )
         .await?;
     } else {
@@ -31,7 +40,13 @@ async fn main() -> Result<()> {
                 Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("tests")
                     .join(directory),
-                || async { optd_sqlplannertest::DatafusionDBMS::new().await },
+                move || async move {
+                    if enable_advanced_cost_model {
+                        optd_sqlplannertest::DatafusionDBMS::new_advanced_cost().await
+                    } else {
+                        optd_sqlplannertest::DatafusionDBMS::new().await
+                    }
+                },
             )
             .await?;
         }

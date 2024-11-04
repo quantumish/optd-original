@@ -11,6 +11,7 @@ use anyhow::Result;
 use tracing::trace;
 
 use crate::{
+    cascades::memo::Winner,
     cost::CostModel,
     nodes::{ArcPlanNode, ArcPredNode, NodeType, PlanNodeMeta, PredNode},
     optimizer::Optimizer,
@@ -197,47 +198,46 @@ impl<T: NodeType> CascadesOptimizer<T> {
             .unwrap_or(false)
     }
 
-    pub fn mark_rule_applied(&self, expr_id: ExprId, rule_id: RuleId) {
-        self.state
-            .write()
-            .unwrap()
-            .applied_rules
-            .entry(expr_id)
-            .or_insert_with(HashSet::new)
-            .insert(rule_id);
+    pub fn dump(&self) {
+        for group_id in self.memo.get_all_group_ids() {
+            let winner_str = match self.memo.get_group_info(group_id).winner {
+                Winner::Impossible => "winner=<impossible>".to_string(),
+                Winner::Unknown => "winner=<unknown>".to_string(),
+                Winner::Full(winner) => {
+                    let expr = self.memo.get_expr_memoed(winner.expr_id);
+                    format!(
+                        "winner={} weighted_cost={} cost={} stat={} | {}",
+                        winner.expr_id,
+                        winner.total_weighted_cost,
+                        self.cost.explain_cost(&winner.total_cost),
+                        self.cost.explain_statistics(&winner.statistics),
+                        expr
+                    )
+                }
+            };
+            println!("group_id={} {}", group_id, winner_str);
+            let group = self.memo.get_group(group_id);
+            for (id, property) in self.property_builders.iter().enumerate() {
+                println!(
+                    "  {}={}",
+                    property.property_name(),
+                    property.display(group.properties[id].as_ref())
+                )
+            }
+            if let Some(predicate_binding) = self.memo.try_get_predicate_binding(group_id) {
+                println!("  predicate={}", predicate_binding);
+            }
+            for expr_id in self.memo.get_all_exprs_in_group(group_id) {
+                let memo_node = self.memo.get_expr_memoed(expr_id);
+                println!("  expr_id={} | {}", expr_id, memo_node);
+            }
+        }
     }
 
-    pub fn get_next_task_id(&self) -> usize {
-        self.task_counter.fetch_add(1, Ordering::AcqRel) // TODO: think about ordering
-    }
-
-    pub fn reset_task_id(&self) {
-        self.task_counter.store(0, Ordering::Release); // TODO: think about ordering
-    }
-
-    pub fn add_expr_to_new_group(&self, expr: ArcPlanNode<T>) -> (GroupId, ExprId) {
-        self.state.write().unwrap().memo.add_new_expr(expr) // TODO: match optim/memo naming
-    }
-
-    pub fn add_expr_to_group(&self, expr: ArcPlanNode<T>, group_id: GroupId) -> ExprId {
-        // TODO: match optim/memo naming
-        self.state
-            .write()
-            .unwrap()
-            .memo
-            .add_expr_to_group(expr, group_id)
-    }
-
-    pub fn get_expr_info(&self, expr: ArcPlanNode<T>) -> (GroupId, ExprId) {
-        self.state.read().unwrap().memo.get_expr_info(expr)
-    }
-
-    pub fn get_pred_node(&self, pred_id: PredId) -> ArcPredNode<T> {
-        self.state
-            .read()
-            .unwrap()
-            .memo
-            .get_pred_from_pred_id(pred_id)
+    fn optimize_inner(&mut self, root_rel: RelNodeRef<T>) -> Result<RelNodeRef<T>> {
+        let (group_id, _) = self.add_new_expr(root_rel);
+        self.fire_optimize_tasks(group_id)?;
+        self.memo.get_best_group_binding(group_id, &mut None)
     }
 
     pub fn resolve_group_id(&self, root_rel: ArcPlanNode<T>) -> GroupId {
@@ -324,29 +324,26 @@ impl<T: NodeType> CascadesOptimizer<T> {
             .get_best_group_binding(group_id, meta)
     }
 
-    pub fn step_optimize_group(&self, root_group_id: GroupId) -> Result<()> {
-        let tasks_empty = self.tasks.lock().unwrap().is_empty();
-
-        self.reset_task_id();
-
-        if tasks_empty {
-            self.push_task(get_initial_task(self.get_next_task_id(), root_group_id));
-        }
-
-        // Run single-threaded search
-        while let Some(task) = self.pop_task() {
-            task.execute(self);
-        }
-
-        Ok(())
+    pub(super) fn mark_expr_explored(&mut self, expr_id: ExprId) {
+        self.explored_expr.insert(expr_id);
     }
 
-    pub fn step_optimize_rel(&self, root_rel: ArcPlanNode<T>) -> Result<GroupId> {
-        let root_rel_2 = root_rel.clone(); // todo remove
-        let (root_group_id, _) = self.add_expr_to_new_group(root_rel);
-        trace!("Optimizing query plan {}", root_rel_2);
-        self.step_optimize_group(root_group_id)?;
-        Ok(root_group_id)
+    pub(super) fn unmark_expr_explored(&mut self, expr_id: ExprId) {
+        self.explored_expr.remove(&expr_id);
+    }
+
+    pub(super) fn is_rule_fired(&self, group_expr_id: ExprId, rule_id: RuleId) -> bool {
+        self.fired_rules
+            .get(&group_expr_id)
+            .map(|rules| rules.contains(&rule_id))
+            .unwrap_or(false)
+    }
+
+    pub(super) fn mark_rule_fired(&mut self, group_expr_id: ExprId, rule_id: RuleId) {
+        self.fired_rules
+            .entry(group_expr_id)
+            .or_default()
+            .insert(rule_id);
     }
 
     fn optimize_inner(&self, root_rel: ArcPlanNode<T>) -> Result<ArcPlanNode<T>> {
