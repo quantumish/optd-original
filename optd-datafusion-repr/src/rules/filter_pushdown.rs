@@ -18,11 +18,12 @@ use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
 use crate::plan_nodes::{
-    ColumnRefPred, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ListPred, JoinType, LogOpPred,
+    ColumnRefPred, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, JoinType, ListPred, LogOpPred,
     LogOpType, LogicalAgg, LogicalFilter, LogicalJoin, LogicalSort,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 
+use super::filter::simplify_log_expr;
 use super::macros::define_rule;
 
 /// Emits a LogOpExpr AND if the list has more than one element
@@ -38,7 +39,11 @@ fn and_expr_list_to_expr(exprs: Vec<Expr>) -> Expr {
 fn merge_conds(first: Expr, second: Expr) -> Expr {
     let new_expr_list = ListPred::new(vec![first, second]);
     // Flatten nested logical expressions if possible
-    LogOpPred::new_flattened_nested_logical(LogOpType::And, new_expr_list).into_expr()
+    let flattened =
+        LogOpPred::new_flattened_nested_logical(LogOpType::And, new_expr_list).into_expr();
+    let mut changed = false;
+    // TODO: such simplifications should be invoked from optd-core, instead of ad-hoc
+    Expr::from_rel_node(simplify_log_expr(flattened.into_rel_node(), &mut changed)).unwrap()
 }
 
 #[derive(Debug, Clone, Copy)]

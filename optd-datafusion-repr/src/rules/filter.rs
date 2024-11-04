@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use super::macros::define_rule;
 use crate::plan_nodes::{
-    ConstantPred, ConstantType, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ListPred,
-    JoinType, LogOpPred, LogOpType, LogicalEmptyRelation, LogicalJoin,
+    ConstantPred, ConstantType, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, JoinType,
+    ListPred, LogOpPred, LogOpType, LogicalEmptyRelation, LogicalJoin,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 use crate::ArcDfPlanNode;
@@ -22,7 +22,7 @@ define_rule!(
 //    - Replaces the Or operator with True if any operand is True
 //    - Replaces the And operator with False if any operand is False
 //    - Removes Duplicates
-fn simplify_log_expr(log_expr: ArcDfPlanNode, changed: &mut bool) -> ArcDfPlanNode {
+pub(crate) fn simplify_log_expr(log_expr: ArcDfPlanNode, changed: &mut bool) -> ArcDfPlanNode {
     let log_expr = LogOpPred::from_rel_node(log_expr).unwrap();
     let op = log_expr.op_type();
     // we need a new children vec to output deterministic order

@@ -17,12 +17,7 @@ PhysicalScan { table: t1 }
 select * from t1;
 
 /*
-<<<<<<< HEAD
-PhysicalProjection { exprs: [ #0 ], cost: weighted=5.02,row_cnt=1.00,compute=4.02,io=1.00 }
-└── PhysicalScan { table: t1, cost: weighted=1.00,row_cnt=1.00,compute=0.00,io=1.00 }
-=======
-PhysicalScan { table: t1, cost: weighted=1.00,row_cnt=1.00,compute=0.00,io=1.00 }
->>>>>>> ae425edc5be07fc4b85f984c635218abd03cbeb9
+PhysicalScan { table: t1, cost: weighted=1.00,row_cnt=1000.00,compute=0.00,io=1.00 }
 */
 
 -- Test verbose explain with aggregation
@@ -42,8 +37,7 @@ PhysicalAgg
 ├── aggrs:Agg(Count)
 │   └── [ 1(u8) ]
 ├── groups: []
-├── cost: weighted=21.12,row_cnt=1.00,compute=20.12,io=1.00
-└── PhysicalScan { table: t1, cost: weighted=1.00,row_cnt=1.00,compute=0.00,io=1.00 }
->>>>>>> ae425edc5be07fc4b85f984c635218abd03cbeb9
+├── cost: weighted=10071.06,row_cnt=1000.00,compute=10070.06,io=1.00
+└── PhysicalScan { table: t1, cost: weighted=1.00,row_cnt=1000.00,compute=0.00,io=1.00 }
 */
 
