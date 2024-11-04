@@ -5,9 +5,9 @@ use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 use std::collections::HashMap;
 
 use crate::plan_nodes::{
-    BinOpPred, BinOpType, ColumnRefPred, ConstantPred, DependentJoin, DfNodeType, DfReprPlanNode, Expr,
-    ListPred, ExternColumnRefExpr, JoinType, LogOpPred, LogOpType, LogicalAgg, LogicalFilter,
-    LogicalJoin, LogicalProjection, DfReprPlanNode,
+    BinOpPred, BinOpType, ColumnRefPred, ConstantPred, DependentJoin, DfNodeType, DfReprPlanNode,
+    DfReprPlanNode, Expr, ExternColumnRefExpr, JoinType, ListPred, LogOpPred, LogOpType,
+    LogicalAgg, LogicalFilter, LogicalJoin, LogicalProjection,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 use crate::rules::macros::define_rule;
@@ -418,8 +418,10 @@ fn apply_dep_join_past_agg(
     vec![new_agg.into_rel_node().as_ref().clone()]
 }
 
+// Heuristics-only rule. If we don't have references to the external columns on the right side,
+// we can rewrite the dependent join into a normal join.
 define_rule!(
-    DepJoinEliminateAtScan,
+    DepJoinEliminate,
     apply_dep_join_eliminate_at_scan, // TODO matching is all wrong
     (DepJoin(JoinType::Cross), left, right, [cond], [extern_cols])
 );
@@ -433,26 +435,35 @@ fn apply_dep_join_eliminate_at_scan(
         right,
         cond,
         extern_cols: _,
-    }: DepJoinEliminateAtScanPicks,
+    }: DepJoinEliminatePicks,
 ) -> Vec<PlanNode<DfNodeType>> {
-    // TODO: Is there ever a situation we need to detect that we can convert earlier?
-    // Technically we can convert as soon as we clear the last externcolumnref...
-
     // Cross join should always have true cond
     assert!(cond == *ConstantPred::bool(true).into_rel_node());
 
-    if right.typ != DfNodeType::Scan {
-        return vec![];
+    fn inspect(node: &RelNode<OptRelNodeTyp>) -> bool {
+        if matches!(node.typ, OptRelNodeTyp::Placeholder(_)) {
+            unimplemented!("this is a heuristics rule");
+        }
+        if node.typ == OptRelNodeTyp::ExternColumnRef {
+            return false;
+        }
+        for child in &node.children {
+            if !inspect(child) {
+                return false;
+            }
+        }
+        true
     }
 
-    // let scan = LogicalScan::new("test".to_string()).into_rel_node();
-
-    let new_join = LogicalJoin::new(
-        DfReprPlanNode::from_group(left.into()),
-        DfReprPlanNode::from_group(right.into()),
-        ConstantPred::bool(true).into_expr(),
-        JoinType::Inner,
-    );
-
-    vec![new_join.into_rel_node().as_ref().clone()]
+    if inspect(&right) {
+        let new_join = LogicalJoin::new(
+            PlanNode::from_group(left.into()),
+            PlanNode::from_group(right.into()),
+            ConstantExpr::bool(true).into_expr(),
+            JoinType::Inner,
+        );
+        vec![new_join.into_rel_node().as_ref().clone()]
+    } else {
+        vec![]
+    }
 }

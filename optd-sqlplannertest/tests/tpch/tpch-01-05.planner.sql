@@ -259,98 +259,70 @@ LogicalLimit { skip: 0(u64), fetch: 100(u64) }
     │   │   └── #1
     │   └── SortOrder { order: Asc }
     │       └── #3
-    └── LogicalProjection { exprs: [ #5, #2, #8, #0, #1, #3, #4, #6 ] }
-        └── LogicalJoin
-            ├── join_type: Inner
+    └── LogicalProjection { exprs: [ #14, #10, #22, #0, #2, #11, #13, #15 ] }
+        └── LogicalFilter
             ├── cond:And
             │   ├── Eq
             │   │   ├── #0
-            │   │   └── #10
+            │   │   └── #16
+            │   ├── Eq
+            │   │   ├── #9
+            │   │   └── #17
+            │   ├── Eq
+            │   │   ├── Cast { cast_to: Int64, expr: #5 }
+            │   │   └── 4(i64)
+            │   ├── Like { expr: #4, pattern: "%TIN", negated: false, case_insensitive: false }
+            │   ├── Eq
+            │   │   ├── #12
+            │   │   └── #21
+            │   ├── Eq
+            │   │   ├── #23
+            │   │   └── #25
+            │   ├── Eq
+            │   │   ├── #26
+            │   │   └── "AFRICA"
             │   └── Eq
-            │       ├── #7
-            │       └── #9
-            ├── LogicalProjection { exprs: [ #0, #1, #2, #3, #4, #5, #6, #7, #8 ] }
-            │   └── LogicalJoin
-            │       ├── join_type: Inner
-            │       ├── cond:Eq
-            │       │   ├── #9
-            │       │   └── #10
-            │       ├── LogicalProjection { exprs: [ #0, #1, #2, #3, #5, #6, #7, #8, #10, #11 ] }
-            │       │   └── LogicalJoin
-            │       │       ├── join_type: Inner
-            │       │       ├── cond:Eq
-            │       │       │   ├── #4
-            │       │       │   └── #9
-            │       │       ├── LogicalProjection { exprs: [ #0, #1, #5, #6, #7, #8, #9, #10, #3 ] }
-            │       │       │   └── LogicalJoin
-            │       │       │       ├── join_type: Inner
-            │       │       │       ├── cond:Eq
-            │       │       │       │   ├── #2
-            │       │       │       │   └── #4
-            │       │       │       ├── LogicalProjection { exprs: [ #0, #1, #3, #4 ] }
-            │       │       │       │   └── LogicalJoin
-            │       │       │       │       ├── join_type: Inner
-            │       │       │       │       ├── cond:Eq
-            │       │       │       │       │   ├── #0
-            │       │       │       │       │   └── #2
-            │       │       │       │       ├── LogicalProjection { exprs: [ #0, #1 ] }
-            │       │       │       │       │   └── LogicalFilter
-            │       │       │       │       │       ├── cond:And
-            │       │       │       │       │       │   ├── Eq
-            │       │       │       │       │       │   │   ├── #3
-            │       │       │       │       │       │   │   └── 4(i32)
-            │       │       │       │       │       │   └── Like { expr: #2, pattern: "%TIN", negated: false, case_insensitive: false }
-            │       │       │       │       │       └── LogicalProjection { exprs: [ #0, #2, #4, #5 ] }
-            │       │       │       │       │           └── LogicalScan { table: part }
-            │       │       │       │       └── LogicalProjection { exprs: [ #0, #1, #3 ] }
-            │       │       │       │           └── LogicalScan { table: partsupp }
-            │       │       │       └── LogicalProjection { exprs: [ #0, #1, #2, #3, #4, #5, #6 ] }
-            │       │       │           └── LogicalScan { table: supplier }
-            │       │       └── LogicalProjection { exprs: [ #0, #1, #2 ] }
-            │       │           └── LogicalScan { table: nation }
-            │       └── LogicalProjection { exprs: [ #0 ] }
-            │           └── LogicalFilter
-            │               ├── cond:Eq
-            │               │   ├── #1
-            │               │   └── "AFRICA"
-            │               └── LogicalProjection { exprs: [ #0, #1 ] }
-            │                   └── LogicalScan { table: region }
-            └── LogicalProjection { exprs: [ #1, #0 ] }
-                └── LogicalAgg
-                    ├── exprs:Agg(Min)
-                    │   └── [ #1 ]
-                    ├── groups: [ #0 ]
-                    └── LogicalProjection { exprs: [ #0, #1 ] }
-                        └── LogicalJoin
-                            ├── join_type: Inner
-                            ├── cond:Eq
-                            │   ├── #2
-                            │   └── #3
-                            ├── LogicalProjection { exprs: [ #0, #1, #4 ] }
-                            │   └── LogicalJoin
-                            │       ├── join_type: Inner
-                            │       ├── cond:Eq
-                            │       │   ├── #2
-                            │       │   └── #3
-                            │       ├── LogicalProjection { exprs: [ #0, #2, #4 ] }
-                            │       │   └── LogicalJoin
-                            │       │       ├── join_type: Inner
-                            │       │       ├── cond:Eq
-                            │       │       │   ├── #1
-                            │       │       │   └── #3
-                            │       │       ├── LogicalProjection { exprs: [ #0, #1, #3 ] }
-                            │       │       │   └── LogicalScan { table: partsupp }
-                            │       │       └── LogicalProjection { exprs: [ #0, #3 ] }
-                            │       │           └── LogicalScan { table: supplier }
-                            │       └── LogicalProjection { exprs: [ #0, #2 ] }
-                            │           └── LogicalScan { table: nation }
-                            └── LogicalProjection { exprs: [ #0 ] }
-                                └── LogicalFilter
-                                    ├── cond:Eq
-                                    │   ├── #1
-                                    │   └── "AFRICA"
-                                    └── LogicalProjection { exprs: [ #0, #1 ] }
-                                        └── LogicalScan { table: region }
+            │       ├── #19
+            │       └── #28
+            └── RawDependentJoin { join_type: Cross, cond: true, extern_cols: [ Extern(#0) ] }
+                ├── LogicalJoin { join_type: Cross, cond: true }
+                │   ├── LogicalJoin { join_type: Cross, cond: true }
+                │   │   ├── LogicalJoin { join_type: Cross, cond: true }
+                │   │   │   ├── LogicalJoin { join_type: Cross, cond: true }
+                │   │   │   │   ├── LogicalScan { table: part }
+                │   │   │   │   └── LogicalScan { table: supplier }
+                │   │   │   └── LogicalScan { table: partsupp }
+                │   │   └── LogicalScan { table: nation }
+                │   └── LogicalScan { table: region }
+                └── LogicalProjection { exprs: [ #0 ] }
+                    └── LogicalAgg
+                        ├── exprs:Agg(Min)
+                        │   └── [ #3 ]
+                        ├── groups: []
+                        └── LogicalFilter
+                            ├── cond:And
+                            │   ├── Eq
+                            │   │   ├── Extern(#0)
+                            │   │   └── #0
+                            │   ├── Eq
+                            │   │   ├── #5
+                            │   │   └── #1
+                            │   ├── Eq
+                            │   │   ├── #8
+                            │   │   └── #12
+                            │   ├── Eq
+                            │   │   ├── #14
+                            │   │   └── #16
+                            │   └── Eq
+                            │       ├── #17
+                            │       └── "AFRICA"
+                            └── LogicalJoin { join_type: Cross, cond: true }
+                                ├── LogicalJoin { join_type: Cross, cond: true }
+                                │   ├── LogicalJoin { join_type: Cross, cond: true }
+                                │   │   ├── LogicalScan { table: partsupp }
+                                │   │   └── LogicalScan { table: supplier }
+                                │   └── LogicalScan { table: nation }
+                                └── LogicalScan { table: region }
 PhysicalLimit { skip: 0(u64), fetch: 100(u64) }
 └── PhysicalSort
     ├── exprs:
@@ -362,52 +334,66 @@ PhysicalLimit { skip: 0(u64), fetch: 100(u64) }
     │   │   └── #1
     │   └── SortOrder { order: Asc }
     │       └── #3
-    └── PhysicalProjection { exprs: [ #19, #15, #22, #0, #2, #16, #18, #20 ] }
-        └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0, #12 ], right_keys: [ #1, #0 ] }
+    └── PhysicalProjection { exprs: [ #14, #10, #22, #0, #2, #11, #13, #15 ] }
+        └── PhysicalHashJoin { join_type: Inner, left_keys: [ #19, #0 ], right_keys: [ #1, #0 ] }
             ├── PhysicalHashJoin { join_type: Inner, left_keys: [ #23 ], right_keys: [ #0 ] }
-            │   ├── PhysicalHashJoin { join_type: Inner, left_keys: [ #17 ], right_keys: [ #0 ] }
-            │   │   ├── PhysicalHashJoin { join_type: Inner, left_keys: [ #10 ], right_keys: [ #0 ] }
-            │   │   │   ├── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ] }
+            │   ├── PhysicalHashJoin { join_type: Inner, left_keys: [ #12 ], right_keys: [ #0 ] }
+            │   │   ├── PhysicalHashJoin { join_type: Inner, left_keys: [ #0, #9 ], right_keys: [ #0, #1 ] }
+            │   │   │   ├── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
             │   │   │   │   ├── PhysicalFilter
             │   │   │   │   │   ├── cond:And
             │   │   │   │   │   │   ├── Eq
-            │   │   │   │   │   │   │   ├── #5
-            │   │   │   │   │   │   │   └── 4(i32)
+            │   │   │   │   │   │   │   ├── Cast { cast_to: Int64, expr: #5 }
+            │   │   │   │   │   │   │   └── 4(i64)
             │   │   │   │   │   │   └── Like { expr: #4, pattern: "%TIN", negated: false, case_insensitive: false }
             │   │   │   │   │   └── PhysicalScan { table: part }
-            │   │   │   │   └── PhysicalScan { table: partsupp }
-            │   │   │   └── PhysicalScan { table: supplier }
-            │   │   └── PhysicalProjection { exprs: [ #0, #1, #2 ] }
-            │   │       └── PhysicalScan { table: nation }
-            │   └── PhysicalProjection { exprs: [ #0 ] }
-            │       └── PhysicalFilter
-            │           ├── cond:Eq
-            │           │   ├── #1
-            │           │   └── "AFRICA"
-            │           └── PhysicalScan { table: region }
-            └── PhysicalProjection { exprs: [ #1, #0 ] }
-                └── PhysicalAgg
-                    ├── aggrs:Agg(Min)
-                    │   └── [ #1 ]
-                    ├── groups: [ #0 ]
-                    └── PhysicalProjection { exprs: [ #0, #1 ] }
-                        └── PhysicalHashJoin { join_type: Inner, left_keys: [ #2 ], right_keys: [ #0 ] }
-                            ├── PhysicalProjection { exprs: [ #0, #1, #4 ] }
-                            │   └── PhysicalHashJoin { join_type: Inner, left_keys: [ #2 ], right_keys: [ #0 ] }
-                            │       ├── PhysicalProjection { exprs: [ #0, #2, #4 ] }
-                            │       │   └── PhysicalHashJoin { join_type: Inner, left_keys: [ #1 ], right_keys: [ #0 ] }
-                            │       │       ├── PhysicalProjection { exprs: [ #0, #1, #3 ] }
-                            │       │       │   └── PhysicalScan { table: partsupp }
-                            │       │       └── PhysicalProjection { exprs: [ #0, #3 ] }
-                            │       │           └── PhysicalScan { table: supplier }
-                            │       └── PhysicalProjection { exprs: [ #0, #2 ] }
-                            │           └── PhysicalScan { table: nation }
-                            └── PhysicalProjection { exprs: [ #0 ] }
-                                └── PhysicalFilter
-                                    ├── cond:Eq
-                                    │   ├── #1
-                                    │   └── "AFRICA"
-                                    └── PhysicalScan { table: region }
+            │   │   │   │   └── PhysicalScan { table: supplier }
+            │   │   │   └── PhysicalScan { table: partsupp }
+            │   │   └── PhysicalScan { table: nation }
+            │   └── PhysicalFilter
+            │       ├── cond:Eq
+            │       │   ├── #1
+            │       │   └── "AFRICA"
+            │       └── PhysicalScan { table: region }
+            └── PhysicalAgg
+                ├── aggrs:Agg(Min)
+                │   └── [ #4 ]
+                ├── groups: [ #1 ]
+                └── PhysicalFilter
+                    ├── cond:And
+                    │   ├── Eq
+                    │   │   ├── #0
+                    │   │   └── #1
+                    │   ├── Eq
+                    │   │   ├── #6
+                    │   │   └── #2
+                    │   ├── Eq
+                    │   │   ├── #9
+                    │   │   └── #13
+                    │   ├── Eq
+                    │   │   ├── #15
+                    │   │   └── #17
+                    │   └── Eq
+                    │       ├── #18
+                    │       └── "AFRICA"
+                    └── PhysicalNestedLoopJoin { join_type: Inner, cond: true }
+                        ├── PhysicalAgg { aggrs: [], groups: [ #0 ] }
+                        │   └── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+                        │       ├── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+                        │       │   ├── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+                        │       │   │   ├── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+                        │       │   │   │   ├── PhysicalScan { table: part }
+                        │       │   │   │   └── PhysicalScan { table: supplier }
+                        │       │   │   └── PhysicalScan { table: partsupp }
+                        │       │   └── PhysicalScan { table: nation }
+                        │       └── PhysicalScan { table: region }
+                        └── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+                            ├── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+                            │   ├── PhysicalNestedLoopJoin { join_type: Cross, cond: true }
+                            │   │   ├── PhysicalScan { table: partsupp }
+                            │   │   └── PhysicalScan { table: supplier }
+                            │   └── PhysicalScan { table: nation }
+                            └── PhysicalScan { table: region }
 */
 
 -- TPC-H Q3
@@ -446,43 +432,33 @@ LogicalLimit { skip: 0(u64), fetch: 10(u64) }
         └── LogicalAgg
             ├── exprs:Agg(Sum)
             │   └── Mul
-            │       ├── #3
+            │       ├── #22
             │       └── Sub
-            │           ├── 1(float)
-            │           └── #4
-            ├── groups: [ #2, #0, #1 ]
-            └── LogicalProjection { exprs: [ #1, #2, #3, #4, #5 ] }
-                └── LogicalJoin
-                    ├── join_type: Inner
-                    ├── cond:Eq
-                    │   ├── #0
-                    │   └── #3
-                    ├── LogicalProjection { exprs: [ #1, #3, #4 ] }
-                    │   └── LogicalJoin
-                    │       ├── join_type: Inner
-                    │       ├── cond:Eq
-                    │       │   ├── #0
-                    │       │   └── #2
-                    │       ├── LogicalProjection { exprs: [ #0 ] }
-                    │       │   └── LogicalFilter
-                    │       │       ├── cond:Eq
-                    │       │       │   ├── #1
-                    │       │       │   └── "FURNITURE"
-                    │       │       └── LogicalProjection { exprs: [ #0, #6 ] }
-                    │       │           └── LogicalScan { table: customer }
-                    │       └── LogicalFilter
-                    │           ├── cond:Lt
-                    │           │   ├── #2
-                    │           │   └── 9218(i64)
-                    │           └── LogicalProjection { exprs: [ #0, #1, #4, #7 ] }
-                    │               └── LogicalScan { table: orders }
-                    └── LogicalProjection { exprs: [ #0, #1, #2 ] }
-                        └── LogicalFilter
-                            ├── cond:Gt
-                            │   ├── #3
-                            │   └── 9218(i64)
-                            └── LogicalProjection { exprs: [ #0, #5, #6, #10 ] }
-                                └── LogicalScan { table: lineitem }
+            │           ├── Cast { cast_to: Decimal128(20, 0), expr: 1(i64) }
+            │           └── #23
+            ├── groups: [ #17, #12, #15 ]
+            └── LogicalFilter
+                ├── cond:And
+                │   ├── Eq
+                │   │   ├── #6
+                │   │   └── "FURNITURE"
+                │   ├── Eq
+                │   │   ├── #0
+                │   │   └── #9
+                │   ├── Eq
+                │   │   ├── #17
+                │   │   └── #8
+                │   ├── Lt
+                │   │   ├── #12
+                │   │   └── Cast { cast_to: Date32, expr: "1995-03-29" }
+                │   └── Gt
+                │       ├── #27
+                │       └── Cast { cast_to: Date32, expr: "1995-03-29" }
+                └── LogicalJoin { join_type: Cross, cond: true }
+                    ├── LogicalJoin { join_type: Cross, cond: true }
+                    │   ├── LogicalScan { table: customer }
+                    │   └── LogicalScan { table: orders }
+                    └── LogicalScan { table: lineitem }
 PhysicalLimit { skip: 0(u64), fetch: 10(u64) }
 └── PhysicalSort
     ├── exprs:
@@ -494,29 +470,28 @@ PhysicalLimit { skip: 0(u64), fetch: 10(u64) }
         └── PhysicalAgg
             ├── aggrs:Agg(Sum)
             │   └── Mul
-            │       ├── #3
+            │       ├── #22
             │       └── Sub
-            │           ├── 1(float)
-            │           └── #4
-            ├── groups: [ #2, #0, #1 ]
-            └── PhysicalProjection { exprs: [ #28, #31, #8, #13, #14 ] }
-                └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #17 ] }
+            │           ├── Cast { cast_to: Decimal128(20, 0), expr: 1(i64) }
+            │           └── #23
+            ├── groups: [ #17, #12, #15 ]
+            └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #1 ] }
+                ├── PhysicalFilter
+                │   ├── cond:Eq
+                │   │   ├── #6
+                │   │   └── "FURNITURE"
+                │   └── PhysicalScan { table: customer }
+                └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ] }
                     ├── PhysicalFilter
-                    │   ├── cond:Eq
-                    │   │   ├── #6
-                    │   │   └── "FURNITURE"
-                    │   └── PhysicalScan { table: customer }
-                    └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ] }
-                        ├── PhysicalFilter
-                        │   ├── cond:Gt
-                        │   │   ├── #10
-                        │   │   └── 9218(i64)
-                        │   └── PhysicalScan { table: lineitem }
-                        └── PhysicalFilter
-                            ├── cond:Lt
-                            │   ├── #4
-                            │   └── 9218(i64)
-                            └── PhysicalScan { table: orders }
+                    │   ├── cond:Lt
+                    │   │   ├── #4
+                    │   │   └── Cast { cast_to: Date32, expr: "1995-03-29" }
+                    │   └── PhysicalScan { table: orders }
+                    └── PhysicalFilter
+                        ├── cond:Gt
+                        │   ├── #10
+                        │   └── Cast { cast_to: Date32, expr: "1995-03-29" }
+                        └── PhysicalScan { table: lineitem }
 */
 
 -- TPC-H Q5
