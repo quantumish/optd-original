@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::explain::Insertable;
 
-use super::{ArcDfPlanNode, ConstantPred, DfNodeType, DfPlanNode, DfReprPlanNode};
+use super::{ArcDfPlanNode, ArcDfPredNode, ConstantPred, DfNodeType, DfPlanNode, DfReprPlanNode};
 
 use crate::properties::schema::Schema;
 
@@ -55,8 +55,7 @@ impl LogicalEmptyRelation {
     }
 
     pub fn empty_relation_schema(&self) -> Schema {
-        let serialized_data = ConstantPred::from(self.0.predicates[1]).value().as_slice();
-        bincode::deserialize(serialized_data.as_ref()).unwrap()
+        decode_empty_relation_schema(&self.0.predicates[1])
     }
 }
 
@@ -90,7 +89,11 @@ impl PhysicalEmptyRelation {
     }
 
     pub fn empty_relation_schema(&self) -> Schema {
-        let serialized_data = ConstantPred::from(self.0.predicates[1]).value().as_slice();
-        bincode::deserialize(serialized_data.as_ref()).unwrap()
+        decode_empty_relation_schema(&self.0.predicates[1])
     }
+}
+
+pub fn decode_empty_relation_schema(pred: &ArcDfPredNode) -> Schema {
+    let serialized_data = ConstantPred::from(pred).value().as_slice();
+    bincode::deserialize(serialized_data.as_ref()).unwrap()
 }

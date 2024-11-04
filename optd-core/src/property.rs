@@ -1,20 +1,31 @@
-use crate::nodes::{NodeType, Value};
+use crate::nodes::{ArcPredNode, NodeType, Value};
 use std::{any::Any, fmt::Debug};
 
 pub trait PropertyBuilderAny<T: NodeType>: 'static + Send + Sync {
-    fn derive_any(&self, typ: T, children: &[&dyn Any]) -> Box<dyn Any + Send + Sync + 'static>;
+    fn derive_any(
+        &self,
+        typ: T,
+        predicates: &[ArcPredNode<T>],
+        children: &[&dyn Any],
+    ) -> Box<dyn Any + Send + Sync + 'static>;
     fn display(&self, prop: &dyn Any) -> String;
     fn property_name(&self) -> &'static str;
 }
 
 pub trait PropertyBuilder<T: NodeType>: 'static + Send + Sync + Sized {
     type Prop: 'static + Send + Sync + Sized + Clone + Debug;
-    fn derive(&self, typ: T, children: &[&Self::Prop]) -> Self::Prop; // TODO: Predicates are not passed in yet!
+    fn derive(&self, typ: T, predicates: &[ArcPredNode<T>], children: &[&Self::Prop])
+        -> Self::Prop; // TODO: Predicates are not passed in yet!
     fn property_name(&self) -> &'static str;
 }
 
 impl<T: NodeType, P: PropertyBuilder<T>> PropertyBuilderAny<T> for P {
-    fn derive_any(&self, typ: T, children: &[&dyn Any]) -> Box<dyn Any + Send + Sync + 'static> {
+    fn derive_any(
+        &self,
+        typ: T,
+        predicates: &[ArcPredNode<T>],
+        children: &[&dyn Any],
+    ) -> Box<dyn Any + Send + Sync + 'static> {
         let children: Vec<&P::Prop> = children
             .iter()
             .map(|child| {
@@ -23,7 +34,7 @@ impl<T: NodeType, P: PropertyBuilder<T>> PropertyBuilderAny<T> for P {
                     .expect("Failed to downcast child")
             })
             .collect();
-        Box::new(self.derive(typ, &children))
+        Box::new(self.derive(typ, predicates, &children))
     }
 
     fn display(&self, prop: &dyn Any) -> String {

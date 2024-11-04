@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 use std::{ops::Deref, sync::Arc};
 
-use crate::plan_nodes::{BinOpType, DfNodeType, EmptyRelationData, JoinType, LogOpType};
+use crate::plan_nodes::{
+    decode_empty_relation_schema, ArcDfPredNode, BinOpType, ConstantPred, DfNodeType, JoinType,
+    LogOpType,
+};
 use anyhow::anyhow;
 use optd_core::property::PropertyBuilder;
 use union_find::disjoint_sets::DisjointSets;
@@ -272,39 +275,11 @@ impl ColumnRefPropertyBuilder {
             .cloned()
             .collect()
     }
-}
 
-impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
-    type Prop = GroupColumnRefs;
-
-    fn derive(
-        &self,
-        typ: DfNodeType,
-        data: Option<optd_core::nodes::Value>,
-        children: &[&Self::Prop],
-    ) -> Self::Prop {
-        match typ {
-            // Should account for PhysicalScan.
-            DfNodeType::Scan => {
-                let table_name = data.unwrap().as_str().to_string();
-                let schema = self.catalog.get(&table_name);
-                let column_cnt = schema.fields.len();
-                let column_refs = (0..column_cnt)
-                    .map(|i| ColumnRef::base_table_column_ref(table_name.clone(), i))
-                    .collect();
-                GroupColumnRefs::new(column_refs, None)
-            }
-            DfNodeType::EmptyRelation => {
-                let data = data.unwrap().as_slice();
-                let empty_relation_data: EmptyRelationData =
-                    bincode::deserialize(data.as_ref()).unwrap();
-                let schema = empty_relation_data.schema;
-                let column_cnt = schema.fields.len();
-                let column_refs = (0..column_cnt)
-                    .map(|i| ColumnRef::base_table_column_ref(DEFAULT_NAME.to_string(), i))
-                    .collect();
-                GroupColumnRefs::new(column_refs, None)
-            }
+    fn derive_for_predicate(predicate: ArcDfPredNode) -> GroupColumnRefs {
+        let data = predicate.data();
+        let children = predicate.children();
+        match predicate {
             DfNodeType::ColumnRef => {
                 let col_ref_idx = data.unwrap().as_u64();
                 // this is always safe since col_ref_idx was initially a usize in ColumnRefExpr::new()
@@ -343,6 +318,80 @@ impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
                 };
                 GroupColumnRefs::new(column_refs, correlation)
             }
+            DfNodeType::SortOrder(_) => children[0].clone(),
+            DfNodeType::Cast => {
+                // FIXME: we just assume the column value does not change.
+                children[0].clone()
+            }
+            DfNodeType::BinOp(op_type) => {
+                let column_refs = vec![ColumnRef::Derived];
+                // For correlation, we only handle the column = column case, e.g. #0 = #1.
+                let correlation = match op_type {
+                    BinOpType::Eq => {
+                        let l_col_ref = &children[0].column_refs;
+                        let r_col_ref = &children[1].column_refs;
+                        if l_col_ref.len() != 1 || r_col_ref.len() != 1 {
+                            None
+                        } else {
+                            match (&l_col_ref[0], &r_col_ref[0]) {
+                                (
+                                    ColumnRef::ChildColumnRef { col_idx: l_col_idx },
+                                    ColumnRef::ChildColumnRef { col_idx: r_col_idx },
+                                ) => Some(SemanticCorrelation {
+                                    eq_columns: EqColumns::EqColumnIdxPairs(vec![(
+                                        *l_col_idx, *r_col_idx,
+                                    )]),
+                                }),
+                                _ => None,
+                            }
+                        }
+                    }
+                    _ => None,
+                };
+                GroupColumnRefs::new(column_refs, correlation)
+            }
+            DfNodeType::Constant(_)
+            | DfNodeType::Func(_)
+            | DfNodeType::DataType(_)
+            | DfNodeType::Between
+            | DfNodeType::Like
+            | DfNodeType::InList
+            | DfNodeType::ExternColumnRef => GroupColumnRefs::new(vec![ColumnRef::Derived], None),
+            _ => unimplemented!("Unsupported predicate type {:?}", predicate),
+        }
+    }
+}
+
+impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
+    type Prop = GroupColumnRefs;
+
+    fn derive(
+        &self,
+        typ: DfNodeType,
+        predicates: &[ArcDfPredNode],
+        children: &[&Self::Prop],
+    ) -> Self::Prop {
+        match typ {
+            // Should account for PhysicalScan.
+            DfNodeType::Scan => {
+                let table_name = ConstantPred::from_pred_node(predicates[0])
+                    .unwrap()
+                    .as_str();
+                let schema = self.catalog.get(&table_name);
+                let column_cnt = schema.fields.len();
+                let column_refs = (0..column_cnt)
+                    .map(|i| ColumnRef::base_table_column_ref(table_name.clone(), i))
+                    .collect();
+                GroupColumnRefs::new(column_refs, None)
+            }
+            DfNodeType::EmptyRelation => {
+                let schema = decode_empty_relation_schema(&predicates[1]);
+                let column_cnt = schema.fields.len();
+                let column_refs = (0..column_cnt)
+                    .map(|i| ColumnRef::base_table_column_ref(DEFAULT_NAME.to_string(), i))
+                    .collect();
+                GroupColumnRefs::new(column_refs, None)
+            }
             DfNodeType::Projection => {
                 let child = children[0];
                 let exprs = children[1];
@@ -361,9 +410,9 @@ impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
                 GroupColumnRefs::new(column_refs, child.output_correlation.clone())
             }
             // Should account for all physical join types.
-            OptRelNodeTyp::Join(join_type)
-            | OptRelNodeTyp::RawDepJoin(join_type)
-            | OptRelNodeTyp::DepJoin(join_type) => {
+            DfNodeType::Join(join_type)
+            | DfNodeType::RawDepJoin(join_type)
+            | DfNodeType::DepJoin(join_type) => {
                 // Concatenate left and right children column refs.
                 let column_refs = Self::concat_children_col_refs(&children[0..2]);
                 // Merge the equal columns of two children as input correlation.
@@ -430,50 +479,7 @@ impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
                 // Aggregation clears all semantic correlations.
                 GroupColumnRefs::new(group_by_col_refs, None)
             }
-            DfNodeType::Filter
-            | DfNodeType::Sort
-            | DfNodeType::Limit
-            | DfNodeType::SortOrder(_) => children[0].clone(),
-            DfNodeType::Cast => {
-                // FIXME: we just assume the column value does not change.
-                children[0].clone()
-            }
-            DfNodeType::BinOp(op_type) => {
-                let column_refs = vec![ColumnRef::Derived];
-                // For correlation, we only handle the column = column case, e.g. #0 = #1.
-                let correlation = match op_type {
-                    BinOpType::Eq => {
-                        let l_col_ref = &children[0].column_refs;
-                        let r_col_ref = &children[1].column_refs;
-                        if l_col_ref.len() != 1 || r_col_ref.len() != 1 {
-                            None
-                        } else {
-                            match (&l_col_ref[0], &r_col_ref[0]) {
-                                (
-                                    ColumnRef::ChildColumnRef { col_idx: l_col_idx },
-                                    ColumnRef::ChildColumnRef { col_idx: r_col_idx },
-                                ) => Some(SemanticCorrelation {
-                                    eq_columns: EqColumns::EqColumnIdxPairs(vec![(
-                                        *l_col_idx, *r_col_idx,
-                                    )]),
-                                }),
-                                _ => None,
-                            }
-                        }
-                    }
-                    _ => None,
-                };
-                GroupColumnRefs::new(column_refs, correlation)
-            }
-            OptRelNodeTyp::Constant(_)
-            | OptRelNodeTyp::Func(_)
-            | OptRelNodeTyp::DataType(_)
-            | OptRelNodeTyp::Between
-            | OptRelNodeTyp::Like
-            | OptRelNodeTyp::InList
-            | OptRelNodeTyp::ExternColumnRef => {
-                GroupColumnRefs::new(vec![ColumnRef::Derived], None)
-            }
+            DfNodeType::Filter | DfNodeType::Sort | DfNodeType::Limit => children[0].clone(),
             _ => unimplemented!("Unsupported rel node type {:?}", typ),
         }
     }

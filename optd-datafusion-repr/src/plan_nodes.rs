@@ -28,7 +28,9 @@ use optd_core::{
 
 pub use agg::{LogicalAgg, PhysicalAgg};
 pub use apply::{ApplyType, LogicalApply};
-pub use empty_relation::{LogicalEmptyRelation, PhysicalEmptyRelation};
+pub use empty_relation::{
+    decode_empty_relation_schema, LogicalEmptyRelation, PhysicalEmptyRelation,
+};
 pub use filter::{LogicalFilter, PhysicalFilter};
 pub use join::{JoinType, LogicalJoin, PhysicalHashJoin, PhysicalNestedLoopJoin};
 pub use limit::{LogicalLimit, PhysicalLimit};

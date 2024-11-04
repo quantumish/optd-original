@@ -410,7 +410,16 @@ impl<T: NodeType> Memo<T> {
                 .iter()
                 .map(|x| x[id].as_ref() as &dyn std::any::Any)
                 .collect::<Vec<_>>();
-            let prop = builder.derive_any(memo_node.typ.clone(), child_properties.as_slice());
+            let materialized_predicates = memo_node
+                .predicates
+                .iter()
+                .map(|pred_id| self.get_pred_from_pred_id(*pred_id))
+                .collect::<Vec<_>>();
+            let prop = builder.derive_any(
+                memo_node.typ.clone(),
+                &materialized_predicates,
+                child_properties.as_slice(),
+            );
             props.push(prop);
         }
         props

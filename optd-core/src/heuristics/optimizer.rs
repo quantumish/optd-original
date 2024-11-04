@@ -209,7 +209,11 @@ impl<T: NodeType> HeuristicsOptimizer<T> {
                 .iter()
                 .map(|x| x[id].as_ref() as &dyn std::any::Any)
                 .collect::<Vec<_>>();
-            let prop = builder.derive_any(root_rel.typ.clone(), child_properties.as_slice());
+            let prop = builder.derive_any(
+                root_rel.typ.clone(),
+                &root_rel.predicates,
+                child_properties.as_slice(),
+            );
             props.push(prop);
         }
         self.properties.insert(root_rel.clone(), props.into());

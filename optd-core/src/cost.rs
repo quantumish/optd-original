@@ -10,7 +10,7 @@ pub trait CostModel<T: NodeType>: 'static + Send + Sync {
     fn compute_cost(
         &self,
         node: &T,
-        predicates: &[ArcPredNode<T>], // TODO: is there a better way?
+        predicates: &[ArcPredNode<T>],
         children_costs: &[Cost],
         context: Option<RelNodeContext>,
         // one reason we need the optimizer is to traverse children nodes to build up an expression tree

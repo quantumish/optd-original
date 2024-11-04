@@ -1,4 +1,4 @@
-use crate::plan_nodes::DfNodeType;
+use crate::plan_nodes::{ArcDfPredNode, DfNodeType};
 use optd_core::{
     cascades::{CascadesOptimizer, RelNodeContext},
     cost::{Cost, CostModel},
@@ -13,8 +13,8 @@ impl CostModel<DfNodeType> for DummyCostModel {
     fn compute_cost(
         &self,
         _node: &DfNodeType,
-        _data: &Option<Value>,
-        _children: &[Cost],
+        _predicates: &[ArcDfPredNode],
+        _children_costs: &[Cost],
         _context: Option<RelNodeContext>,
         _optimizer: Option<&CascadesOptimizer<DfNodeType>>,
     ) -> Cost {
