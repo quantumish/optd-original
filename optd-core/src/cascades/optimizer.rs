@@ -357,6 +357,11 @@ impl<T: NodeType> CascadesOptimizer<T> {
             .memo
             .get_best_group_binding(root_group_id, &mut None)
     }
+
+    pub fn memo(&self) -> &Memo<T> {
+        // &self.state.read().unwrap().memo
+        unimplemented!()
+    }
 }
 
 impl<T: NodeType> Optimizer<T> for CascadesOptimizer<T> {

@@ -101,7 +101,11 @@ pub enum DfNodeType {
 
 impl std::fmt::Display for DfNodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        if let Self::Placeholder(group_id) = self {
+            write!(f, "{}", group_id)
+        } else {
+            write!(f, "{:?}", self)
+        }
     }
 }
 

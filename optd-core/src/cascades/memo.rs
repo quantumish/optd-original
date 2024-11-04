@@ -63,6 +63,20 @@ pub struct MemoPredNode<T: NodeType> {
     pub data: Option<Value>,
 }
 
+impl<T: NodeType> MemoPlanNode<T> {
+    pub fn into_rel_node(self) -> PlanNode<T> {
+        PlanNode {
+            typ: self.typ,
+            children: self
+                .children
+                .into_iter()
+                .map(|x| PlanNodeOrGroup::Group(x))
+                .collect(),
+            predicates: vec![], // TODO: fill in the predicates
+        }
+    }
+}
+
 impl<T: NodeType> std::fmt::Display for MemoPredNode<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}", self.typ)?;
@@ -484,7 +498,7 @@ impl<T: NodeType> Memo<T> {
     }
 
     /// Get the memoized representation of a node, only for debugging purpose
-    pub(crate) fn get_expr_memoed(&self, mut expr_id: ExprId) -> RelMemoNodeRef<T> {
+    pub fn get_expr_memoed(&self, mut expr_id: ExprId) -> RelMemoNodeRef<T> {
         while let Some(new_expr_id) = self.dup_expr_mapping.get(&expr_id) {
             expr_id = *new_expr_id;
         }
@@ -494,7 +508,8 @@ impl<T: NodeType> Memo<T> {
             .clone()
     }
 
-    pub(crate) fn get_all_exprs_in_group(&self, group_id: GroupId) -> Vec<ExprId> {
+    pub fn get_all_exprs_in_group(&self, group_id: GroupId) -> Vec<ExprId> {
+        let group_id = self.reduce_group(group_id);
         let group = self.groups.get(&group_id).expect("group not found");
         let mut exprs = group.group_exprs.iter().copied().collect_vec();
         exprs.sort();

@@ -4,5 +4,5 @@ mod memo;
 mod optimizer;
 mod tasks;
 
-pub use memo::BindingType;
-pub use optimizer::{CascadesOptimizer, GroupId, RelNodeContext};
+pub use memo::{BindingType, Memo};
+pub use optimizer::{CascadesOptimizer, ExprId, GroupId, RelNodeContext};
