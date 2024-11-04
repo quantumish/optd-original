@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::plan_nodes::DfNodeType;
 use itertools::Itertools;
 use optd_core::{
-    cascades::{CascadesOptimizer, RelNodeContext},
+    cascades::{CascadesOptimizer, NaiveMemo, RelNodeContext},
     cost::{Cost, CostModel, Statistics},
     rel_node::Value,
 };
@@ -54,7 +54,7 @@ impl OptCostModel {
     }
 }
 
-impl CostModel<DfNodeType> for OptCostModel {
+impl CostModel<DfNodeType, NaiveMemo<OptRelNodeTyp>> for OptCostModel {
     fn explain_cost(&self, cost: &Cost) -> String {
         format!(
             "{{compute={},io={}}}",

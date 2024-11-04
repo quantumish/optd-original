@@ -2,6 +2,8 @@ use optimize_group::OptimizeGroupTask;
 
 use crate::nodes::NodeType;
 
+use super::{CascadesOptimizer, Memo};
+
 mod apply_rule;
 mod explore_expr;
 mod explore_group;
@@ -11,8 +13,8 @@ mod optimize_inputs;
 
 use super::{CascadesOptimizer, GroupId};
 
-pub trait Task<T: NodeType>: 'static + Send + Sync {
-    fn execute(&self, optimizer: &CascadesOptimizer<T>);
+pub trait Task<T: NodeType, M: Memo<T>>: 'static + Send + Sync {
+    fn execute(&self, optimizer: &CascadesOptimizer<T, M>);
 }
 
 pub fn get_initial_task<T: NodeType>(

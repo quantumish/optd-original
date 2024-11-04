@@ -148,7 +148,7 @@ impl Display for PredId {
 }
 
 /// Trait for memo table implementations.
-pub struct Memo<T: NodeType> {
+pub trait Memo<T: NodeType>: 'static + Send + Sync {
     /// Add an expression to the memo table. If the expression already exists, it will return the existing group id and
     /// expr id. Otherwise, a new group and expr will be created.
     fn add_new_expr(&mut self, rel_node: RelNodeRef<T>) -> (GroupId, ExprId);
@@ -172,6 +172,10 @@ pub struct Memo<T: NodeType> {
 
     /// Update the group info.
     fn update_group_info(&mut self, group_id: GroupId, group_info: GroupInfo);
+
+    /// Estimated plan space for the memo table, only useful when plan exploration budget is enabled.
+    /// Returns number of expressions in the memo table.
+    fn estimated_plan_space(&self) -> usize;
 
     // The below functions can be overwritten by the memo table implementation if there
     // are more efficient way to retrieve the information.
@@ -376,6 +380,10 @@ impl<T: NodeType> Memo<T> for NaiveMemo<T> {
         }
         let grp = self.groups.get_mut(&group_id);
         grp.unwrap().info = group_info;
+    }
+
+    fn estimated_plan_space(&self) -> usize {
+        self.expr_id_to_expr_node.len()
     }
 }
 
@@ -699,27 +707,21 @@ impl<T: NodeType> NaiveMemo<T> {
             group.info.winner = Winner::Unknown;
         }
     }
-
-    /// Return number of expressions in the memo table.
-    pub fn compute_plan_space(&self) -> usize {
-        self.expr_id_to_expr_node.len()
-    }
 }
 
-// TODO: Fix tests with predicates
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-//     enum MemoTestRelTyp {
-//         Group(GroupId),
-//         List,
-//         Join,
-//         Project,
-//         Scan,
-//         Expr,
-//     }
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    enum MemoTestRelTyp {
+        Group(GroupId),
+        List,
+        Join,
+        Project,
+        Scan,
+        Expr,
+    }
 
 //     impl std::fmt::Display for MemoTestRelTyp {
 //         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

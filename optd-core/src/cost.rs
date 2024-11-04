@@ -13,7 +13,7 @@ pub struct Statistics(pub value_bag::OwnedValueBag);
 #[derive(Default, Clone, Debug, PartialOrd, PartialEq)]
 pub struct Cost(pub Vec<f64>);
 
-pub trait CostModel<T: RelNodeTyp>: 'static + Send + Sync {
+pub trait CostModel<T: RelNodeTyp, M: Memo<T>>: 'static + Send + Sync {
     /// Compute the cost of a single operation
     fn compute_operation_cost(
         &self,
@@ -23,7 +23,7 @@ pub trait CostModel<T: RelNodeTyp>: 'static + Send + Sync {
         predicates: &[ArcPredNode<T>],
         children_cost: &[Cost],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<T>>,
+        optimizer: Option<&CascadesOptimizer<T, M>>,
     ) -> Cost;
 
     /// Derive the statistics of a single operation
@@ -33,7 +33,7 @@ pub trait CostModel<T: RelNodeTyp>: 'static + Send + Sync {
         children_stat: &[&Statistics],
         predicates: &[ArcPredNode<T>],
         context: Option<RelNodeContext>,
-        optimizer: Option<&CascadesOptimizer<T>>,
+        optimizer: Option<&CascadesOptimizer<T, M>>,
     ) -> Statistics;
 
     fn explain_cost(&self, cost: &Cost) -> String;
