@@ -146,9 +146,12 @@ fn get_meta<'a>(node: &ArcPlanNode<DfNodeType>, meta_map: &'a PlanNodeMetaMap) -
 }
 
 pub fn dispatch_plan_explain(
-    plan_node: ArcDfPlanNode,
+    plan_node_maybe: DfPlanNodeOrGroup,
     meta_map: Option<&PlanNodeMetaMap>,
 ) -> Pretty<'static> {
+    let DfPlanNodeOrGroup::PlanNode(plan_node) = plan_node_maybe else {
+        unreachable!("Should not explain a placeholder");
+    };
     match plan_node.typ {
         DfNodeType::Join(_) => LogicalJoin::from_plan_node(plan_node)
             .unwrap()

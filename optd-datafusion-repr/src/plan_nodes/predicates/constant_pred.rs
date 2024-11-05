@@ -181,11 +181,11 @@ impl ConstantPred {
 
     /// Gets the constant value.
     pub fn value(&self) -> Value {
-        self.0 .0.data.clone().unwrap()
+        self.0.data.clone().unwrap()
     }
 
     pub fn constant_type(&self) -> ConstantType {
-        if let DfPredType::Constant(typ) = self.0.typ() {
+        if let DfPredType::Constant(typ) = self.0.typ {
             typ
         } else {
             panic!("not a constant")
@@ -195,14 +195,15 @@ impl ConstantPred {
 
 impl DfReprPredNode for ConstantPred {
     fn into_pred_node(self) -> ArcDfPredNode {
-        self.0.into_rel_node()
+        self.0
     }
 
     fn from_pred_node(rel_node: ArcDfPredNode) -> Option<Self> {
         if let DfPredType::Constant(_) = rel_node.typ {
             Some(Self(rel_node))
+        } else {
+            None
         }
-        None
     }
 
     fn explain(&self, _meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {

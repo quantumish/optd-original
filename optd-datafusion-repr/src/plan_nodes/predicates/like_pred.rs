@@ -3,7 +3,9 @@ use std::sync::Arc;
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap, Value};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode};
+use crate::plan_nodes::{
+    dispatch_pred_explain, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode,
+};
 
 #[derive(Clone, Debug)]
 pub struct LikePred(pub ArcDfPredNode);
@@ -21,7 +23,7 @@ impl LikePred {
         LikePred(
             DfPredNode {
                 typ: DfPredType::Like,
-                children: vec![child.into_rel_node(), pattern.into_rel_node()],
+                children: vec![child, pattern],
                 data: Some(Value::Serialized(Arc::new([negated, case_insensitive]))),
             }
             .into(),
@@ -38,14 +40,14 @@ impl LikePred {
 
     /// `true` for `NOT LIKE`.
     pub fn negated(&self) -> bool {
-        match self.0 .0.data.as_ref().unwrap() {
+        match self.0.data.as_ref().unwrap() {
             Value::Serialized(data) => data[0] != 0,
             _ => panic!("not a serialized value"),
         }
     }
 
     pub fn case_insensitive(&self) -> bool {
-        match self.0 .0.data.as_ref().unwrap() {
+        match self.0.data.as_ref().unwrap() {
             Value::Serialized(data) => data[1] != 0,
             _ => panic!("not a serialized value"),
         }
@@ -54,7 +56,7 @@ impl LikePred {
 
 impl DfReprPredNode for LikePred {
     fn into_pred_node(self) -> ArcDfPredNode {
-        self.0.into_rel_node()
+        self.0
     }
 
     fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {
@@ -68,8 +70,8 @@ impl DfReprPredNode for LikePred {
         Pretty::simple_record(
             "Like",
             vec![
-                ("expr", self.child().explain(meta_map)),
-                ("pattern", self.pattern().explain(meta_map)),
+                ("expr", dispatch_pred_explain(self.child(), meta_map)),
+                ("pattern", dispatch_pred_explain(self.pattern(), meta_map)),
                 ("negated", self.negated().to_string().into()),
                 (
                     "case_insensitive",

@@ -22,7 +22,7 @@ impl ExternColumnRefPred {
     }
 
     fn get_data_usize(&self) -> usize {
-        self.0 .0.data.as_ref().unwrap().as_u64() as usize
+        self.0.data.as_ref().unwrap().as_u64() as usize
     }
 
     /// Gets the column index.
@@ -33,7 +33,7 @@ impl ExternColumnRefPred {
 
 impl DfReprPredNode for ExternColumnRefPred {
     fn into_pred_node(self) -> ArcDfPredNode {
-        self.0.into_rel_node()
+        self.0
     }
 
     fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {

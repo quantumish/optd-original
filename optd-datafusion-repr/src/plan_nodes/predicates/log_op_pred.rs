@@ -4,8 +4,8 @@ use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{
-    ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPredNode, DfPredType, DfReprPlanNode,
-    DfReprPredNode,
+    dispatch_pred_explain, ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPredNode, DfPredType,
+    DfReprPlanNode, DfReprPredNode,
 };
 
 use super::ListPred;
@@ -47,10 +47,9 @@ impl LogOpPred {
         // there is no need to call flatten_nested_logical recursively
         let mut new_expr_list = Vec::new();
         for child in expr_list.to_vec() {
-            if let DfPredType::LogOp(child_op) = child.typ() {
+            if let DfPredType::LogOp(child_op) = child.typ {
                 if child_op == op {
-                    let child_log_op_expr =
-                        LogOpPred::from_rel_node(child.into_rel_node()).unwrap();
+                    let child_log_op_expr = LogOpPred::from_pred_node(child).unwrap();
                     new_expr_list.extend(child_log_op_expr.children().to_vec());
                     continue;
                 }
@@ -95,7 +94,7 @@ impl DfReprPredNode for LogOpPred {
             vec![],
             self.children()
                 .iter()
-                .map(|x| x.explain(meta_map))
+                .map(|x| dispatch_pred_explain(*x, meta_map))
                 .collect(),
         )
     }

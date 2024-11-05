@@ -2,6 +2,8 @@ use super::{
     macros::define_plan_node, ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode,
 };
 
+use crate::plan_nodes::{dispatch_plan_explain, dispatch_pred_explain, get_meta};
+
 #[derive(Clone, Debug)]
 pub struct LogicalLimit(pub ArcDfPlanNode);
 

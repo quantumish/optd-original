@@ -2,7 +2,9 @@ use arrow_schema::DataType;
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode};
+use crate::plan_nodes::{
+    dispatch_pred_explain, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode,
+};
 
 use super::data_type_pred::DataTypePred;
 
@@ -49,7 +51,7 @@ impl DfReprPredNode for CastPred {
             "Cast",
             vec![
                 ("cast_to", format!("{}", self.cast_to()).into()),
-                ("child", self.child().explain(meta_map)),
+                ("child", dispatch_pred_explain(self.child(), meta_map)),
             ],
             vec![],
         )

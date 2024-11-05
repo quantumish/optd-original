@@ -7,7 +7,7 @@ use super::{
     ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfPlanNodeOrGroup, DfReprPlanNode,
 };
 
-use crate::plan_nodes::dispatch_plan_explain;
+use crate::plan_nodes::{dispatch_plan_explain, dispatch_pred_explain, get_meta};
 
 #[derive(Clone, Debug)]
 pub struct LogicalAgg(pub ArcDfPlanNode);
@@ -17,8 +17,8 @@ define_plan_node!(
     Agg, [
         { 0, child: DfPlanNodeOrGroup }
     ], [
-        { 0, exprs: ListPred },
-        { 1, groups: ListPred }
+        { 0, exprs: ArcDfPredNode },
+        { 1, groups: ArcDfPredNode }
     ]
 );
 

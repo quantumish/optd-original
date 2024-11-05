@@ -4,7 +4,8 @@ use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{
-    ArcDfPlanNode, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode,
+    dispatch_pred_explain, ArcDfPlanNode, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode,
+    DfReprPredNode,
 };
 
 /// The pattern of storing numerical, comparison, and logical operators in the same type with is_*() functions
@@ -75,7 +76,7 @@ impl BinOpPred {
     }
 
     pub fn op_type(&self) -> BinOpType {
-        if let DfPredType::BinOp(op_type) = self.clone().into_rel_node().typ {
+        if let DfPredType::BinOp(op_type) = self.0.typ {
             op_type
         } else {
             panic!("not a bin op")
@@ -100,8 +101,8 @@ impl DfReprPredNode for BinOpPred {
             self.op_type().to_string(),
             vec![],
             vec![
-                self.left_child().explain(meta_map),
-                self.right_child().explain(meta_map),
+                dispatch_pred_explain(self.left_child(), meta_map),
+                dispatch_pred_explain(self.right_child(), meta_map),
             ],
         )
     }

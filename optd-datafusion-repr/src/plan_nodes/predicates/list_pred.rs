@@ -3,8 +3,8 @@ use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{
-    ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPredNode, DfPredType, DfReprPlanNode,
-    DfReprPredNode,
+    dispatch_pred_explain, ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPredNode, DfPredType,
+    DfReprPlanNode, DfReprPredNode,
 };
 
 #[derive(Clone, Debug)]
@@ -12,11 +12,14 @@ pub struct ListPred(pub ArcDfPredNode);
 
 impl ListPred {
     pub fn new(preds: Vec<ArcDfPredNode>) -> Self {
-        ListPred(DfPredNode {
-            typ: DfPredType::List,
-            children: preds,
-            data: None,
-        })
+        ListPred(
+            DfPredNode {
+                typ: DfPredType::List,
+                children: preds,
+                data: None,
+            }
+            .into(),
+        )
     }
 
     /// Gets number of expressions in the list
@@ -52,7 +55,7 @@ impl DfReprPredNode for ListPred {
     fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         Pretty::Array(
             (0..self.len())
-                .map(|x| self.child(x).explain(meta_map))
+                .map(|x| dispatch_pred_explain(self.child(x), meta_map))
                 .collect_vec(),
         )
     }

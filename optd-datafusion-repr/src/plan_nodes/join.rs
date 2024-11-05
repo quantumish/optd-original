@@ -4,6 +4,8 @@ use std::fmt::Display;
 use super::macros::define_plan_node;
 use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode};
 
+use crate::plan_nodes::{dispatch_plan_explain, dispatch_pred_explain, get_meta};
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum JoinType {
     Inner = 1,

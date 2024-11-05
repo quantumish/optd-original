@@ -20,7 +20,7 @@ impl DataTypePred {
     }
 
     pub fn data_type(&self) -> DataType {
-        if let DfPredType::DataType(data_type) = self.0.typ() {
+        if let DfPredType::DataType(data_type) = self.0.typ {
             data_type
         } else {
             panic!("not a data type")

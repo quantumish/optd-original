@@ -4,8 +4,8 @@ use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{
-    dispatch_plan_explain, dispatch_pred_explain, ArcDfPlanNode, ArcDfPredNode, DfPredNode,
-    DfPredType, DfReprPlanNode, DfReprPredNode,
+    dispatch_pred_explain, ArcDfPlanNode, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode,
+    DfReprPredNode,
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -40,7 +40,7 @@ impl UnOpPred {
     }
 
     pub fn op_type(&self) -> UnOpType {
-        if let DfPredType::UnOp(op_type) = self.clone().into_pred_node().typ {
+        if let DfPredType::UnOp(op_type) = self.0.typ {
             op_type
         } else {
             panic!("not a un op")

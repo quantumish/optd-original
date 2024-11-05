@@ -1,7 +1,9 @@
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
-use crate::plan_nodes::{ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode};
+use crate::plan_nodes::{
+    dispatch_pred_explain, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode,
+};
 
 #[derive(Clone, Debug)]
 pub struct BetweenPred(pub ArcDfPredNode);
@@ -47,9 +49,9 @@ impl DfReprPredNode for BetweenPred {
         Pretty::simple_record(
             "Between",
             vec![
-                ("child", self.child().explain(meta_map)),
-                ("lower", self.lower().explain(meta_map)),
-                ("upper", self.upper().explain(meta_map)),
+                ("child", dispatch_pred_explain(self.child(), meta_map)),
+                ("lower", dispatch_pred_explain(self.lower(), meta_map)),
+                ("upper", dispatch_pred_explain(self.upper(), meta_map)),
             ],
             vec![],
         )

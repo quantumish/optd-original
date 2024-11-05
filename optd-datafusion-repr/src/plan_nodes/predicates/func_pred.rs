@@ -2,8 +2,8 @@ use optd_core::nodes::{ArcPredNode, PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{
-    ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPredNode, DfPredType, DfReprPlanNode,
-    DfReprPredNode,
+    dispatch_pred_explain, ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPredNode, DfPredType,
+    DfReprPlanNode, DfReprPredNode,
 };
 
 use super::ListPred;
@@ -39,7 +39,7 @@ impl FuncPred {
         FuncPred(
             DfPredNode {
                 typ: DfPredType::Func(func_id),
-                children: vec![argv.into_rel_node()],
+                children: vec![argv.into_pred_node()],
                 data: None,
             }
             .into(),
@@ -53,7 +53,7 @@ impl FuncPred {
 
     /// Get all children.
     pub fn children(&self) -> ListPred {
-        ListPred::from_rel_node(self.0.child(0)).unwrap()
+        ListPred::from_pred_node(self.0.child(0)).unwrap()
     }
 
     /// Gets the function id.
@@ -68,11 +68,11 @@ impl FuncPred {
 
 impl DfReprPredNode for FuncPred {
     fn into_pred_node(self) -> ArcDfPredNode {
-        self.0.into_pred_node()
+        self.0
     }
 
     fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {
-        if !matches!(pred_node.typ, DfNodeType::Func(_)) {
+        if !matches!(pred_node.typ, DfPredType::Func(_)) {
             return None;
         }
         Some(Self(pred_node))
@@ -82,7 +82,10 @@ impl DfReprPredNode for FuncPred {
         Pretty::simple_record(
             self.func().to_string(),
             vec![],
-            vec![self.children().explain(meta_map)],
+            vec![dispatch_pred_explain(
+                self.children().into_pred_node(),
+                meta_map,
+            )],
         )
     }
 }
