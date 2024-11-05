@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
-use crate::plan_nodes::DfNodeType;
+use crate::plan_nodes::{ArcDfPredNode, ConstantPred, DfNodeType};
 use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, NaiveMemo, RelNodeContext},
     cost::{Cost, CostModel, Statistics},
-    rel_node::Value,
+    nodes::{ArcPredNode, Value},
 };
 use value_bag::ValueBag;
 
-pub struct OptCostModel {
+pub struct DfCostModel {
     table_stat: HashMap<String, usize>,
 }
 
@@ -18,7 +18,7 @@ pub const IO_COST: usize = 1;
 
 pub(crate) const DEFAULT_TABLE_ROW_CNT: usize = 1000;
 
-impl OptCostModel {
+impl DfCostModel {
     pub fn compute_cost(Cost(cost): &Cost) -> f64 {
         cost[COMPUTE_COST]
     }
@@ -43,10 +43,7 @@ impl OptCostModel {
         (cost[COMPUTE_COST], cost[IO_COST])
     }
 
-    fn get_row_cnt(&self, data: &Option<Value>) -> f64 {
-        let table_name = ConstantPred::from_pred_node(predicates[0])
-            .unwrap()
-            .as_str();
+    fn get_row_cnt(&self, table_name: &str) -> f64 {
         self.table_stat
             .get(table_name.as_ref())
             .copied()
@@ -54,7 +51,7 @@ impl OptCostModel {
     }
 }
 
-impl CostModel<DfNodeType, NaiveMemo<OptRelNodeTyp>> for OptCostModel {
+impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
     fn explain_cost(&self, cost: &Cost) -> String {
         format!(
             "{{compute={},io={}}}",
@@ -79,14 +76,17 @@ impl CostModel<DfNodeType, NaiveMemo<OptRelNodeTyp>> for OptCostModel {
     fn derive_statistics(
         &self,
         node: &DfNodeType,
-        data: &Option<Value>,
+        predicates: &[ArcPredNode<DfNodeType>],
         children: &[&Statistics],
         _context: Option<RelNodeContext>,
-        _optimizer: Option<&CascadesOptimizer<DfNodeType>>,
+        _optimizer: Option<&CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>,
     ) -> Statistics {
         match node {
             DfNodeType::PhysicalScan => {
-                let row_cnt = self.get_row_cnt(data);
+                let table_name = ConstantPred::from_pred_node(predicates[0])
+                    .unwrap()
+                    .as_str();
+                let row_cnt = self.get_row_cnt(table_name);
                 Self::stat(row_cnt)
             }
             DfNodeType::PhysicalLimit => {
@@ -124,11 +124,11 @@ impl CostModel<DfNodeType, NaiveMemo<OptRelNodeTyp>> for OptCostModel {
     fn compute_operation_cost(
         &self,
         node: &DfNodeType,
-        data: &Option<Value>,
         children: &[Option<&Statistics>],
+        predicates: &[ArcDfPredNode],
         children_cost: &[Cost],
         _context: Option<RelNodeContext>,
-        _optimizer: Option<&CascadesOptimizer<DfNodeType>>,
+        _optimizer: Option<&CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>,
     ) -> Cost {
         let row_cnts = children
             .iter()
@@ -136,7 +136,10 @@ impl CostModel<DfNodeType, NaiveMemo<OptRelNodeTyp>> for OptCostModel {
             .collect_vec();
         match node {
             DfNodeType::PhysicalScan => {
-                let row_cnt = self.get_row_cnt(data);
+                let table_name = ConstantPred::from_pred_node(predicates[0])
+                    .unwrap()
+                    .as_str();
+                let row_cnt = self.get_row_cnt(table_name);
                 Self::cost(0.0, row_cnt)
             }
             DfNodeType::PhysicalLimit => {
@@ -205,7 +208,7 @@ impl CostModel<DfNodeType, NaiveMemo<OptRelNodeTyp>> for OptCostModel {
     }
 }
 
-impl OptCostModel {
+impl DfCostModel {
     pub fn new(table_stat: HashMap<String, usize>) -> Self {
         Self { table_stat }
     }

@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Result;
 use cost::{AdaptiveCostModel, RuntimeAdaptionStorage};
 use optd_core::{
-    cascades::{CascadesOptimizer, GroupId},
+    cascades::{CascadesOptimizer, GroupId, NaiveMemo},
     cost::CostModel,
     heuristics::{ApplyOrder, HeuristicsOptimizer},
     nodes::PlanNodeMetaMap,
@@ -19,20 +19,17 @@ use properties::{
     column_ref::ColumnRefPropertyBuilder,
     schema::{Catalog, SchemaPropertyBuilder},
 };
-use rules::{
-    EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
-    EliminateJoinRule, EliminateLimitRule, EliminateProjectRule, FilterAggTransposeRule,
-    FilterCrossJoinTransposeRule, FilterInnerJoinTransposeRule, FilterMergeRule,
-    FilterProjectTransposeRule, FilterSortTransposeRule, HashJoinRule, JoinAssocRule,
-    JoinCommuteRule, PhysicalConversionRule, ProjectFilterTransposeRule, ProjectMergeRule,
-    ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule,
-};
+// use rules::{
+//     EliminateDuplicatedAggExprRule, EliminateDuplicatedSortExprRule, EliminateFilterRule,
+//     EliminateJoinRule, EliminateLimitRule, EliminateProjectRule, FilterAggTransposeRule,
+//     FilterCrossJoinTransposeRule, FilterInnerJoinTransposeRule, FilterMergeRule,
+//     FilterProjectTransposeRule, FilterSortTransposeRule, HashJoinRule, JoinAssocRule,
+//     JoinCommuteRule, PhysicalConversionRule, ProjectFilterTransposeRule, ProjectMergeRule,
+//     ProjectionPullUpJoin, SimplifyFilterRule, SimplifyJoinCondRule,
+// };
 
 pub use optd_core::nodes::Value;
-
-use crate::rules::{
-    DepInitialDistinct, DepJoinEliminate, DepJoinPastAgg, DepJoinPastFilter, DepJoinPastProj,
-};
+use rules::{EliminateLimitRule, PhysicalConversionRule};
 
 pub use memo_ext::{LogicalJoinOrder, MemoExt};
 
@@ -47,7 +44,7 @@ mod testing;
 
 pub struct DatafusionOptimizer {
     heuristic_optimizer: HeuristicsOptimizer<DfNodeType>,
-    cascades_optimizer: CascadesOptimizer<DfNodeType>,
+    cascades_optimizer: CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>,
     pub runtime_statistics: RuntimeAdaptionStorage,
     enable_adaptive: bool,
     enable_heuristic: bool,
@@ -70,7 +67,7 @@ impl DatafusionOptimizer {
         self.enable_heuristic
     }
 
-    pub fn optd_cascades_optimizer(&self) -> &CascadesOptimizer<DfNodeType> {
+    pub fn optd_cascades_optimizer(&self) -> &CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>> {
         &self.cascades_optimizer
     }
 
@@ -78,34 +75,36 @@ impl DatafusionOptimizer {
         &self.heuristic_optimizer
     }
 
-    pub fn optd_optimizer_mut(&mut self) -> &mut CascadesOptimizer<DfNodeType> {
+    pub fn optd_optimizer_mut(
+        &mut self,
+    ) -> &mut CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>> {
         &mut self.cascades_optimizer
     }
 
     pub fn default_heuristic_rules(
     ) -> Vec<Arc<dyn Rule<DfNodeType, HeuristicsOptimizer<DfNodeType>>>> {
         vec![
-            Arc::new(EliminateProjectRule::new()),
-            Arc::new(SimplifyFilterRule::new()),
-            Arc::new(SimplifyJoinCondRule::new()),
-            Arc::new(EliminateFilterRule::new()),
-            Arc::new(EliminateJoinRule::new()),
-            Arc::new(EliminateLimitRule::new()),
-            Arc::new(EliminateDuplicatedSortExprRule::new()),
-            Arc::new(EliminateDuplicatedAggExprRule::new()),
-            Arc::new(DepJoinEliminate::new()),
-            Arc::new(DepInitialDistinct::new()),
-            Arc::new(DepJoinPastProj::new()),
-            Arc::new(DepJoinPastFilter::new()),
-            Arc::new(DepJoinPastAgg::new()),
-            Arc::new(ProjectMergeRule::new()),
-            Arc::new(FilterMergeRule::new()),
+            // Arc::new(EliminateProjectRule::new()),
+            // Arc::new(SimplifyFilterRule::new()),
+            // Arc::new(SimplifyJoinCondRule::new()),
+            // Arc::new(EliminateFilterRule::new()),
+            // Arc::new(EliminateJoinRule::new()),
+            // Arc::new(EliminateLimitRule::new()),
+            // Arc::new(EliminateDuplicatedSortExprRule::new()),
+            // Arc::new(EliminateDuplicatedAggExprRule::new()),
+            // Arc::new(DepJoinEliminate::new()),
+            // Arc::new(DepInitialDistinct::new()),
+            // Arc::new(DepJoinPastProj::new()),
+            // Arc::new(DepJoinPastFilter::new()),
+            // Arc::new(DepJoinPastAgg::new()),
+            // Arc::new(ProjectMergeRule::new()),
+            // Arc::new(FilterMergeRule::new()),
         ]
     }
 
     pub fn default_cascades_rules() -> (
-        Vec<Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType>>>>,
-        Vec<Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType>>>>,
+        Vec<Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>>>,
+        Vec<Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>>>,
     ) {
         let mut transformation_rules: Vec<
             Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType>>>,
@@ -117,14 +116,15 @@ impl DatafusionOptimizer {
         // transformation_rules.push(Arc::new(FilterSortTransposeRule::new()));
         // transformation_rules.push(Arc::new(FilterAggTransposeRule::new()));
         // transformation_rules.push(Arc::new(JoinAssocRule::new()));
-        transformation_rules.push(Arc::new(JoinCommuteRule::new()));
-        transformation_rules.push(Arc::new(ProjectionPullUpJoin::new()));
+        // transformation_rules.push(Arc::new(JoinCommuteRule::new()));
+        // transformation_rules.push(Arc::new(ProjectionPullUpJoin::new()));
 
+        transformation_rules.push(Arc::new(EliminateLimitRule::new())); // TODO: Remove, this is for testing
         let mut implementation_rules: Vec<
             Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType>>>,
         > = PhysicalConversionRule::all_conversions();
 
-        implementation_rules.push(Arc::new(HashJoinRule::new()));
+        // implementation_rules.push(Arc::new(HashJoinRule::new()));
 
         (transformation_rules, implementation_rules)
     }
@@ -139,7 +139,7 @@ impl DatafusionOptimizer {
     pub fn new_physical_with_cost_model(
         catalog: Arc<dyn Catalog>,
         enable_adaptive: bool,
-        cost_model: impl CostModel<DfNodeType, NaiveMemo<OptRelNodeTyp>>,
+        cost_model: impl CostModel<DfNodeType, NaiveMemo<DfNodeType>>,
         runtime_map: RuntimeAdaptionStorage,
     ) -> Self {
         let (transformation_rules, implementation_rules) = Self::default_cascades_rules();

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::DataType;
-use optd_core::nodes::{PlanNode, PlanNodeOrGroup};
+use optd_core::nodes::{ArcPredNode, PlanNode, PlanNodeOrGroup};
 use optd_core::optimizer::Optimizer;
 use optd_core::rules::{Rule, RuleMatcher};
 
@@ -20,6 +20,7 @@ impl PhysicalConversionRule {
             matcher: RuleMatcher::MatchAndPickDiscriminant {
                 typ_discriminant: std::mem::discriminant(&logical_typ),
                 children: vec![RuleMatcher::IgnoreMany],
+                predicates: vec![RuleMatcher::IgnoreMany],
                 pick_to: 0,
             },
         }
@@ -57,6 +58,7 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
         &self,
         _optimizer: &O,
         mut input: HashMap<usize, PlanNodeOrGroup<DfNodeType>>,
+        mut pred_input: HashMap<usize, ArcPredNode<DfNodeType>>,
     ) -> Vec<PlanNode<DfNodeType>> {
         let PlanNode {
             typ,

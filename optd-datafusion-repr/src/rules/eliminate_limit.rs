@@ -10,8 +10,9 @@ use crate::plan_nodes::{
     ConstantPred, ConstantType, DfNodeType, DfReprPredNode, LogicalEmptyRelation,
 };
 
-use super::macros::{collect_picks, define_picks_struct, define_rule};
 use crate::properties::schema::SchemaPropertyBuilder;
+
+use super::macros::define_rule;
 
 define_rule!(
     EliminateLimitRule,

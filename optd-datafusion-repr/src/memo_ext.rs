@@ -6,12 +6,9 @@ use std::{
 };
 
 use itertools::Itertools;
-use optd_core::{
-    cascades::{ExprId, GroupId, Memo},
-    rel_node::RelNodeTyp,
-};
+use optd_core::cascades::{ExprId, GroupId, Memo};
 
-use crate::plan_nodes::{LogicalScan, OptRelNode, OptRelNodeTyp};
+use crate::plan_nodes::{DfNodeType, LogicalScan};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum LogicalJoinOrder {
@@ -34,7 +31,7 @@ pub trait MemoExt {
     fn enumerate_join_order(&self, entry: GroupId) -> Vec<LogicalJoinOrder>;
 }
 
-fn enumerate_join_order_expr_inner<M: Memo<OptRelNodeTyp> + ?Sized>(
+fn enumerate_join_order_expr_inner<M: Memo<DfNodeType> + ?Sized>(
     memo: &M,
     current: ExprId,
     visited: &mut HashMap<GroupId, Vec<LogicalJoinOrder>>,
@@ -45,11 +42,11 @@ fn enumerate_join_order_expr_inner<M: Memo<OptRelNodeTyp> + ?Sized>(
         .clone()
         .into_rel_node();
     match expr.typ {
-        OptRelNodeTyp::Scan => {
+        DfNodeType::Scan => {
             let scan = LogicalScan::from_rel_node(Arc::new(expr)).unwrap();
             vec![LogicalJoinOrder::Table(scan.table())]
         }
-        OptRelNodeTyp::Join(_) | OptRelNodeTyp::DepJoin(_) | OptRelNodeTyp::RawDepJoin(_) => {
+        DfNodeType::Join(_) | DfNodeType::DepJoin(_) | DfNodeType::RawDepJoin(_) => {
             // Assume child 0 == left, child 1 == right
             let left = expr.children[0].typ.extract_group().unwrap();
             let right = expr.children[1].typ.extract_group().unwrap();
@@ -91,7 +88,7 @@ fn enumerate_join_order_expr_inner<M: Memo<OptRelNodeTyp> + ?Sized>(
     }
 }
 
-fn enumerate_join_order_group_inner<M: Memo<OptRelNodeTyp> + ?Sized>(
+fn enumerate_join_order_group_inner<M: Memo<DfNodeType> + ?Sized>(
     memo: &M,
     current: GroupId,
     visited: &mut HashMap<GroupId, Vec<LogicalJoinOrder>>,
@@ -115,7 +112,7 @@ fn enumerate_join_order_group_inner<M: Memo<OptRelNodeTyp> + ?Sized>(
     res
 }
 
-impl<M: Memo<OptRelNodeTyp>> MemoExt for M {
+impl<M: Memo<DfNodeType>> MemoExt for M {
     fn enumerate_join_order(&self, entry: GroupId) -> Vec<LogicalJoinOrder> {
         let mut visited = HashMap::new();
         enumerate_join_order_group_inner(self, entry, &mut visited)
@@ -124,25 +121,20 @@ impl<M: Memo<OptRelNodeTyp>> MemoExt for M {
 
 #[cfg(test)]
 mod tests {
-    use optd_core::{
-        cascades::NaiveMemo,
-        rel_node::{RelNode, Value},
-    };
+    use optd_core::{cascades::NaiveMemo, nodes::Value};
 
-    use crate::plan_nodes::{
-        ConstantExpr, ExprList, JoinType, LogicalJoin, LogicalProjection, PlanNode,
-    };
+    use crate::plan_nodes::{ConstantPred, JoinType, ListPred, LogicalJoin, LogicalProjection};
 
     use super::*;
 
     #[test]
     fn enumerate_join_orders() {
-        let mut memo = NaiveMemo::<OptRelNodeTyp>::new(Arc::new([]));
+        let mut memo = NaiveMemo::<DfNodeType>::new(Arc::new([]));
         let (group, _) = memo.add_new_expr(
             LogicalJoin::new(
                 LogicalScan::new("t1".to_string()).into_plan_node(),
                 LogicalScan::new("t2".to_string()).into_plan_node(),
-                ConstantExpr::new(Value::Bool(true)).into_expr(),
+                ConstantPred::new(Value::Bool(true)).into_expr(),
                 JoinType::Inner,
             )
             .into_rel_node(),
@@ -153,24 +145,25 @@ mod tests {
                 LogicalJoin::new(
                     LogicalScan::new("t2".to_string()).into_plan_node(),
                     LogicalScan::new("t1".to_string()).into_plan_node(),
-                    ConstantExpr::new(Value::Bool(true)).into_expr(),
+                    ConstantPred::new(Value::Bool(true)).into_expr(),
                     JoinType::Inner,
                 )
                 .into_plan_node(),
-                ExprList::new(Vec::new()),
+                ListPred::new(Vec::new()),
             )
             .into_rel_node(),
             group,
         );
         // Self-reference group
-        memo.add_expr_to_group(
-            LogicalProjection::new(
-                PlanNode::from_group(Arc::new(RelNode::new_group(group))),
-                ExprList::new(Vec::new()),
-            )
-            .into_rel_node(),
-            group,
-        );
+        todo!("Uncomment");
+        // memo.add_expr_to_group(
+        //     LogicalProjection::new(
+        //         PlanNode::from_group(Arc::new(RelNode::new_group(group))),
+        //         ExprList::new(Vec::new()),
+        //     )
+        //     .into_rel_node(),
+        //     group,
+        // );
         let orders = memo.enumerate_join_order(group);
         assert_eq!(
             orders,
