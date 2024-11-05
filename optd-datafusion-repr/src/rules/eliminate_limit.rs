@@ -1,17 +1,22 @@
 use optd_core::rules::{Rule, RuleMatcher};
-use optd_core::{nodes::PlanNode, optimizer::Optimizer};
+use optd_core::{
+    nodes::{PlanNode, PlanNodeOrGroup},
+    optimizer::Optimizer,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::plan_nodes::{ConstantPred, ConstantType, DfNodeType, LogicalEmptyRelation, DfReprPlanNode};
+use crate::plan_nodes::{
+    ConstantPred, ConstantType, DfNodeType, DfReprPredNode, LogicalEmptyRelation,
+};
 
-use super::macros::define_rule;
+use super::macros::{collect_picks, define_picks_struct, define_rule};
 use crate::properties::schema::SchemaPropertyBuilder;
 
 define_rule!(
     EliminateLimitRule,
     apply_eliminate_limit,
-    (Limit, child, [skip], [fetch])
+    (Limit, [child], [skip, fetch])
 );
 
 /// Transformations:
@@ -23,12 +28,12 @@ fn apply_eliminate_limit(
 ) -> Vec<PlanNode<DfNodeType>> {
     if let DfNodeType::Constant(ConstantType::UInt64) = skip.typ {
         if let DfNodeType::Constant(ConstantType::UInt64) = fetch.typ {
-            let skip_val = ConstantPred::from_rel_node(skip.into())
+            let skip_val = ConstantPred::from_pred_node(skip.into())
                 .unwrap()
                 .value()
                 .as_u64();
 
-            let fetch_val = ConstantPred::from_rel_node(fetch.into())
+            let fetch_val = ConstantPred::from_pred_node(fetch.into())
                 .unwrap()
                 .value()
                 .as_u64();
