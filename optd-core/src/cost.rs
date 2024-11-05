@@ -1,5 +1,5 @@
 use crate::{
-    cascades::{CascadesOptimizer, RelNodeContext},
+    cascades::{CascadesOptimizer, Memo, RelNodeContext},
     nodes::{ArcPredNode, NodeType, PlanNode, Value},
 };
 
@@ -13,12 +13,11 @@ pub struct Statistics(pub value_bag::OwnedValueBag);
 #[derive(Default, Clone, Debug, PartialOrd, PartialEq)]
 pub struct Cost(pub Vec<f64>);
 
-pub trait CostModel<T: RelNodeTyp, M: Memo<T>>: 'static + Send + Sync {
+pub trait CostModel<T: NodeType, M: Memo<T>>: 'static + Send + Sync {
     /// Compute the cost of a single operation
     fn compute_operation_cost(
         &self,
         node: &T,
-        data: &Option<Value>,
         children_stat: &[Option<&Statistics>],
         predicates: &[ArcPredNode<T>],
         children_cost: &[Cost],

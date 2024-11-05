@@ -22,9 +22,7 @@ use crate::{
 
 use super::optimizer::{ExprId, GroupId};
 
-// TODO: What is a RelMemoNodeRef supposed to mean?
-// Can we call this a MemoExprRef, and MemoExpr instead?
-pub type RelMemoNodeRef<T> = Arc<MemoPlanNode<T>>;
+pub type ArcMemoPlanNode<T> = Arc<MemoPlanNode<T>>;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum BindingType {
@@ -151,18 +149,18 @@ impl Display for PredId {
 pub trait Memo<T: NodeType>: 'static + Send + Sync {
     /// Add an expression to the memo table. If the expression already exists, it will return the existing group id and
     /// expr id. Otherwise, a new group and expr will be created.
-    fn add_new_expr(&mut self, rel_node: RelNodeRef<T>) -> (GroupId, ExprId);
+    fn add_new_expr(&mut self, plan_node: ArcPlanNode<T>) -> (GroupId, ExprId);
 
-    /// Add a new expression to an existing gruop. If the expression is a group, it will merge the two groups. Otherwise,
+    /// Add a new expression to an existing group. If the expression is a group, it will merge the two groups. Otherwise,
     /// it will add the expression to the group. Returns the expr id if the expression is not a group.
-    fn add_expr_to_group(&mut self, rel_node: RelNodeRef<T>, group_id: GroupId) -> Option<ExprId>;
+    fn add_expr_to_group(&mut self, plan_node: ArcPlanNode<T>, group_id: GroupId) -> ExprId;
 
     /// Get the group id of an expression.
     /// The group id is volatile, depending on whether the groups are merged.
     fn get_group_id(&self, expr_id: ExprId) -> GroupId;
 
     /// Get the memoized representation of a node.
-    fn get_expr_memoed(&self, expr_id: ExprId) -> RelMemoNodeRef<T>;
+    fn get_expr_memoed(&self, expr_id: ExprId) -> ArcMemoPlanNode<T>;
 
     /// Get all groups IDs in the memo table.
     fn get_all_group_ids(&self) -> Vec<GroupId>;
@@ -197,27 +195,25 @@ pub trait Memo<T: NodeType>: 'static + Send + Sync {
     fn get_best_group_binding(
         &self,
         group_id: GroupId,
-        mut post_process: impl FnMut(Arc<RelNode<T>>, GroupId, &WinnerInfo),
-    ) -> Result<RelNodeRef<T>> {
+        mut post_process: impl FnMut(ArcPlanNode<T>, GroupId, &WinnerInfo),
+    ) -> Result<ArcPlanNode<T>> {
         get_best_group_binding_inner(self, group_id, &mut post_process)
     }
 
-    /// Get all bindings of a predicate group. Will panic if the group contains more than one bindings.
-    fn get_predicate_binding(&self, group_id: GroupId) -> Option<RelNodeRef<T>> {
-        get_predicate_binding_group_inner(self, group_id, true)
+    /// Get binding of a predicate group from its ID. Crashes if there is no predicate binding for the ID.
+    fn get_predicate_binding(&self, pred_id: PredId) -> ArcPredNode<T> {
+        self.try_get_predicate_binding(pred_id).unwrap()
     }
 
-    /// Get all bindings of a predicate group. Returns None if the group contains zero or more than one bindings.
-    fn try_get_predicate_binding(&self, group_id: GroupId) -> Option<RelNodeRef<T>> {
-        get_predicate_binding_group_inner(self, group_id, false)
-    }
+    /// Materialize a predicate from its ID. Returns None if there is no predicate binding for the ID.
+    fn try_get_predicate_binding(&self, pred_id: PredId) -> Option<ArcPredNode<T>>;
 }
 
-fn get_best_group_binding_inner<M: Memo<T> + ?Sized, T: RelNodeTyp>(
+fn get_best_group_binding_inner<M: Memo<T> + ?Sized, T: NodeType>(
     this: &M,
     group_id: GroupId,
-    post_process: &mut impl FnMut(Arc<RelNode<T>>, GroupId, &WinnerInfo),
-) -> Result<RelNodeRef<T>> {
+    post_process: &mut impl FnMut(ArcPlanNode<T>, GroupId, &WinnerInfo),
+) -> Result<ArcPlanNode<T>> {
     let info: &GroupInfo = this.get_group_info(group_id);
     if let Winner::Full(info @ WinnerInfo { expr_id, .. }) = &info.winner {
         let expr = this.get_expr_memoed(*expr_id);
@@ -228,10 +224,18 @@ fn get_best_group_binding_inner<M: Memo<T> + ?Sized, T: RelNodeTyp>(
                     .with_context(|| format!("when processing expr {}", expr_id))?,
             );
         }
-        let node = Arc::new(RelNode {
+        let mut predicates = Vec::with_capacity(expr.predicates.len());
+        for pred in &expr.predicates {
+            let pred = this.get_predicate_binding(*pred);
+            predicates.push(pred);
+        }
+        let node = Arc::new(PlanNode {
             typ: expr.typ.clone(),
-            children,
-            data: expr.data.clone(),
+            children: children
+                .into_iter()
+                .map(PlanNodeOrGroup::PlanNode)
+                .collect(),
+            predicates,
         });
         post_process(node.clone(), group_id, info);
         return Ok(node);
@@ -239,56 +243,11 @@ fn get_best_group_binding_inner<M: Memo<T> + ?Sized, T: RelNodeTyp>(
     bail!("no best group binding for group {}", group_id)
 }
 
-fn get_predicate_binding_expr_inner<M: Memo<T> + ?Sized, T: RelNodeTyp>(
-    this: &M,
-    expr_id: ExprId,
-    panic_on_invalid_group: bool,
-) -> Option<RelNodeRef<T>> {
-    let expr = this.get_expr_memoed(expr_id);
-    let mut children = Vec::with_capacity(expr.children.len());
-    for child in expr.children.iter() {
-        if let Some(child) = get_predicate_binding_group_inner(this, *child, panic_on_invalid_group)
-        {
-            children.push(child);
-        } else {
-            return None;
-        }
-    }
-    Some(Arc::new(RelNode {
-        typ: expr.typ.clone(),
-        data: expr.data.clone(),
-        children,
-    }))
-}
-
-fn get_predicate_binding_group_inner<M: Memo<T> + ?Sized, T: RelNodeTyp>(
-    this: &M,
-    group_id: GroupId,
-    panic_on_invalid_group: bool,
-) -> Option<RelNodeRef<T>> {
-    let exprs = this.get_all_exprs_in_group(group_id);
-    match exprs.len() {
-        0 => None,
-        1 => get_predicate_binding_expr_inner(
-            this,
-            exprs.first().copied().unwrap(),
-            panic_on_invalid_group,
-        ),
-        len => {
-            if panic_on_invalid_group {
-                panic!("group {group_id} has {len} expressions")
-            } else {
-                None
-            }
-        }
-    }
-}
-
 /// A naive, simple, and unoptimized memo table implementation.
-pub struct NaiveMemo<T: RelNodeTyp> {
+pub struct NaiveMemo<T: NodeType> {
     // Source of truth.
     groups: HashMap<GroupId, Group>,
-    expr_id_to_expr_node: HashMap<ExprId, RelMemoNodeRef<T>>,
+    expr_id_to_expr_node: HashMap<ExprId, ArcMemoPlanNode<T>>,
 
     // Predicate stuff (TODO: Improve this---this is a working prototype)
     pred_node_to_pred_id: HashMap<MemoPredNode<T>, PredId>, // TODO: Pred groups not implemented yet
@@ -310,7 +269,7 @@ pub struct NaiveMemo<T: RelNodeTyp> {
 }
 
 impl<T: NodeType> Memo<T> for NaiveMemo<T> {
-    fn add_new_expr(&mut self, rel_node: RelNodeRef<T>) -> (GroupId, ExprId) {
+    fn add_new_expr(&mut self, rel_node: ArcPlanNode<T>) -> (GroupId, ExprId) {
         let (group_id, expr_id) = self
             .add_new_group_expr_inner(rel_node, None)
             .expect("should not trigger merge group");
@@ -318,20 +277,14 @@ impl<T: NodeType> Memo<T> for NaiveMemo<T> {
         (group_id, expr_id)
     }
 
-    fn add_expr_to_group(&mut self, rel_node: RelNodeRef<T>, group_id: GroupId) -> Option<ExprId> {
-        if let Some(input_group) = rel_node.typ.extract_group() {
-            let input_group = self.reduce_group(input_group);
-            let group_id = self.reduce_group(group_id);
-            self.merge_group_inner(input_group, group_id);
-            return None;
-        }
+    fn add_expr_to_group(&mut self, rel_node: ArcPlanNode<T>, group_id: GroupId) -> ExprId {
         let reduced_group_id = self.reduce_group(group_id);
         let (returned_group_id, expr_id) = self
             .add_new_group_expr_inner(rel_node, Some(reduced_group_id))
             .unwrap();
         assert_eq!(returned_group_id, reduced_group_id);
         self.verify_integrity();
-        Some(expr_id)
+        expr_id
     }
 
     fn get_group_id(&self, mut expr_id: ExprId) -> GroupId {
@@ -344,7 +297,7 @@ impl<T: NodeType> Memo<T> for NaiveMemo<T> {
             .expect("expr not found in group mapping")
     }
 
-    fn get_expr_memoed(&self, mut expr_id: ExprId) -> RelMemoNodeRef<T> {
+    fn get_expr_memoed(&self, mut expr_id: ExprId) -> ArcMemoPlanNode<T> {
         while let Some(new_expr_id) = self.dup_expr_mapping.get(&expr_id) {
             expr_id = *new_expr_id;
         }
@@ -384,6 +337,11 @@ impl<T: NodeType> Memo<T> for NaiveMemo<T> {
 
     fn estimated_plan_space(&self) -> usize {
         self.expr_id_to_expr_node.len()
+    }
+
+    // todo: would be implemented differently with predicate groups
+    fn try_get_predicate_binding(&self, pred_id: PredId) -> Option<ArcPredNode<T>> {
+        self.get_pred_from_pred_id(pred_id)
     }
 }
 
@@ -577,8 +535,28 @@ impl<T: NodeType> NaiveMemo<T> {
         Ok((group_id, expr_id))
     }
 
+    pub fn get_pred_from_pred_id(&self, pred_id: PredId) -> Option<ArcPredNode<T>> {
+        let Some(pred_node) = self.pred_id_to_pred_node.get(&pred_id) else {
+            return None;
+        };
+        // recursively materialize
+        let Some(children): Option<Vec<ArcPredNode<T>>> = pred_node
+            .children
+            .iter()
+            .map(|child| self.get_pred_from_pred_id(*child))
+            .collect()
+        else {
+            return None;
+        };
+        Some(Arc::new(PredNode {
+            typ: pred_node.typ.clone(),
+            children,
+            data: pred_node.data.clone(),
+        }))
+    }
+
     /// This may also be inefficient for the same reason as get_expr_info.
-    #[cfg(test)]
+    /// TODO: Config test?
     pub fn get_pred_expr_info(&self, pred_node: ArcPredNode<T>) -> PredId {
         let children_pred_ids = pred_node
             .children
@@ -599,7 +577,7 @@ impl<T: NodeType> NaiveMemo<T> {
     /// This is inefficient: usually the optimizer should have a MemoRef instead of passing the full rel node. Should
     /// be only used for debugging purpose.
     #[cfg(test)]
-    pub(crate) fn get_expr_info(&self, rel_node: ArcPlanNode<T>) -> (GroupId, ExprId) {
+    pub(crate) fn get_expr_info(&self, plan_node: ArcPlanNode<T>) -> (GroupId, ExprId) {
         let children_group_ids = plan_node
             .children
             .iter()
@@ -644,7 +622,7 @@ impl<T: NodeType> NaiveMemo<T> {
             let materialized_predicates = memo_node
                 .predicates
                 .iter()
-                .map(|pred_id| self.get_pred_from_pred_id(*pred_id))
+                .map(|pred_id| self.get_predicate_binding(*pred_id))
                 .collect::<Vec<_>>();
             let prop = builder.derive_any(
                 memo_node.typ.clone(),
@@ -723,176 +701,176 @@ mod tests {
         Expr,
     }
 
-//     impl std::fmt::Display for MemoTestRelTyp {
-//         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//             match self {
-//                 Self::Group(x) => write!(f, "{}", x),
-//                 other => write!(f, "{:?}", other),
-//             }
-//         }
-//     }
+    //     impl std::fmt::Display for MemoTestRelTyp {
+    //         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    //             match self {
+    //                 Self::Group(x) => write!(f, "{}", x),
+    //                 other => write!(f, "{:?}", other),
+    //             }
+    //         }
+    //     }
 
-//     impl NodeType for MemoTestRelTyp {
-//         fn is_logical(&self) -> bool {
-//             matches!(self, Self::Project | Self::Scan | Self::Join)
-//         }
-//     }
+    //     impl NodeType for MemoTestRelTyp {
+    //         fn is_logical(&self) -> bool {
+    //             matches!(self, Self::Project | Self::Scan | Self::Join)
+    //         }
+    //     }
 
-//     type MemoTestRelNode = RelNode<MemoTestRelTyp>;
-//     type MemoTestRelNodeRef = RelNodeRef<MemoTestRelTyp>;
+    //     type MemoTestRelNode = RelNode<MemoTestRelTyp>;
+    //     type MemoTestRelNodeRef = RelNodeRef<MemoTestRelTyp>;
 
-//     fn join(
-//         left: impl Into<MemoTestRelNodeRef>,
-//         right: impl Into<MemoTestRelNodeRef>,
-//         cond: impl Into<MemoTestRelNodeRef>,
-//     ) -> MemoTestRelNode {
-//         RelNode {
-//             typ: MemoTestRelTyp::Join,
-//             children: vec![left.into(), right.into(), cond.into()],
-//             data: None,
-//         }
-//     }
+    //     fn join(
+    //         left: impl Into<MemoTestRelNodeRef>,
+    //         right: impl Into<MemoTestRelNodeRef>,
+    //         cond: impl Into<MemoTestRelNodeRef>,
+    //     ) -> MemoTestRelNode {
+    //         RelNode {
+    //             typ: MemoTestRelTyp::Join,
+    //             children: vec![left.into(), right.into(), cond.into()],
+    //             data: None,
+    //         }
+    //     }
 
-//     fn scan(table: &str) -> MemoTestRelNode {
-//         RelNode {
-//             typ: MemoTestRelTyp::Scan,
-//             children: vec![],
-//             data: Some(Value::String(table.to_string().into())),
-//         }
-//     }
+    //     fn scan(table: &str) -> MemoTestRelNode {
+    //         RelNode {
+    //             typ: MemoTestRelTyp::Scan,
+    //             children: vec![],
+    //             data: Some(Value::String(table.to_string().into())),
+    //         }
+    //     }
 
-//     fn project(
-//         input: impl Into<MemoTestRelNodeRef>,
-//         expr_list: impl Into<MemoTestRelNodeRef>,
-//     ) -> MemoTestRelNode {
-//         RelNode {
-//             typ: MemoTestRelTyp::Project,
-//             children: vec![input.into(), expr_list.into()],
-//             data: None,
-//         }
-//     }
+    //     fn project(
+    //         input: impl Into<MemoTestRelNodeRef>,
+    //         expr_list: impl Into<MemoTestRelNodeRef>,
+    //     ) -> MemoTestRelNode {
+    //         RelNode {
+    //             typ: MemoTestRelTyp::Project,
+    //             children: vec![input.into(), expr_list.into()],
+    //             data: None,
+    //         }
+    //     }
 
-//     fn list(items: Vec<impl Into<MemoTestRelNodeRef>>) -> MemoTestRelNode {
-//         RelNode {
-//             typ: MemoTestRelTyp::List,
-//             children: items.into_iter().map(|x| x.into()).collect(),
-//             data: None,
-//         }
-//     }
+    //     fn list(items: Vec<impl Into<MemoTestRelNodeRef>>) -> MemoTestRelNode {
+    //         RelNode {
+    //             typ: MemoTestRelTyp::List,
+    //             children: items.into_iter().map(|x| x.into()).collect(),
+    //             data: None,
+    //         }
+    //     }
 
-//     fn expr(data: Value) -> MemoTestRelNode {
-//         RelNode {
-//             typ: MemoTestRelTyp::Expr,
-//             children: vec![],
-//             data: Some(data),
-//         }
-//     }
+    //     fn expr(data: Value) -> MemoTestRelNode {
+    //         RelNode {
+    //             typ: MemoTestRelTyp::Expr,
+    //             children: vec![],
+    //             data: Some(data),
+    //         }
+    //     }
 
-//     fn group(group_id: GroupId) -> MemoTestRelNode {
-//         RelNode {
-//             typ: MemoTestRelTyp::Group(group_id),
-//             children: vec![],
-//             data: None,
-//         }
-//     }
+    //     fn group(group_id: GroupId) -> MemoTestRelNode {
+    //         RelNode {
+    //             typ: MemoTestRelTyp::Group(group_id),
+    //             children: vec![],
+    //             data: None,
+    //         }
+    //     }
 
-    #[test]
-    fn group_merge_1() {
-        let mut memo = NaiveMemo::new(Arc::new([]));
-        let (group_id, _) =
-            memo.add_new_expr(join(scan("t1"), scan("t2"), expr(Value::Bool(true))).into());
-        memo.add_expr_to_group(
-            join(scan("t2"), scan("t1"), expr(Value::Bool(true))).into(),
-            group_id,
-        );
-        assert_eq!(memo.get_group(group_id).group_exprs.len(), 2);
-    }
+    // #[test]
+    // fn group_merge_1() {
+    //     let mut memo = NaiveMemo::new(Arc::new([]));
+    //     let (group_id, _) =
+    //         memo.add_new_expr(join(scan("t1"), scan("t2"), expr(Value::Bool(true))).into());
+    //     memo.add_expr_to_group(
+    //         join(scan("t2"), scan("t1"), expr(Value::Bool(true))).into(),
+    //         group_id,
+    //     );
+    //     assert_eq!(memo.get_group(group_id).group_exprs.len(), 2);
+    // }
 
-    #[test]
-    fn group_merge_2() {
-        let mut memo = NaiveMemo::new(Arc::new([]));
-        let (group_id_1, _) = memo.add_new_expr(
-            project(
-                join(scan("t1"), scan("t2"), expr(Value::Bool(true))),
-                list(vec![expr(Value::Int64(1))]),
-            )
-            .into(),
-        );
-        let (group_id_2, _) = memo.add_new_expr(
-            project(
-                join(scan("t1"), scan("t2"), expr(Value::Bool(true))),
-                list(vec![expr(Value::Int64(1))]),
-            )
-            .into(),
-        );
-        assert_eq!(group_id_1, group_id_2);
-    }
+    // #[test]
+    // fn group_merge_2() {
+    //     let mut memo = NaiveMemo::new(Arc::new([]));
+    //     let (group_id_1, _) = memo.add_new_expr(
+    //         project(
+    //             join(scan("t1"), scan("t2"), expr(Value::Bool(true))),
+    //             list(vec![expr(Value::Int64(1))]),
+    //         )
+    //         .into(),
+    //     );
+    //     let (group_id_2, _) = memo.add_new_expr(
+    //         project(
+    //             join(scan("t1"), scan("t2"), expr(Value::Bool(true))),
+    //             list(vec![expr(Value::Int64(1))]),
+    //         )
+    //         .into(),
+    //     );
+    //     assert_eq!(group_id_1, group_id_2);
+    // }
 
-    #[test]
-    fn group_merge_3() {
-        let mut memo = NaiveMemo::new(Arc::new([]));
-        let expr1 = Arc::new(project(scan("t1"), list(vec![expr(Value::Int64(1))])));
-        let expr2 = Arc::new(project(scan("t1-alias"), list(vec![expr(Value::Int64(1))])));
-        memo.add_new_expr(expr1.clone());
-        memo.add_new_expr(expr2.clone());
-        // merging two child groups causes parent to merge
-        let (group_id_expr, _) = memo.get_expr_info(scan("t1").into());
-        memo.add_expr_to_group(scan("t1-alias").into(), group_id_expr);
-        let (group_1, _) = memo.get_expr_info(expr1);
-        let (group_2, _) = memo.get_expr_info(expr2);
-        assert_eq!(group_1, group_2);
-    }
+    // #[test]
+    // fn group_merge_3() {
+    //     let mut memo = NaiveMemo::new(Arc::new([]));
+    //     let expr1 = Arc::new(project(scan("t1"), list(vec![expr(Value::Int64(1))])));
+    //     let expr2 = Arc::new(project(scan("t1-alias"), list(vec![expr(Value::Int64(1))])));
+    //     memo.add_new_expr(expr1.clone());
+    //     memo.add_new_expr(expr2.clone());
+    //     // merging two child groups causes parent to merge
+    //     let (group_id_expr, _) = memo.get_expr_info(scan("t1").into());
+    //     memo.add_expr_to_group(scan("t1-alias").into(), group_id_expr);
+    //     let (group_1, _) = memo.get_expr_info(expr1);
+    //     let (group_2, _) = memo.get_expr_info(expr2);
+    //     assert_eq!(group_1, group_2);
+    // }
 
-    #[test]
-    fn group_merge_4() {
-        let mut memo = NaiveMemo::new(Arc::new([]));
-        let expr1 = Arc::new(project(
-            project(scan("t1"), list(vec![expr(Value::Int64(1))])),
-            list(vec![expr(Value::Int64(2))]),
-        ));
-        let expr2 = Arc::new(project(
-            project(scan("t1-alias"), list(vec![expr(Value::Int64(1))])),
-            list(vec![expr(Value::Int64(2))]),
-        ));
-        memo.add_new_expr(expr1.clone());
-        memo.add_new_expr(expr2.clone());
-        // merge two child groups, cascading merge
-        let (group_id_expr, _) = memo.get_expr_info(scan("t1").into());
-        memo.add_expr_to_group(scan("t1-alias").into(), group_id_expr);
-        let (group_1, _) = memo.get_expr_info(expr1.clone());
-        let (group_2, _) = memo.get_expr_info(expr2.clone());
-        assert_eq!(group_1, group_2);
-        let (group_1, _) = memo.get_expr_info(expr1.child(0));
-        let (group_2, _) = memo.get_expr_info(expr2.child(0));
-        assert_eq!(group_1, group_2);
-    }
+    // #[test]
+    // fn group_merge_4() {
+    //     let mut memo = NaiveMemo::new(Arc::new([]));
+    //     let expr1 = Arc::new(project(
+    //         project(scan("t1"), list(vec![expr(Value::Int64(1))])),
+    //         list(vec![expr(Value::Int64(2))]),
+    //     ));
+    //     let expr2 = Arc::new(project(
+    //         project(scan("t1-alias"), list(vec![expr(Value::Int64(1))])),
+    //         list(vec![expr(Value::Int64(2))]),
+    //     ));
+    //     memo.add_new_expr(expr1.clone());
+    //     memo.add_new_expr(expr2.clone());
+    //     // merge two child groups, cascading merge
+    //     let (group_id_expr, _) = memo.get_expr_info(scan("t1").into());
+    //     memo.add_expr_to_group(scan("t1-alias").into(), group_id_expr);
+    //     let (group_1, _) = memo.get_expr_info(expr1.clone());
+    //     let (group_2, _) = memo.get_expr_info(expr2.clone());
+    //     assert_eq!(group_1, group_2);
+    //     let (group_1, _) = memo.get_expr_info(expr1.child(0));
+    //     let (group_2, _) = memo.get_expr_info(expr2.child(0));
+    //     assert_eq!(group_1, group_2);
+    // }
 
-    #[test]
-    fn group_merge_5() {
-        let mut memo = NaiveMemo::new(Arc::new([]));
-        let expr1 = Arc::new(project(
-            project(scan("t1"), list(vec![expr(Value::Int64(1))])),
-            list(vec![expr(Value::Int64(2))]),
-        ));
-        let expr2 = Arc::new(project(
-            project(scan("t1-alias"), list(vec![expr(Value::Int64(1))])),
-            list(vec![expr(Value::Int64(2))]),
-        ));
-        let (_, expr1_id) = memo.add_new_expr(expr1.clone());
-        let (_, expr2_id) = memo.add_new_expr(expr2.clone());
+    // #[test]
+    // fn group_merge_5() {
+    //     let mut memo = NaiveMemo::new(Arc::new([]));
+    //     let expr1 = Arc::new(project(
+    //         project(scan("t1"), list(vec![expr(Value::Int64(1))])),
+    //         list(vec![expr(Value::Int64(2))]),
+    //     ));
+    //     let expr2 = Arc::new(project(
+    //         project(scan("t1-alias"), list(vec![expr(Value::Int64(1))])),
+    //         list(vec![expr(Value::Int64(2))]),
+    //     ));
+    //     let (_, expr1_id) = memo.add_new_expr(expr1.clone());
+    //     let (_, expr2_id) = memo.add_new_expr(expr2.clone());
 
-//         // experimenting with group id in expr (i.e., when apply rules)
-//         let (scan_t1, _) = memo.get_expr_info(scan("t1").into());
-//         let (expr_middle_proj, _) = memo.get_expr_info(list(vec![expr(Value::Int64(1))]).into());
-//         let proj_binding = project(group(scan_t1), group(expr_middle_proj));
-//         let middle_proj_2 = memo.get_expr_memoed(expr2_id).children[0];
+    //     //         // experimenting with group id in expr (i.e., when apply rules)
+    //     let (scan_t1, _) = memo.get_expr_info(scan("t1").into());
+    //     let (expr_middle_proj, _) = memo.get_expr_info(list(vec![expr(Value::Int64(1))]).into());
+    //     let proj_binding = project(group(scan_t1), group(expr_middle_proj));
+    //     let middle_proj_2 = memo.get_expr_memoed(expr2_id).children[0];
 
-//         memo.add_expr_to_group(proj_binding.into(), middle_proj_2);
+    //     memo.add_expr_to_group(proj_binding.into(), middle_proj_2);
 
-//         assert_eq!(
-//             memo.get_expr_memoed(expr1_id),
-//             memo.get_expr_memoed(expr2_id)
-//         ); // these two expressions are merged
-//         assert_eq!(memo.get_expr_info(expr1), memo.get_expr_info(expr2));
-//     }
-// }
+    //     assert_eq!(
+    //         memo.get_expr_memoed(expr1_id),
+    //         memo.get_expr_memoed(expr2_id)
+    //     ); // these two expressions are merged
+    //     assert_eq!(memo.get_expr_info(expr1), memo.get_expr_info(expr2));
+    // }
+}

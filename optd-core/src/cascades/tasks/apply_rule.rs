@@ -5,10 +5,10 @@ use tracing::trace;
 
 use crate::{
     cascades::{
-        memo::{BindingType, RelMemoNodeRef},
+        memo::{ArcMemoPlanNode, BindingType},
         optimizer::{rule_matches_expr, ExprId, RuleId},
         tasks::{explore_expr::ExploreExprTask, optimize_inputs::OptimizeInputsTask},
-        CascadesOptimizer, GroupId,
+        CascadesOptimizer, GroupId, Memo,
     },
     nodes::{ArcPredNode, NodeType, PlanNode, PlanNodeOrGroup},
     rules::{Rule, RuleMatcher},
@@ -19,13 +19,13 @@ use super::Task;
 // Pick/match logic, to get pieces of info to pass to the rule apply function
 // TODO: I would like to see this moved elsewhere
 
-fn match_node<T: NodeType>(
+fn match_node<T: NodeType, M: Memo<T>>(
     typ: &T,
     children: &[RuleMatcher<T>],
     predicates: &[RuleMatcher<T>],
     pick_to: Option<usize>,
-    node: RelMemoNodeRef<T>,
-    optimizer: &CascadesOptimizer<T>,
+    node: ArcMemoPlanNode<T>,
+    optimizer: &CascadesOptimizer<T, M>,
 ) -> Vec<(
     HashMap<usize, PlanNodeOrGroup<T>>,
     HashMap<usize, ArcPredNode<T>>,
@@ -95,7 +95,7 @@ fn match_node<T: NodeType>(
                 for (pick, pred_pick) in &mut picks {
                     let res = pred_pick.insert(
                         *pick_to,
-                        optimizer.get_pred_from_pred_id(node.predicates[idx].clone()),
+                        optimizer.get_predicate_binding(node.predicates[idx].clone()),
                     );
                     assert!(res.is_none(), "dup pred pick?");
                 }
@@ -121,7 +121,7 @@ fn match_node<T: NodeType>(
                         predicates: node
                             .predicates
                             .iter()
-                            .map(|x| optimizer.get_pred_node(*x))
+                            .map(|x| optimizer.get_predicate_binding(*x))
                             .collect(),
                     }
                     .into(),
@@ -133,10 +133,10 @@ fn match_node<T: NodeType>(
     picks
 }
 
-fn match_and_pick_expr<T: NodeType>(
+fn match_and_pick_expr<T: NodeType, M: Memo<T>>(
     matcher: &RuleMatcher<T>,
     expr_id: ExprId,
-    optimizer: &CascadesOptimizer<T>,
+    optimizer: &CascadesOptimizer<T, M>,
 ) -> Vec<(
     HashMap<usize, PlanNodeOrGroup<T>>,
     HashMap<usize, ArcPredNode<T>>,
@@ -145,10 +145,10 @@ fn match_and_pick_expr<T: NodeType>(
     match_and_pick(matcher, node, optimizer)
 }
 
-fn match_and_pick_group<T: NodeType>(
+fn match_and_pick_group<T: NodeType, M: Memo<T>>(
     matcher: &RuleMatcher<T>,
     group_id: GroupId,
-    optimizer: &CascadesOptimizer<T>,
+    optimizer: &CascadesOptimizer<T, M>,
 ) -> Vec<(
     HashMap<usize, PlanNodeOrGroup<T>>,
     HashMap<usize, ArcPredNode<T>>,
@@ -161,10 +161,10 @@ fn match_and_pick_group<T: NodeType>(
     matches
 }
 
-fn match_and_pick<T: NodeType>(
+fn match_and_pick<T: NodeType, M: Memo<T>>(
     matcher: &RuleMatcher<T>,
-    node: RelMemoNodeRef<T>,
-    optimizer: &CascadesOptimizer<T>,
+    node: ArcMemoPlanNode<T>,
+    optimizer: &CascadesOptimizer<T, M>,
 ) -> Vec<(
     HashMap<usize, PlanNodeOrGroup<T>>,
     HashMap<usize, ArcPredNode<T>>,
@@ -230,23 +230,23 @@ fn match_and_pick<T: NodeType>(
     }
 }
 
-pub struct ApplyRuleTask<T: NodeType> {
+pub struct ApplyRuleTask<T: NodeType, M: Memo<T>> {
     parent_task_id: Option<usize>,
     task_id: usize,
     expr_id: ExprId,
     rule_id: RuleId,
-    rule: Arc<dyn Rule<T, CascadesOptimizer<T>>>,
+    rule: Arc<dyn Rule<T, CascadesOptimizer<T, M>>>,
     // TODO: Promise here? Maybe it can be part of the Rule trait.
     cost_limit: Option<isize>,
 }
 
-impl<T: NodeType> ApplyRuleTask<T> {
+impl<T: NodeType, M: Memo<T>> ApplyRuleTask<T, M> {
     pub fn new(
         parent_task_id: Option<usize>,
         task_id: usize,
         expr_id: ExprId,
         rule_id: RuleId,
-        rule: Arc<dyn Rule<T, CascadesOptimizer<T>>>,
+        rule: Arc<dyn Rule<T, CascadesOptimizer<T, M>>>,
         cost_limit: Option<isize>,
     ) -> Self {
         Self {
@@ -260,10 +260,10 @@ impl<T: NodeType> ApplyRuleTask<T> {
     }
 }
 
-fn transform<T: NodeType>(
-    optimizer: &CascadesOptimizer<T>,
+fn transform<T: NodeType, M: Memo<T>>(
+    optimizer: &CascadesOptimizer<T, M>,
     expr_id: ExprId,
-    rule: &Arc<dyn Rule<T, CascadesOptimizer<T>>>,
+    rule: &Arc<dyn Rule<T, CascadesOptimizer<T, M>>>,
 ) -> Vec<PlanNode<T>> {
     let picked_datas = match_and_pick_expr(rule.matcher(), expr_id, optimizer);
 
@@ -280,8 +280,8 @@ fn transform<T: NodeType>(
     }
 }
 
-fn update_memo<T: NodeType>(
-    optimizer: &CascadesOptimizer<T>,
+fn update_memo<T: NodeType, M: Memo<T>>(
+    optimizer: &CascadesOptimizer<T, M>,
     group_id: GroupId,
     new_exprs: Vec<Arc<PlanNode<T>>>,
 ) -> Vec<ExprId> {
@@ -307,8 +307,8 @@ fn update_memo<T: NodeType>(
 ///             // Can fail if the cost limit becomes 0 or negative
 ///             limit ← UpdateCostLimit(newExpr, limit)
 ///             tasks.Push(OptInputs(newExpr, limit))
-impl<T: NodeType> Task<T> for ApplyRuleTask<T> {
-    fn execute(&self, optimizer: &CascadesOptimizer<T>) {
+impl<T: NodeType, M: Memo<T>> Task<T, M> for ApplyRuleTask<T, M> {
+    fn execute(&self, optimizer: &CascadesOptimizer<T, M>) {
         let expr = optimizer.get_expr_memoed(self.expr_id);
 
         trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_begin", task = "apply_rule", rule_id = %self.rule_id, rule = %self.rule.name(), expr_id = %self.expr_id, expr = %expr);

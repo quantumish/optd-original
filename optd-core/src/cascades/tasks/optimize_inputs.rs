@@ -2,12 +2,12 @@ use tracing::trace;
 
 use crate::{
     cascades::{
-        memo::{GroupInfo, Winner},
+        memo::{GroupInfo, Winner, WinnerInfo},
         optimizer::{ExprId, RelNodeContext},
-        CascadesOptimizer, GroupId,
+        CascadesOptimizer, GroupId, Memo,
     },
-    cost::Cost,
-    nodes::NodeType,
+    cost::{Cost, Statistics},
+    nodes::{ArcPredNode, NodeType},
 };
 
 use super::{optimize_group::OptimizeGroupTask, Task};
@@ -36,7 +36,10 @@ impl OptimizeInputsTask {
         }
     }
 
-    fn new_continue_iteration(&self, optimizer: &CascadesOptimizer<impl NodeType>) -> Self {
+    fn new_continue_iteration<T: NodeType>(
+        &self,
+        optimizer: &CascadesOptimizer<T, impl Memo<T>>,
+    ) -> Self {
         Self {
             parent_task_id: Some(self.task_id),
             task_id: optimizer.get_next_task_id(),
@@ -47,27 +50,27 @@ impl OptimizeInputsTask {
     }
 }
 
-fn get_input_cost<T: NodeType>(
+fn get_input_cost<T: NodeType, M: Memo<T>>(
     children: &[GroupId],
-    optimizer: &CascadesOptimizer<T>,
+    optimizer: &CascadesOptimizer<T, M>,
 ) -> Vec<Cost> {
-    let zero_cost = optimizer.cost().zero();
-    let mut input_cost = Vec::with_capacity(children.len());
-    for &child in children.iter() {
-        let group = optimizer.get_group_info(child);
-        if let Some(ref winner) = group.winner {
-            if !winner.impossible {
-                // the full winner case
-                input_cost.push(winner.cost.clone());
-                continue;
-            }
-        }
-        input_cost.push(zero_cost.clone());
-    }
+    let cost = optimizer.cost();
+    let input_cost = children
+        .iter()
+        .map(|&group_id| {
+            optimizer
+                .get_group_info(group_id)
+                .winner
+                .as_full_winner()
+                .map(|x| x.total_cost.clone())
+                .unwrap_or_else(|| cost.zero())
+        })
+        .collect::<Vec<_>>();
     input_cost
 }
 
-fn update_winner<T: NodeType>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>) {
+// TODO: Horrific mess
+fn update_winner<T: NodeType>(expr_id: ExprId, optimizer: &CascadesOptimizer<T, impl Memo<T>>) {
     let cost = optimizer.cost();
     let expr = optimizer.get_expr_memoed(expr_id);
     let group_id = optimizer.get_group_id(expr_id);
@@ -79,29 +82,71 @@ fn update_winner<T: NodeType>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>)
         children_group_ids: expr.children.clone(),
     };
     let input_cost = get_input_cost(&expr.children, optimizer);
+    let input_statistics = context
+        .children_group_ids
+        .iter()
+        .map(|&group_id| {
+            optimizer
+                .get_group_info(group_id)
+                .winner
+                .as_full_winner()
+                .map(|x| x.statistics.clone())
+        })
+        .collect::<Vec<_>>();
+    let input_statistics_ref = input_statistics
+        .iter()
+        .map(|x| x.as_deref())
+        .collect::<Vec<_>>();
+    let input_statistics_refs: Vec<&Statistics> = input_statistics
+        .iter()
+        .map(|x| {
+            x.as_ref()
+                .expect("child winner should always have statistics?")
+                .as_ref()
+        })
+        .collect();
+    let predicates: Vec<ArcPredNode<T>> = expr
+        .predicates
+        .iter()
+        .map(|&pred_id| optimizer.get_predicate_binding(pred_id))
+        .collect();
+    let statistics = cost.derive_statistics(
+        &expr.typ,
+        &input_statistics_refs,
+        &predicates,
+        Some(RelNodeContext {
+            group_id,
+            expr_id,
+            children_group_ids: expr.children.clone(),
+        }),
+        Some(optimizer),
+    );
     let materialized_predicates = expr
         .predicates
         .iter()
-        .map(|x| optimizer.get_pred_from_pred_id(*x))
+        .map(|x| optimizer.get_predicate_binding(*x))
         .collect::<Vec<_>>();
-    let total_cost = cost.sum(
-        &cost.compute_cost(
-            &expr.typ,
-            &materialized_predicates,
-            &input_cost,
-            Some(context.clone()),
-            Some(optimizer),
-        ),
+    let operation_cost = cost.compute_operation_cost(
+        &expr.typ,
+        &input_statistics_ref,
+        &materialized_predicates,
         &input_cost,
+        Some(context.clone()),
+        Some(optimizer),
     );
+
+    let total_cost = cost.sum(&operation_cost, &input_cost);
+
+    let operation_weighted_cost = cost.weighted_cost(&operation_cost);
+    let total_weighted_cost = cost.weighted_cost(&total_cost);
 
     let group_id = optimizer.get_group_id(expr_id);
     let group_info = optimizer.get_group_info(group_id);
 
     // Update best cost for group if desired
     let mut update_cost = false;
-    if let Some(winner) = &group_info.winner {
-        if winner.impossible || winner.cost > total_cost {
+    if let Some(winner) = group_info.winner.as_full_winner() {
+        if winner.total_weighted_cost > total_weighted_cost {
             update_cost = true;
         }
     } else {
@@ -113,10 +158,13 @@ fn update_winner<T: NodeType>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>)
         optimizer.update_group_info(
             group_id,
             GroupInfo {
-                winner: Some(Winner {
-                    impossible: false,
+                winner: Winner::Full(WinnerInfo {
                     expr_id,
-                    cost: total_cost.clone(),
+                    total_weighted_cost,
+                    operation_weighted_cost,
+                    total_cost,
+                    operation_cost,
+                    statistics: statistics.into(),
                 }),
             },
         );
@@ -135,8 +183,8 @@ fn update_winner<T: NodeType>(expr_id: ExprId, optimizer: &CascadesOptimizer<T>)
 ///     UpdateCostBound(expr)
 ///     limit ← UpdateCostLimit(expr, limit)
 ///     tasks.Push(OptGrp(GetGroup(childExpr), limit))
-impl<T: NodeType> Task<T> for OptimizeInputsTask {
-    fn execute(&self, optimizer: &CascadesOptimizer<T>) {
+impl<T: NodeType, M: Memo<T>> Task<T, M> for OptimizeInputsTask {
+    fn execute(&self, optimizer: &CascadesOptimizer<T, M>) {
         let expr = optimizer.get_expr_memoed(self.expr_id);
         let group_id = optimizer.get_group_id(self.expr_id);
         // TODO: add typ to more traces and iteration to traces below

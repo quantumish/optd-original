@@ -1,7 +1,7 @@
 use tracing::trace;
 
 use crate::{
-    cascades::{CascadesOptimizer, GroupId},
+    cascades::{CascadesOptimizer, GroupId, Memo},
     nodes::NodeType,
 };
 
@@ -47,8 +47,8 @@ impl OptimizeGroupTask {
 ///     else
 ///         for expr ∈ grp.Expressions do
 ///         tasks.Push(OptExpr(expr, limit))
-impl<T: NodeType> Task<T> for OptimizeGroupTask {
-    fn execute(&self, optimizer: &CascadesOptimizer<T>) {
+impl<T: NodeType, M: Memo<T>> Task<T, M> for OptimizeGroupTask {
+    fn execute(&self, optimizer: &CascadesOptimizer<T, M>) {
         trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_begin", task = "optimize_group", group_id = %self.group_id);
         let group_explored = optimizer.is_group_explored(self.group_id);
 
