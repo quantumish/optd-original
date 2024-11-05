@@ -129,33 +129,33 @@ mod tests {
 
     #[test]
     fn enumerate_join_orders() {
-        let mut memo = NaiveMemo::<DfNodeType>::new(Arc::new([]));
-        let (group, _) = memo.add_new_expr(
-            LogicalJoin::new(
-                LogicalScan::new("t1".to_string()).into_plan_node(),
-                LogicalScan::new("t2".to_string()).into_plan_node(),
-                ConstantPred::new(Value::Bool(true)).into_expr(),
-                JoinType::Inner,
-            )
-            .into_rel_node(),
-        );
-        // Add an alternative join order
-        memo.add_expr_to_group(
-            LogicalProjection::new(
-                LogicalJoin::new(
-                    LogicalScan::new("t2".to_string()).into_plan_node(),
-                    LogicalScan::new("t1".to_string()).into_plan_node(),
-                    ConstantPred::new(Value::Bool(true)).into_expr(),
-                    JoinType::Inner,
-                )
-                .into_plan_node(),
-                ListPred::new(Vec::new()),
-            )
-            .into_rel_node(),
-            group,
-        );
-        // Self-reference group
         todo!("Uncomment");
+        // let mut memo = NaiveMemo::<DfNodeType>::new(Arc::new([]));
+        // let (group, _) = memo.add_new_expr(
+        //     LogicalJoin::new(
+        //         LogicalScan::new("t1".to_string()).into_plan_node(),
+        //         LogicalScan::new("t2".to_string()).into_plan_node(),
+        //         ConstantPred::new(Value::Bool(true)).into_expr(),
+        //         JoinType::Inner,
+        //     )
+        //     .into_rel_node(),
+        // );
+        // // Add an alternative join order
+        // memo.add_expr_to_group(
+        //     LogicalProjection::new(
+        //         LogicalJoin::new(
+        //             LogicalScan::new("t2".to_string()).into_plan_node(),
+        //             LogicalScan::new("t1".to_string()).into_plan_node(),
+        //             ConstantPred::new(Value::Bool(true)).into_expr(),
+        //             JoinType::Inner,
+        //         )
+        //         .into_plan_node(),
+        //         ListPred::new(Vec::new()),
+        //     )
+        //     .into_rel_node(),
+        //     group,
+        // );
+        // Self-reference group
         // memo.add_expr_to_group(
         //     LogicalProjection::new(
         //         PlanNode::from_group(Arc::new(RelNode::new_group(group))),
@@ -164,19 +164,19 @@ mod tests {
         //     .into_rel_node(),
         //     group,
         // );
-        let orders = memo.enumerate_join_order(group);
-        assert_eq!(
-            orders,
-            vec![
-                LogicalJoinOrder::Join(
-                    Box::new(LogicalJoinOrder::Table("t1".into())),
-                    Box::new(LogicalJoinOrder::Table("t2".into())),
-                ),
-                LogicalJoinOrder::Join(
-                    Box::new(LogicalJoinOrder::Table("t2".into())),
-                    Box::new(LogicalJoinOrder::Table("t1".into())),
-                )
-            ]
-        );
+        // let orders = memo.enumerate_join_order(group);
+        // assert_eq!(
+        //     orders,
+        //     vec![
+        //         LogicalJoinOrder::Join(
+        //             Box::new(LogicalJoinOrder::Table("t1".into())),
+        //             Box::new(LogicalJoinOrder::Table("t2".into())),
+        //         ),
+        //         LogicalJoinOrder::Join(
+        //             Box::new(LogicalJoinOrder::Table("t2".into())),
+        //             Box::new(LogicalJoinOrder::Table("t1".into())),
+        //         )
+        //     ]
+        // );
     }
 }

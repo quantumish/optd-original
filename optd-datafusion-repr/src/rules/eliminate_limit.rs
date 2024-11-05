@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::plan_nodes::{
-    ConstantPred, ConstantType, DfNodeType, DfReprPredNode, LogicalEmptyRelation,
+    ConstantPred, ConstantType, DfNodeType, DfPredType, DfReprPredNode, LogicalEmptyRelation
 };
 
 use crate::properties::schema::SchemaPropertyBuilder;
@@ -27,8 +27,8 @@ fn apply_eliminate_limit(
     optimizer: &impl Optimizer<DfNodeType>,
     EliminateLimitRulePicks { child, skip, fetch }: EliminateLimitRulePicks,
 ) -> Vec<PlanNode<DfNodeType>> {
-    if let DfNodeType::Constant(ConstantType::UInt64) = skip.typ {
-        if let DfNodeType::Constant(ConstantType::UInt64) = fetch.typ {
+    if let DfPredType::Constant(ConstantType::UInt64) = skip.typ {
+        if let DfPredType::Constant(ConstantType::UInt64) = fetch.typ {
             let skip_val = ConstantPred::from_pred_node(skip.into())
                 .unwrap()
                 .value()

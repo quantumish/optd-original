@@ -4,7 +4,8 @@ use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{
-    ArcDfPlanNode, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode,
+    dispatch_pred_explain, ArcDfPlanNode, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode,
+    DfReprPredNode,
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -27,7 +28,7 @@ impl SortOrderPred {
         SortOrderPred(
             DfPredNode {
                 typ: DfPredType::SortOrder(order),
-                children: vec![child.into_rel_node()],
+                children: vec![child],
                 data: None,
             }
             .into(),
@@ -39,7 +40,7 @@ impl SortOrderPred {
     }
 
     pub fn order(&self) -> SortOrderType {
-        if let DfPredType::SortOrder(order) = self.0.typ() {
+        if let DfPredType::SortOrder(order) = self.0.typ {
             order
         } else {
             panic!("not a sort order expr")
@@ -63,7 +64,7 @@ impl DfReprPredNode for SortOrderPred {
         Pretty::simple_record(
             "SortOrder",
             vec![("order", self.order().to_string().into())],
-            vec![self.child().explain(meta_map)],
+            vec![dispatch_pred_explain(self.child(), meta_map)],
         )
     }
 }

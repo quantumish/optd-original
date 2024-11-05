@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::{ops::Deref, sync::Arc};
 
 use crate::plan_nodes::{
-    decode_empty_relation_schema, ArcDfPredNode, BinOpType, ConstantPred, DfNodeType, JoinType,
-    LogOpType,
+    decode_empty_relation_schema, ArcDfPredNode, BinOpType, ConstantPred, DfNodeType, DfPredType,
+    JoinType, LogOpType,
 };
 use anyhow::anyhow;
 use optd_core::property::PropertyBuilder;
@@ -277,10 +277,10 @@ impl ColumnRefPropertyBuilder {
     }
 
     fn derive_for_predicate(predicate: ArcDfPredNode) -> GroupColumnRefs {
-        let data = predicate.data();
-        let children = predicate.children();
-        match predicate {
-            DfNodeType::ColumnRef => {
+        let data = predicate.data;
+        let children = predicate.children;
+        match predicate.typ {
+            DfPredType::ColumnRef => {
                 let col_ref_idx = data.unwrap().as_u64();
                 // this is always safe since col_ref_idx was initially a usize in ColumnRefExpr::new()
                 let usize_col_ref_idx = col_ref_idx as usize;
@@ -289,12 +289,12 @@ impl ColumnRefPropertyBuilder {
                 }];
                 GroupColumnRefs::new(column_refs, None)
             }
-            DfNodeType::List => {
+            DfPredType::List => {
                 // Concatentate the children column refs.
                 let column_refs = Self::concat_children_col_refs(children);
                 GroupColumnRefs::new(column_refs, None)
             }
-            DfNodeType::LogOp(op_type) => {
+            DfPredType::LogOp(op_type) => {
                 let column_refs = vec![ColumnRef::Derived];
                 // For AND, combine the eq columns of each child expression.
                 let correlation = {
@@ -318,12 +318,12 @@ impl ColumnRefPropertyBuilder {
                 };
                 GroupColumnRefs::new(column_refs, correlation)
             }
-            DfNodeType::SortOrder(_) => children[0].clone(),
-            DfNodeType::Cast => {
+            DfPredType::SortOrder(_) => children[0].clone(),
+            DfPredType::Cast => {
                 // FIXME: we just assume the column value does not change.
                 children[0].clone()
             }
-            DfNodeType::BinOp(op_type) => {
+            DfPredType::BinOp(op_type) => {
                 let column_refs = vec![ColumnRef::Derived];
                 // For correlation, we only handle the column = column case, e.g. #0 = #1.
                 let correlation = match op_type {
@@ -350,13 +350,13 @@ impl ColumnRefPropertyBuilder {
                 };
                 GroupColumnRefs::new(column_refs, correlation)
             }
-            DfNodeType::Constant(_)
-            | DfNodeType::Func(_)
-            | DfNodeType::DataType(_)
-            | DfNodeType::Between
-            | DfNodeType::Like
-            | DfNodeType::InList
-            | DfNodeType::ExternColumnRef => GroupColumnRefs::new(vec![ColumnRef::Derived], None),
+            DfPredType::Constant(_)
+            | DfPredType::Func(_)
+            | DfPredType::DataType(_)
+            | DfPredType::Between
+            | DfPredType::Like
+            | DfPredType::InList
+            | DfPredType::ExternColumnRef => GroupColumnRefs::new(vec![ColumnRef::Derived], None),
             _ => unimplemented!("Unsupported predicate type {:?}", predicate),
         }
     }

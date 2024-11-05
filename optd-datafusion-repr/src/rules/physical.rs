@@ -64,12 +64,12 @@ impl<O: Optimizer<DfNodeType>> Rule<DfNodeType, O> for PhysicalConversionRule {
             typ,
             children,
             predicates,
-        } = input.remove(&0).unwrap().unwrap_plan_node();
+        } = Arc::unwrap_or_clone(input.remove(&0).unwrap().unwrap_plan_node());
 
         match typ {
             DfNodeType::Apply(x) => {
                 let node = PlanNode {
-                    typ: DfNodeType::PhysicalNestedLoopJoin(x.to_join_type()),
+                    typ: DfNodeType::PhysicalNestedLoopJoin(x.into()),
                     children,
                     predicates,
                 };

@@ -107,7 +107,7 @@ impl DatafusionOptimizer {
         Vec<Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>>>,
     ) {
         let mut transformation_rules: Vec<
-            Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType>>>,
+            Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>>,
         > = vec![];
         // transformation_rules.push(Arc::new(ProjectFilterTransposeRule::new()));
         // transformation_rules.push(Arc::new(FilterProjectTransposeRule::new()));
@@ -121,7 +121,7 @@ impl DatafusionOptimizer {
 
         transformation_rules.push(Arc::new(EliminateLimitRule::new())); // TODO: Remove, this is for testing
         let mut implementation_rules: Vec<
-            Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType>>>,
+            Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>>,
         > = PhysicalConversionRule::all_conversions();
 
         // implementation_rules.push(Arc::new(HashJoinRule::new()));

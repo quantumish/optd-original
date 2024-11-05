@@ -4,7 +4,8 @@ use optd_core::nodes::{PlanNode, PlanNodeMetaMap};
 use pretty_xmlish::Pretty;
 
 use crate::plan_nodes::{
-    ArcDfPlanNode, ArcDfPredNode, DfPredNode, DfPredType, DfReprPlanNode, DfReprPredNode,
+    dispatch_plan_explain, dispatch_pred_explain, ArcDfPlanNode, ArcDfPredNode, DfPredNode,
+    DfPredType, DfReprPlanNode, DfReprPredNode,
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -27,7 +28,7 @@ impl UnOpPred {
         UnOpPred(
             DfPredNode {
                 typ: DfPredType::UnOp(op_type),
-                children: vec![child.into_rel_node()],
+                children: vec![child],
                 data: None,
             }
             .into(),
@@ -39,7 +40,7 @@ impl UnOpPred {
     }
 
     pub fn op_type(&self) -> UnOpType {
-        if let DfPredType::UnOp(op_type) = self.clone().into_rel_node().typ {
+        if let DfPredType::UnOp(op_type) = self.clone().into_pred_node().typ {
             op_type
         } else {
             panic!("not a un op")
@@ -49,7 +50,7 @@ impl UnOpPred {
 
 impl DfReprPredNode for UnOpPred {
     fn into_pred_node(self) -> ArcDfPredNode {
-        self.0.into_rel_node()
+        self.0
     }
 
     fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self> {
@@ -63,7 +64,7 @@ impl DfReprPredNode for UnOpPred {
         Pretty::simple_record(
             self.op_type().to_string(),
             vec![],
-            vec![self.child().explain(meta_map)],
+            vec![dispatch_pred_explain(self.child(), meta_map)],
         )
     }
 }

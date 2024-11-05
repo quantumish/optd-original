@@ -5,7 +5,10 @@ use pretty_xmlish::Pretty;
 use crate::explain::Insertable;
 use optd_core::nodes::{PlanNode, PlanNodeMetaMap, PredNode, Value};
 
-use super::{ArcDfPlanNode, ConstantPred, DfNodeType, DfPlanNode, DfPredType, DfReprPlanNode};
+use super::{
+    get_meta, ArcDfPlanNode, ConstantPred, DfNodeType, DfPlanNode, DfPredType, DfReprPlanNode,
+    DfReprPredNode,
+};
 
 #[derive(Clone, Debug)]
 pub struct LogicalScan(pub ArcDfPlanNode);
@@ -36,7 +39,7 @@ impl LogicalScan {
             DfPlanNode {
                 typ: DfNodeType::Scan,
                 children: vec![],
-                predicates: vec![ConstantPred::string(table).into()],
+                predicates: vec![ConstantPred::string(table).into_pred_node()],
             }
             .into(),
         )
@@ -72,7 +75,7 @@ impl DfReprPlanNode for PhysicalScan {
     fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         let mut fields = vec![("table", self.table().to_string().into())];
         if let Some(meta_map) = meta_map {
-            fields = fields.with_meta(self.0.get_meta(meta_map));
+            fields = fields.with_meta(get_meta(&self.0, meta_map));
         }
         Pretty::childless_record("PhysicalScan", fields)
     }
@@ -80,7 +83,8 @@ impl DfReprPlanNode for PhysicalScan {
 
 impl PhysicalScan {
     pub fn table(&self) -> Arc<str> {
-        ConstantPred::from_plan_node(self.0.predicates.first().unwrap())
+        ConstantPred::from_pred_node(self.0.predicates.first().unwrap().clone())
+            .unwrap()
             .value()
             .as_str()
     }

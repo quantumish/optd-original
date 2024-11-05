@@ -1,3 +1,5 @@
+use optd_core::nodes::PlanNodeOrGroup;
+
 use super::macros::define_plan_node;
 use super::predicates::ListPred;
 
@@ -11,9 +13,9 @@ pub struct LogicalSort(pub ArcDfPlanNode);
 // 2. node type defines sort order per expression
 // 3. actual expr is stored as a child of this node
 define_plan_node!(
-    LogicalSort : DfPlanNode,
+    LogicalSort : DfNodeType,
     Sort, [
-        { 0, child: ArcDfPlanNode }
+        { 0, child: PlanNodeOrGroup<DfNodeType> }
     ], [
         { 0, exprs: ArcDfPredNode }
     ]
@@ -23,9 +25,9 @@ define_plan_node!(
 pub struct PhysicalSort(pub ArcDfPlanNode);
 
 define_plan_node!(
-    PhysicalSort : DfPlanNode,
+    PhysicalSort : DfNodeType,
     PhysicalSort, [
-        { 0, child: ArcDfPlanNode }
+        { 0, child: PlanNodeOrGroup<DfNodeType> }
     ], [
         { 0, exprs: ArcDfPredNode }
     ]

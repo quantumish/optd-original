@@ -14,16 +14,11 @@ mod sort;
 mod subquery;
 
 use std::fmt::Debug;
-use std::sync::Arc;
 
 use arrow_schema::DataType;
-use itertools::Itertools;
-use optd_core::{
-    cascades::{CascadesOptimizer, GroupId},
-    nodes::{
-        ArcPlanNode, ArcPredNode, NodeType, PlanNode, PlanNodeMeta, PlanNodeMetaMap, PredNode,
-    },
-    optimizer::Optimizer,
+use optd_core::nodes::{
+    ArcPlanNode, ArcPredNode, NodeType, PlanNode, PlanNodeMeta, PlanNodeMetaMap, PlanNodeOrGroup,
+    PredNode,
 };
 
 pub use agg::{LogicalAgg, PhysicalAgg};
@@ -45,13 +40,12 @@ pub use scan::{LogicalScan, PhysicalScan};
 pub use sort::{LogicalSort, PhysicalSort};
 pub use subquery::{DependentJoin, RawDependentJoin}; // Add missing import
 
-use crate::properties::schema::{Schema, SchemaPropertyBuilder};
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DfPredType {
     Constant(ConstantType),
     ColumnRef,
     ExternColumnRef,
+    List,
     UnOp(UnOpType),
     BinOp(BinOpType),
     LogOp(LogOpType),
@@ -101,11 +95,7 @@ pub enum DfNodeType {
 
 impl std::fmt::Display for DfNodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Self::Placeholder(group_id) = self {
-            write!(f, "{}", group_id)
-        } else {
-            write!(f, "{:?}", self)
-        }
+        write!(f, "{:?}", self)
     }
 }
 
@@ -128,6 +118,7 @@ impl NodeType for DfNodeType {
 }
 
 pub type DfPlanNode = PlanNode<DfNodeType>;
+pub type DfPlanNodeOrGroup = PlanNodeOrGroup<DfNodeType>;
 pub type ArcDfPlanNode = ArcPlanNode<DfNodeType>;
 
 pub trait DfReprPlanNode: 'static + Clone {
@@ -147,6 +138,128 @@ pub trait DfReprPlanNode: 'static + Clone {
         let mut out = String::new();
         config.unicode(&mut out, &self.explain(meta_map));
         out
+    }
+}
+
+fn get_meta<'a>(node: &ArcPlanNode<DfNodeType>, meta_map: &'a PlanNodeMetaMap) -> &'a PlanNodeMeta {
+    meta_map.get(&(node as *const _ as usize)).unwrap()
+}
+
+pub fn dispatch_plan_explain(
+    plan_node: ArcDfPlanNode,
+    meta_map: Option<&PlanNodeMetaMap>,
+) -> Pretty<'static> {
+    match plan_node.typ {
+        DfNodeType::Join(_) => LogicalJoin::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::RawDepJoin(_) => RawDependentJoin::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::DepJoin(_) => DependentJoin::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::Scan => LogicalScan::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::Filter => LogicalFilter::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::Apply(_) => LogicalApply::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::EmptyRelation => LogicalEmptyRelation::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::Limit => LogicalLimit::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::PhysicalFilter => PhysicalFilter::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::PhysicalScan => PhysicalScan::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::PhysicalNestedLoopJoin(_) => PhysicalNestedLoopJoin::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::Agg => LogicalAgg::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::Sort => LogicalSort::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::Projection => LogicalProjection::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::PhysicalProjection => PhysicalProjection::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::PhysicalAgg => PhysicalAgg::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::PhysicalSort => PhysicalSort::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::PhysicalHashJoin(_) => PhysicalHashJoin::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::PhysicalEmptyRelation => PhysicalEmptyRelation::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+        DfNodeType::PhysicalLimit => PhysicalLimit::from_plan_node(plan_node)
+            .unwrap()
+            .explain(meta_map),
+    }
+}
+
+pub fn dispatch_pred_explain(
+    pred_node: ArcDfPredNode,
+    meta_map: Option<&PlanNodeMetaMap>,
+) -> Pretty<'static> {
+    match pred_node.typ {
+        DfPredType::Constant(constant_type) => ConstantPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::ColumnRef => ColumnRefPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::ExternColumnRef => ExternColumnRefPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::List => ListPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::UnOp(un_op_type) => UnOpPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::BinOp(bin_op_type) => BinOpPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::LogOp(log_op_type) => LogOpPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::Func(func_type) => FuncPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::SortOrder(sort_order_type) => SortOrderPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::Between => BetweenPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::Cast => CastPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::Like => LikePred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::DataType(data_type) => DataTypePred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
+        DfPredType::InList => InListPred::from_pred_node(pred_node)
+            .unwrap()
+            .explain(meta_map),
     }
 }
 
