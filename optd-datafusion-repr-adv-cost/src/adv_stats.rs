@@ -71,7 +71,7 @@ impl<
 mod tests {
     use arrow_schema::DataType;
     use itertools::Itertools;
-    use optd_core::rel_node::Value;
+    use optd_core::nodes::Value;
     use optd_datafusion_repr::plan_nodes::{
         BinOpExpr, BinOpType, CastExpr, ColumnRefExpr, ConstantExpr, Expr, ExprList, InListExpr,
         LikeExpr, LogOpExpr, LogOpType, OptRelNode, OptRelNodeRef, UnOpExpr, UnOpType,

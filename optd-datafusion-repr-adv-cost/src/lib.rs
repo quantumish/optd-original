@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use optd_core::{
     cascades::{CascadesOptimizer, NaiveMemo, RelNodeContext},
     cost::{Cost, CostModel, Statistics},
-    rel_node::Value,
+    nodes::Value,
 };
 
 pub struct AdvancedCostModel {
