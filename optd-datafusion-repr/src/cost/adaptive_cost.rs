@@ -3,15 +3,17 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use crate::{
+    cost::DfCostModel,
+    plan_nodes::{ArcDfPredNode, DfNodeType, DfPredNode},
+};
 use optd_core::{
     cascades::{CascadesOptimizer, GroupId, NaiveMemo, RelNodeContext},
     cost::{Cost, CostModel, Statistics},
     nodes::Value,
 };
 
-use crate::plan_nodes::DfNodeType;
-
-use super::{base_cost::DEFAULT_TABLE_ROW_CNT, DfCostModel};
+use super::base_cost::DEFAULT_TABLE_ROW_CNT;
 
 pub type RuntimeAdaptionStorage = Arc<Mutex<RuntimeAdaptionStorageInner>>;
 
@@ -28,7 +30,7 @@ pub struct AdaptiveCostModel {
 }
 
 impl AdaptiveCostModel {
-    fn get_row_cnt(&self, _: &Option<Value>, context: &Option<RelNodeContext>) -> f64 {
+    fn get_row_cnt(&self, context: &Option<RelNodeContext>) -> f64 {
         let guard = self.runtime_row_cnt.lock().unwrap();
         if let Some((runtime_row_cnt, iter)) =
             guard.history.get(&context.as_ref().unwrap().group_id)
@@ -65,20 +67,20 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for AdaptiveCostModel {
     fn compute_operation_cost(
         &self,
         node: &DfNodeType,
-        data: &Option<Value>,
         children: &[Option<&Statistics>],
+        predicates: &[ArcDfPredNode],
         children_cost: &[Cost],
         context: Option<RelNodeContext>,
         optimizer: Option<&CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>,
     ) -> Cost {
         if let DfNodeType::PhysicalScan = node {
-            let row_cnt = self.get_row_cnt(data, &context);
+            let row_cnt = self.get_row_cnt(&context);
             return DfCostModel::cost(0.0, row_cnt);
         }
         self.base_model.compute_operation_cost(
             node,
-            data,
             children,
+            predicates,
             children_cost,
             context,
             optimizer,
@@ -88,17 +90,17 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for AdaptiveCostModel {
     fn derive_statistics(
         &self,
         node: &DfNodeType,
-        data: &Option<Value>,
         children: &[&Statistics],
+        predicates: &[ArcDfPredNode],
         context: Option<RelNodeContext>,
         optimizer: Option<&CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>,
     ) -> Statistics {
         if let DfNodeType::PhysicalScan = node {
-            let row_cnt = self.get_row_cnt(data, &context);
+            let row_cnt = self.get_row_cnt(&context);
             return DfCostModel::stat(row_cnt);
         }
         self.base_model
-            .derive_statistics(node, data, children, context, optimizer)
+            .derive_statistics(node, children, predicates, context, optimizer)
     }
 }
 

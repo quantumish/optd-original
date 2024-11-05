@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::plan_nodes::{ArcDfPredNode, ConstantPred, DfNodeType};
+use crate::plan_nodes::{ArcDfPredNode, ConstantPred, DfNodeType, DfPredType, DfReprPredNode};
 use itertools::Itertools;
 use optd_core::{
     cascades::{CascadesOptimizer, NaiveMemo, RelNodeContext},
@@ -45,7 +45,7 @@ impl DfCostModel {
 
     fn get_row_cnt(&self, table_name: &str) -> f64 {
         self.table_stat
-            .get(table_name.as_ref())
+            .get::<str>(table_name)
             .copied()
             .unwrap_or(DEFAULT_TABLE_ROW_CNT) as f64
     }
@@ -76,8 +76,8 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
     fn derive_statistics(
         &self,
         node: &DfNodeType,
-        predicates: &[ArcPredNode<DfNodeType>],
         children: &[&Statistics],
+        predicates: &[ArcDfPredNode],
         _context: Option<RelNodeContext>,
         _optimizer: Option<&CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>,
     ) -> Statistics {
@@ -85,8 +85,9 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
             DfNodeType::PhysicalScan => {
                 let table_name = ConstantPred::from_pred_node(predicates[0])
                     .unwrap()
+                    .value()
                     .as_str();
-                let row_cnt = self.get_row_cnt(table_name);
+                let row_cnt = self.get_row_cnt(&table_name);
                 Self::stat(row_cnt)
             }
             DfNodeType::PhysicalLimit => {
@@ -115,8 +116,6 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
                 let row_cnt = Self::row_cnt(children[0]);
                 Self::stat(row_cnt)
             }
-            DfNodeType::List => Self::stat(1.0),
-            _ if node.is_expression() => Self::stat(1.0),
             x => unimplemented!("cannot derive statistics for {}", x),
         }
     }
@@ -138,8 +137,9 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
             DfNodeType::PhysicalScan => {
                 let table_name = ConstantPred::from_pred_node(predicates[0])
                     .unwrap()
+                    .value()
                     .as_str();
-                let row_cnt = self.get_row_cnt(table_name);
+                let row_cnt = self.get_row_cnt(&table_name);
                 Self::cost(0.0, row_cnt)
             }
             DfNodeType::PhysicalLimit => {
@@ -149,18 +149,18 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
             DfNodeType::PhysicalEmptyRelation => Self::cost(0.01, 0.0),
             DfNodeType::PhysicalFilter => {
                 let row_cnt = row_cnts[0];
-                let (compute_cost, _) = Self::cost_tuple(&children_cost[1]);
+                let (compute_cost, _) = Self::cost_tuple(&derive_pred_cost(&predicates[0]));
                 Self::cost(row_cnt * compute_cost, 0.0)
             }
             DfNodeType::PhysicalNestedLoopJoin(_) => {
                 let row_cnt_1 = row_cnts[0];
                 let row_cnt_2 = row_cnts[1];
-                let (compute_cost, _) = Self::cost_tuple(&children_cost[2]);
+                let (compute_cost, _) = Self::cost_tuple(&derive_pred_cost(&predicates[0]));
                 Self::cost(row_cnt_1 * row_cnt_2 * compute_cost + row_cnt_1, 0.0)
             }
             DfNodeType::PhysicalProjection => {
                 let row_cnt = row_cnts[0];
-                let (compute_cost, _) = Self::cost_tuple(&children_cost[1]);
+                let (compute_cost, _) = Self::cost_tuple(&derive_pred_cost(&predicates[0]));
                 Self::cost(row_cnt * compute_cost, 0.0)
             }
             DfNodeType::PhysicalHashJoin(_) => {
@@ -174,30 +174,9 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
             }
             DfNodeType::PhysicalAgg => {
                 let row_cnt = row_cnts[0];
-                let (compute_cost_1, _) = Self::cost_tuple(&children_cost[1]);
-                let (compute_cost_2, _) = Self::cost_tuple(&children_cost[2]);
+                let (compute_cost_1, _) = Self::cost_tuple(&derive_pred_cost(&predicates[0]));
+                let (compute_cost_2, _) = Self::cost_tuple(&derive_pred_cost(&predicates[1]));
                 Self::cost(row_cnt * (compute_cost_1 + compute_cost_2), 0.0)
-            }
-            // List and expressions are computed in the same way -- but list has much fewer cost
-            DfNodeType::List => {
-                let compute_cost = children_cost
-                    .iter()
-                    .map(|child| {
-                        let (compute_cost, _) = Self::cost_tuple(child);
-                        compute_cost
-                    })
-                    .sum::<f64>();
-                Self::cost(compute_cost + 0.01, 0.0)
-            }
-            _ if node.is_expression() => {
-                let compute_cost = children_cost
-                    .iter()
-                    .map(|child| {
-                        let (compute_cost, _) = Self::cost_tuple(child);
-                        compute_cost
-                    })
-                    .sum::<f64>();
-                Self::cost(compute_cost + 1.0, 0.0)
             }
             x => unimplemented!("cannot compute cost for {}", x),
         }
@@ -206,6 +185,18 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
     fn weighted_cost(&self, cost: &Cost) -> f64 {
         Self::compute_cost(cost) + Self::io_cost(cost)
     }
+}
+
+fn derive_pred_cost(pred: &ArcDfPredNode) -> Cost {
+    let compute_cost = pred
+        .children
+        .iter()
+        .map(|child| {
+            let (compute_cost, _) = DfCostModel::cost_tuple(&derive_pred_cost(child));
+            compute_cost
+        })
+        .sum::<f64>();
+    DfCostModel::cost(compute_cost + 1.0, 0.0)
 }
 
 impl DfCostModel {
