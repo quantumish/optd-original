@@ -123,18 +123,6 @@ pub trait DfReprPlanNode: 'static + Clone {
     fn from_plan_node(plan_node: ArcDfPlanNode) -> Option<Self>;
 
     fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static>;
-
-    fn explain_to_string(&self, meta_map: Option<&PlanNodeMetaMap>) -> String {
-        let mut config = PrettyConfig {
-            need_boundaries: false,
-            reduced_spaces: false,
-            width: 300,
-            ..Default::default()
-        };
-        let mut out = String::new();
-        config.unicode(&mut out, &self.explain(meta_map));
-        out
-    }
 }
 
 fn get_meta<'a>(node: &ArcPlanNode<DfNodeType>, meta_map: &'a PlanNodeMetaMap) -> &'a PlanNodeMeta {
