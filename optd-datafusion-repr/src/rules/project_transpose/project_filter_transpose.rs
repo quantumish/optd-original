@@ -1,12 +1,17 @@
 use std::collections::HashMap;
 use std::vec;
 
+use optd_core::nodes::PlanNodeOrGroup;
 use optd_core::rules::{Rule, RuleMatcher};
 use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 
 use super::project_transpose_common::ProjectionMapping;
 use crate::plan_nodes::{
+<<<<<<< HEAD
     DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ListPred, LogicalFilter, LogicalProjection,
+=======
+    DfNodeType, DfReprPlanNode,  ListPred, LogicalFilter, LogicalProjection,
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
 };
 use crate::rules::macros::define_rule;
 
@@ -28,7 +33,11 @@ define_rule!(
 fn apply_projection_filter_transpose(
     _optimizer: &impl Optimizer<DfNodeType>,
     ProjectFilterTransposeRulePicks { child, cond, exprs }: ProjectFilterTransposeRulePicks,
+<<<<<<< HEAD
 ) -> Vec<PlanNode<DfNodeType>> {
+=======
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     // get columns out of cond
     let exprs = ListPred::from_rel_node(exprs.into()).unwrap();
     let exprs_vec = exprs.clone().to_vec();
@@ -50,7 +59,11 @@ fn apply_projection_filter_transpose(
     };
 
     let child: DfReprPlanNode = DfReprPlanNode::from_group(child.into());
+<<<<<<< HEAD
     let new_filter_cond: Expr = mapping.rewrite_filter_cond(cond_as_expr.clone(), true);
+=======
+    let new_filter_cond = mapping.rewrite_filter_cond(cond_as_expr.clone(), true);
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     let bottom_proj_node = LogicalProjection::new(child, bottom_proj_exprs);
     let new_filter_node = LogicalFilter::new(bottom_proj_node.into_plan_node(), new_filter_cond);
 
@@ -81,9 +94,14 @@ define_rule!(
 fn apply_filter_project_transpose(
     _optimizer: &impl Optimizer<DfNodeType>,
     FilterProjectTransposeRulePicks { child, exprs, cond }: FilterProjectTransposeRulePicks,
+<<<<<<< HEAD
 ) -> Vec<PlanNode<DfNodeType>> {
     let child = DfReprPlanNode::from_group(child.into());
     let cond_as_expr = Expr::from_rel_node(cond.into()).unwrap();
+=======
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
+    let child = DfReprPlanNode::from_group(child.into());
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     let exprs = ListPred::from_rel_node(exprs.into()).unwrap();
 
     let proj_col_map = ProjectionMapping::build(&exprs).unwrap();
@@ -91,7 +109,7 @@ fn apply_filter_project_transpose(
 
     let new_filter_node = LogicalFilter::new(child, rewritten_cond);
     let new_proj = LogicalProjection::new(new_filter_node.into_plan_node(), exprs);
-    vec![new_proj.into_rel_node().as_ref().clone()]
+    vec![new_proj.into_plan_node().into()]
 }
 
 #[cfg(test)]

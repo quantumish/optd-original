@@ -3,7 +3,9 @@ use optd_core::nodes::PlanNodeOrGroup;
 use super::macros::define_plan_node;
 use super::predicates::ListPred;
 
-use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode};
+use super::{
+    ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfPlanNodeOrGroup, DfReprPlanNode,
+};
 
 #[derive(Clone, Debug)]
 pub struct LogicalSort(pub ArcDfPlanNode);
@@ -15,7 +17,7 @@ pub struct LogicalSort(pub ArcDfPlanNode);
 define_plan_node!(
     LogicalSort : DfNodeType,
     Sort, [
-        { 0, child: PlanNodeOrGroup<DfNodeType> }
+        { 0, child: DfPlanNodeOrGroup }
     ], [
         { 0, exprs: ArcDfPredNode }
     ]
@@ -27,7 +29,7 @@ pub struct PhysicalSort(pub ArcDfPlanNode);
 define_plan_node!(
     PhysicalSort : DfNodeType,
     PhysicalSort, [
-        { 0, child: PlanNodeOrGroup<DfNodeType> }
+        { 0, child: DfPlanNodeOrGroup }
     ], [
         { 0, exprs: ArcDfPredNode }
     ]

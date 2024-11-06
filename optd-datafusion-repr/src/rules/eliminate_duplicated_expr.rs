@@ -30,7 +30,7 @@ define_rule!(
 fn apply_eliminate_duplicated_sort_expr(
     _optimizer: &impl Optimizer<DfNodeType>,
     EliminateDuplicatedSortExprRulePicks { child, exprs }: EliminateDuplicatedSortExprRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     let sort_keys: Vec<Expr> = exprs
         .children
         .iter()
@@ -95,7 +95,7 @@ fn apply_eliminate_duplicated_agg_expr(
         exprs,
         groups,
     }: EliminateDuplicatedAggExprRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     let mut dedup_expr: Vec<Expr> = Vec::new();
     let mut dedup_set: HashSet<Arc<PlanNode<DfNodeType>>> = HashSet::new();
     groups.children.iter().for_each(|expr| {

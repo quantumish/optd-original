@@ -141,7 +141,7 @@ define_rule!(
 fn apply_filter_merge(
     _optimizer: &impl Optimizer<DfNodeType>,
     FilterMergeRulePicks { child, cond1, cond }: FilterMergeRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     let child = DfReprPlanNode::from_group(child.into());
     let curr_cond = Expr::from_rel_node(cond.into()).unwrap();
     let child_cond = Expr::from_rel_node(cond1.into()).unwrap();
@@ -171,7 +171,7 @@ fn apply_filter_cross_join_transpose(
         join_cond,
         cond,
     }: FilterCrossJoinTransposeRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     filter_join_transpose(
         optimizer,
         JoinType::Cross,
@@ -200,7 +200,7 @@ fn apply_filter_inner_join_transpose(
         join_cond,
         cond,
     }: FilterInnerJoinTransposeRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     filter_join_transpose(
         optimizer,
         JoinType::Inner,
@@ -224,7 +224,7 @@ fn filter_join_transpose(
     join_child_b: PlanNode<DfNodeType>,
     join_cond: PlanNode<DfNodeType>,
     filter_cond: PlanNode<DfNodeType>,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     let left_schema_size = optimizer
         .get_property::<SchemaPropertyBuilder>(join_child_a.clone().into(), 0)
         .len();
@@ -322,7 +322,7 @@ define_rule!(
 fn apply_filter_sort_transpose(
     _optimizer: &impl Optimizer<DfNodeType>,
     FilterSortTransposeRulePicks { child, exprs, cond }: FilterSortTransposeRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     let child = DfReprPlanNode::from_group(child.into());
     let exprs = ListPred::from_rel_node(exprs.into()).unwrap();
 
@@ -350,7 +350,7 @@ fn apply_filter_agg_transpose(
         groups,
         cond,
     }: FilterAggTransposeRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     let exprs = ListPred::from_rel_node(exprs.into()).unwrap();
     let groups = ListPred::from_rel_node(groups.into()).unwrap();
     let child = DfReprPlanNode::from_group(child.into());

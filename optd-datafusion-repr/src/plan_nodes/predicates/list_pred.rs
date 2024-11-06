@@ -36,7 +36,7 @@ impl ListPred {
     }
 
     pub fn to_vec(&self) -> Vec<ArcDfPredNode> {
-        self.0.children
+        self.0.children.clone()
     }
 }
 

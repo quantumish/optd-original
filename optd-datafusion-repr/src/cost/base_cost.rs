@@ -83,7 +83,7 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
     ) -> Statistics {
         match node {
             DfNodeType::PhysicalScan => {
-                let table_name = ConstantPred::from_pred_node(predicates[0])
+                let table_name = ConstantPred::from_pred_node(predicates[0].clone())
                     .unwrap()
                     .value()
                     .as_str();
@@ -135,7 +135,7 @@ impl CostModel<DfNodeType, NaiveMemo<DfNodeType>> for DfCostModel {
             .collect_vec();
         match node {
             DfNodeType::PhysicalScan => {
-                let table_name = ConstantPred::from_pred_node(predicates[0])
+                let table_name = ConstantPred::from_pred_node(predicates[0].clone())
                     .unwrap()
                     .value()
                     .as_str();

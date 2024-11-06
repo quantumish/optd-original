@@ -29,7 +29,7 @@ use properties::{
 // };
 
 pub use optd_core::nodes::Value;
-use rules::{EliminateLimitRule, PhysicalConversionRule};
+// use rules::{EliminateLimitRule, PhysicalConversionRule};
 
 pub use memo_ext::{LogicalJoinOrder, MemoExt};
 
@@ -119,10 +119,11 @@ impl DatafusionOptimizer {
         // transformation_rules.push(Arc::new(JoinCommuteRule::new()));
         // transformation_rules.push(Arc::new(ProjectionPullUpJoin::new()));
 
-        transformation_rules.push(Arc::new(EliminateLimitRule::new())); // TODO: Remove, this is for testing
+        // transformation_rules.push(Arc::new(EliminateLimitRule::new())); // TODO: Remove, this is for testing
         let mut implementation_rules: Vec<
             Arc<dyn Rule<DfNodeType, CascadesOptimizer<DfNodeType, NaiveMemo<DfNodeType>>>>,
-        > = PhysicalConversionRule::all_conversions();
+        > = vec![];
+        // implementation_rules.extend_from_slice(PhysicalConversionRule::all_conversions());
 
         // implementation_rules.push(Arc::new(HashJoinRule::new()));
 

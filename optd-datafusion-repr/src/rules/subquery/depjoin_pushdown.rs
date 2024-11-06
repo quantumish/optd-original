@@ -1,3 +1,4 @@
+use optd_core::nodes::PlanNodeOrGroup;
 // TODO: No push past join
 // TODO: Sideways information passing??
 use optd_core::rules::{Rule, RuleMatcher};
@@ -5,9 +6,13 @@ use optd_core::{nodes::PlanNode, optimizer::Optimizer};
 use std::collections::HashMap;
 
 use crate::plan_nodes::{
+<<<<<<< HEAD
     BinOpPred, BinOpType, ColumnRefPred, ConstantPred, DependentJoin, DfNodeType, DfReprPlanNode,
     DfReprPlanNode, Expr, ExternColumnRefExpr, JoinType, ListPred, LogOpPred, LogOpType,
     LogicalAgg, LogicalFilter, LogicalJoin, LogicalProjection,
+=======
+    ArcDfPlanNode, ArcDfPredNode, BinOpPred, BinOpType, ColumnRefPred, ConstantPred, DependentJoin, DfNodeType, Expr, ExternColumnRefExpr, JoinType, ListPred, LogOpPred, LogOpType, LogicalAgg, LogicalFilter, LogicalJoin, LogicalProjection
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
 };
 use crate::properties::schema::SchemaPropertyBuilder;
 use crate::rules::macros::define_rule;
@@ -80,7 +85,11 @@ fn apply_dep_initial_distinct(
         cond,
         extern_cols,
     }: DepInitialDistinctPicks,
+<<<<<<< HEAD
 ) -> Vec<PlanNode<DfNodeType>> {
+=======
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     assert!(cond == *ConstantPred::bool(true).into_rel_node());
 
     let left_schema_size = optimizer
@@ -206,7 +215,11 @@ fn apply_dep_join_past_proj(
         cond,
         extern_cols,
     }: DepJoinPastProjPicks,
+<<<<<<< HEAD
 ) -> Vec<PlanNode<DfNodeType>> {
+=======
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     // TODO: can we have external columns in projection node? I don't think so?
     // Cross join should always have true cond
     assert!(cond == *ConstantPred::bool(true).into_rel_node());
@@ -267,7 +280,11 @@ fn apply_dep_join_past_filter(
         cond,
         extern_cols,
     }: DepJoinPastFilterPicks,
+<<<<<<< HEAD
 ) -> Vec<PlanNode<DfNodeType>> {
+=======
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     // Cross join should always have true cond
     assert!(cond == *ConstantPred::bool(true).into_rel_node());
     let left_schema_len = optimizer
@@ -351,7 +368,11 @@ fn apply_dep_join_past_agg(
         cond,
         extern_cols,
     }: DepJoinPastAggPicks,
+<<<<<<< HEAD
 ) -> Vec<PlanNode<DfNodeType>> {
+=======
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     // Cross join should always have true cond
     assert!(cond == *ConstantPred::bool(true).into_rel_node());
 
@@ -436,30 +457,49 @@ fn apply_dep_join_eliminate_at_scan(
         cond,
         extern_cols: _,
     }: DepJoinEliminatePicks,
+<<<<<<< HEAD
 ) -> Vec<PlanNode<DfNodeType>> {
+=======
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     // Cross join should always have true cond
     assert!(cond == *ConstantPred::bool(true).into_rel_node());
 
-    fn inspect(node: &RelNode<OptRelNodeTyp>) -> bool {
-        if matches!(node.typ, OptRelNodeTyp::Placeholder(_)) {
-            unimplemented!("this is a heuristics rule");
-        }
-        if node.typ == OptRelNodeTyp::ExternColumnRef {
+    fn inspect_pred(node: &ArcDfPredNode) -> bool {
+        if node.typ == DfNodeType::ExternColumnRef {
             return false;
         }
         for child in &node.children {
-            if !inspect(child) {
+            if !inspect_pred(child) {
                 return false;
             }
         }
         true
     }
 
-    if inspect(&right) {
+
+    fn inspect_plan_node(node: &ArcDfPlanNode) -> bool {
+        if node.typ == DfNodeType::ExternColumnRef {
+            return false;
+        }
+        for child in &node.children {
+            if !inspect_plan_node(child) {
+                return false;
+            }
+        }
+        for pred in &node.predicates {
+            if !inspect_pred(pred) {
+                return false;
+            }
+        }
+        true
+    }
+
+    if inspect_plan_node(&right) {
         let new_join = LogicalJoin::new(
             PlanNode::from_group(left.into()),
             PlanNode::from_group(right.into()),
-            ConstantExpr::bool(true).into_expr(),
+            ConstantPred::bool(true).into_expr(),
             JoinType::Inner,
         );
         vec![new_join.into_rel_node().as_ref().clone()]

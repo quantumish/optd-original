@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 use crate::plan_nodes::{ColumnRefPred, Expr, ListPred, DfReprPlanNode};
+=======
+use crate::plan_nodes::{ColumnRefPred, DfReprPlanNode,  ListPred};
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
 
 /// This struct holds the mapping from original columns to projected columns.
 ///

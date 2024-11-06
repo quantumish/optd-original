@@ -7,7 +7,10 @@ use std::sync::Arc;
 
 use crate::explain::Insertable;
 
-use super::{ArcDfPlanNode, ArcDfPredNode, ConstantPred, DfNodeType, DfPlanNode, DfReprPlanNode};
+use super::{
+    get_meta, ArcDfPlanNode, ArcDfPredNode, ConstantPred, DfNodeType, DfPlanNode, DfReprPlanNode,
+    DfReprPredNode,
+};
 
 use crate::properties::schema::Schema;
 
@@ -42,8 +45,8 @@ impl LogicalEmptyRelation {
                 typ: DfNodeType::EmptyRelation,
                 children: vec![],
                 predicates: vec![
-                    ConstantPred::bool(produce_one_row).into(),
-                    ConstantPred::serialized(serialized_data).into(),
+                    ConstantPred::bool(produce_one_row).into_pred_node(),
+                    ConstantPred::serialized(serialized_data).into_pred_node(),
                 ],
             }
             .into(),
@@ -51,7 +54,10 @@ impl LogicalEmptyRelation {
     }
 
     pub fn produce_one_row(&self) -> bool {
-        ConstantPred::from(self.0.predicates[0]).value().as_bool()
+        ConstantPred::from_pred_node(self.0.predicates[0].clone())
+            .unwrap()
+            .value()
+            .as_bool()
     }
 
     pub fn empty_relation_schema(&self) -> Schema {
@@ -77,7 +83,7 @@ impl DfReprPlanNode for PhysicalEmptyRelation {
     fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static> {
         let mut fields = vec![("produce_one_row", self.produce_one_row().to_string().into())];
         if let Some(meta_map) = meta_map {
-            fields = fields.with_meta(self.0.get_meta(meta_map));
+            fields = fields.with_meta(get_meta(&self.0, meta_map));
         }
         Pretty::childless_record("PhysicalEmptyRelation", fields)
     }
@@ -85,7 +91,10 @@ impl DfReprPlanNode for PhysicalEmptyRelation {
 
 impl PhysicalEmptyRelation {
     pub fn produce_one_row(&self) -> bool {
-        ConstantPred::from(self.0.predicates[0]).value().as_bool()
+        ConstantPred::from_pred_node(self.0.predicates[0].clone())
+            .unwrap()
+            .value()
+            .as_bool()
     }
 
     pub fn empty_relation_schema(&self) -> Schema {
@@ -94,6 +103,9 @@ impl PhysicalEmptyRelation {
 }
 
 pub fn decode_empty_relation_schema(pred: &ArcDfPredNode) -> Schema {
-    let serialized_data = ConstantPred::from(pred).value().as_slice();
+    let serialized_data = ConstantPred::from_pred_node(pred.clone())
+        .unwrap()
+        .value()
+        .as_slice();
     bincode::deserialize(serialized_data.as_ref()).unwrap()
 }

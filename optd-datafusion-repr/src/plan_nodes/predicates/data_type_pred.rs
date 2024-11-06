@@ -20,8 +20,8 @@ impl DataTypePred {
     }
 
     pub fn data_type(&self) -> DataType {
-        if let DfPredType::DataType(data_type) = self.0.typ {
-            data_type
+        if let DfPredType::DataType(ref data_type) = self.0.typ {
+            data_type.clone()
         } else {
             panic!("not a data type")
         }

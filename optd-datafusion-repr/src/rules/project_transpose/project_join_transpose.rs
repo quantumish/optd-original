@@ -11,7 +11,11 @@ use optd_core::optimizer::Optimizer;
 
 use super::project_transpose_common::ProjectionMapping;
 use crate::plan_nodes::{
+<<<<<<< HEAD
     ColumnRefPred, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, ListPred, JoinType,
+=======
+    ColumnRefPred, DfNodeType, DfReprPlanNode, DfReprPlanNode, Expr, JoinType, ListPred,
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     LogicalJoin, LogicalProjection,
 };
 use crate::properties::schema::SchemaPropertyBuilder;
@@ -36,7 +40,11 @@ fn apply_projection_pull_up_join(
         list,
         cond,
     }: ProjectionPullUpJoinPicks,
+<<<<<<< HEAD
 ) -> Vec<PlanNode<DfNodeType>> {
+=======
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     let left = Arc::new(left.clone());
     let right = Arc::new(right.clone());
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use optd_core::nodes::PlanNode;
+use optd_core::nodes::{PlanNode, PlanNodeOrGroup};
 use optd_core::optimizer::Optimizer;
 use optd_core::rules::{Rule, RuleMatcher};
 
@@ -24,7 +24,7 @@ define_rule!(
 fn apply_join_commute(
     optimizer: &impl Optimizer<DfNodeType>,
     JoinCommuteRulePicks { left, right, cond }: JoinCommuteRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     let left_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(left.clone()), 0);
     let right_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(right.clone()), 0);
     let cond = Expr::from_rel_node(cond.into())
@@ -66,7 +66,7 @@ define_rule!(
 fn apply_eliminate_join(
     optimizer: &impl Optimizer<DfNodeType>,
     EliminateJoinRulePicks { left, right, cond }: EliminateJoinRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     if let DfNodeType::Constant(const_type) = cond.typ {
         if const_type == ConstantType::Bool {
             if let Some(data) = cond.data {
@@ -122,7 +122,7 @@ fn apply_join_assoc(
         cond1,
         cond2,
     }: JoinAssocRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     let a_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(a.clone()), 0);
     let _b_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(b.clone()), 0);
     let _c_schema = optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(c.clone()), 0);
@@ -146,12 +146,10 @@ fn apply_join_assoc(
             PlanNode {
                 typ: DfNodeType::Join(JoinType::Inner),
                 children: vec![b.into(), c.into(), cond2.into_rel_node()],
-                data: None,
             }
             .into(),
             cond1.into(),
         ],
-        data: None,
     };
     vec![node]
 }
@@ -165,7 +163,7 @@ define_impl_rule!(
 fn apply_hash_join(
     optimizer: &impl Optimizer<DfNodeType>,
     HashJoinRulePicks { left, right, cond }: HashJoinRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     match cond.typ {
         DfNodeType::BinOp(BinOpType::Eq) => {
             let left_schema =
@@ -173,7 +171,7 @@ fn apply_hash_join(
             // let right_schema =
             //     optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(right.clone()), 0);
             let op = BinOpPred::from_rel_node(Arc::new(cond.clone())).unwrap();
-            let left_expr: Expr = op.left_child();
+            let left_expr = op.left_child();
             let right_expr = op.right_child();
             let Some(mut left_expr) = ColumnRefPred::from_rel_node(left_expr.into_rel_node())
             else {
@@ -276,7 +274,7 @@ fn apply_hash_join(
         // let right_schema =
         //     optimizer.get_property::<SchemaPropertyBuilder>(Arc::new(right.clone()), 0);
         let op = BinOpPred::from_rel_node(Arc::new(cond.clone())).unwrap();
-        let left_expr: Expr = op.left_child();
+        let left_expr = op.left_child();
         let right_expr = op.right_child();
         let Some(mut left_expr) = ColumnRefPred::from_rel_node(left_expr.into_rel_node()) else {
             return vec![];

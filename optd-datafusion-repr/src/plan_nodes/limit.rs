@@ -1,5 +1,6 @@
 use super::{
-    macros::define_plan_node, ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode,
+    macros::define_plan_node, ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode,
+    DfPlanNodeOrGroup, DfReprPlanNode,
 };
 
 use crate::plan_nodes::{dispatch_plan_explain, dispatch_pred_explain, get_meta};
@@ -10,7 +11,7 @@ pub struct LogicalLimit(pub ArcDfPlanNode);
 define_plan_node!(
     LogicalLimit : DfPlanNode,
     Limit, [
-        { 0, child: ArcDfPlanNode }
+        { 0, child: DfPlanNodeOrGroup }
     ], [
         { 0, skip: ArcDfPredNode },
         { 1, fetch: ArcDfPredNode }
@@ -23,7 +24,7 @@ pub struct PhysicalLimit(pub ArcDfPlanNode);
 define_plan_node!(
     PhysicalLimit : DfPlanNode,
     PhysicalLimit, [
-        { 0, child: ArcDfPlanNode }
+        { 0, child: DfPlanNodeOrGroup }
     ], [
         { 0, skip: ArcDfPredNode },
         { 1, fetch: ArcDfPredNode }

@@ -99,7 +99,7 @@ pub(crate) fn simplify_log_expr(log_expr: ArcDfPlanNode, changed: &mut bool) -> 
 fn apply_simplify_filter(
     _optimizer: &impl Optimizer<DfNodeType>,
     SimplifyFilterRulePicks { child, cond }: SimplifyFilterRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     match cond.typ {
         DfNodeType::LogOp(_) => {
             let mut changed = false;
@@ -130,7 +130,7 @@ define_rule!(
 fn apply_simplify_join_cond(
     _optimizer: &impl Optimizer<DfNodeType>,
     SimplifyJoinCondRulePicks { left, right, cond }: SimplifyJoinCondRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     match cond.typ {
         DfNodeType::LogOp(_) => {
             let mut changed = false;
@@ -164,7 +164,7 @@ define_rule!(
 fn apply_eliminate_filter(
     optimizer: &impl Optimizer<DfNodeType>,
     EliminateFilterRulePicks { child, cond }: EliminateFilterRulePicks,
-) -> Vec<PlanNode<DfNodeType>> {
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
     if let DfNodeType::Constant(ConstantType::Bool) = cond.typ {
         if let Some(data) = cond.data {
             if data.as_bool() {

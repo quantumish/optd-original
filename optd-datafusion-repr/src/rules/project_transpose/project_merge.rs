@@ -23,7 +23,11 @@ fn apply_projection_merge(
         exprs1,
         exprs2,
     }: ProjectMergeRulePicks,
+<<<<<<< HEAD
 ) -> Vec<PlanNode<DfNodeType>> {
+=======
+) -> Vec<PlanNodeOrGroup<DfNodeType>> {
+>>>>>>> 98368fb (refactor(df-repr): everything compiles except rules)
     let child = DfReprPlanNode::from_group(child.into());
     let exprs1 = ListPred::from_rel_node(exprs1.into()).unwrap();
     let exprs2 = ListPred::from_rel_node(exprs2.into()).unwrap();
@@ -49,9 +53,9 @@ define_rule!(
 );
 
 fn apply_eliminate_project(
-    optimizer: &impl Optimizer<OptRelNodeTyp>,
+    optimizer: &impl Optimizer<DfNodeType>,
     EliminateProjectRulePicks { child, expr }: EliminateProjectRulePicks,
-) -> Vec<RelNode<OptRelNodeTyp>> {
+) -> Vec<RelNode<DfNodeType>> {
     let exprs = ExprList::from_rel_node(expr.into()).unwrap();
     let child_columns = optimizer
         .get_property::<SchemaPropertyBuilder>(child.clone().into(), 0)
@@ -61,7 +65,7 @@ fn apply_eliminate_project(
     }
     for i in 0..exprs.len() {
         let child_expr = exprs.child(i);
-        if child_expr.typ() == OptRelNodeTyp::ColumnRef {
+        if child_expr.typ() == DfNodeType::ColumnRef {
             let child_expr = ColumnRefExpr::from_rel_node(child_expr.into_rel_node()).unwrap();
             if child_expr.index() != i {
                 return Vec::new();

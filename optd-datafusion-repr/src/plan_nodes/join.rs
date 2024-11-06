@@ -2,7 +2,9 @@ use core::fmt;
 use std::fmt::Display;
 
 use super::macros::define_plan_node;
-use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode};
+use super::{
+    ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfPlanNodeOrGroup, DfReprPlanNode,
+};
 
 use crate::plan_nodes::{dispatch_plan_explain, dispatch_pred_explain, get_meta};
 
@@ -31,8 +33,8 @@ pub struct LogicalJoin(pub ArcDfPlanNode);
 define_plan_node!(
     LogicalJoin : DfPlanNode,
     Join, [
-        { 0, left: ArcDfPlanNode },
-        { 1, right: ArcDfPlanNode }
+        { 0, left: DfPlanNodeOrGroup },
+        { 1, right: DfPlanNodeOrGroup }
     ], [
         { 0, cond: ArcDfPredNode }
     ], { join_type: JoinType }
@@ -44,8 +46,8 @@ pub struct PhysicalNestedLoopJoin(pub ArcDfPlanNode);
 define_plan_node!(
     PhysicalNestedLoopJoin : DfPlanNode,
     PhysicalNestedLoopJoin, [
-        { 0, left: ArcDfPlanNode },
-        { 1, right: ArcDfPlanNode }
+        { 0, left: DfPlanNodeOrGroup },
+        { 1, right: DfPlanNodeOrGroup }
     ], [
         { 0, cond: ArcDfPredNode }
     ], { join_type: JoinType }
@@ -57,8 +59,8 @@ pub struct PhysicalHashJoin(pub ArcDfPlanNode);
 define_plan_node!(
     PhysicalHashJoin : DfPlanNode,
     PhysicalHashJoin, [
-        { 0, left: ArcDfPlanNode },
-        { 1, right: ArcDfPlanNode }
+        { 0, left: DfPlanNodeOrGroup },
+        { 1, right: DfPlanNodeOrGroup }
     ], [
         { 0, left_keys: ArcDfPredNode },
         { 1, right_keys: ArcDfPredNode }

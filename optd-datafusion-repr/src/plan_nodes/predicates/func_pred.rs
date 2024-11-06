@@ -58,7 +58,7 @@ impl FuncPred {
 
     /// Gets the function id.
     pub fn func(&self) -> FuncType {
-        if let DfPredType::Func(func_id) = self.0.typ {
+        if let DfPredType::Func(ref func_id) = self.0.typ {
             func_id.clone()
         } else {
             panic!("not a function")

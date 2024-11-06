@@ -13,7 +13,7 @@ macro_rules! define_plan_node {
 
             fn from_plan_node(plan_node: ArcDfPlanNode) -> Option<Self> {
                 #[allow(unused_variables)]
-                if let ArcDfPlanNode :: $variant $( ($inner_name) )? = plan_node.typ {
+                if let DfNodeType :: $variant $( ($inner_name) )? = plan_node.typ {
                     Some(Self(plan_node))
                 } else {
                     None
@@ -21,21 +21,22 @@ macro_rules! define_plan_node {
             }
 
             fn explain(&self, meta_map: Option<&crate::PlanNodeMetaMap>) -> pretty_xmlish::Pretty<'static> {
+                use crate::plan_nodes::{dispatch_plan_explain, dispatch_pred_explain, get_meta};
                 use crate::explain::Insertable;
 
                 let mut fields = vec![
                     $( (stringify!($inner_name), self.$inner_name().to_string().into() ) , )?
-                    $( (stringify!($attr_name), self.$attr_name().explain(meta_map) ) ),*
+                    $( (stringify!($attr_name), dispatch_pred_explain(self.$attr_name(), meta_map) ) ),*
                 ];
                 if let Some(meta_map) = meta_map {
-                    fields = fields.with_meta(self.0.get_meta(meta_map));
+                    fields = fields.with_meta(get_meta(&self.0, meta_map));
                 };
 
                 pretty_xmlish::Pretty::simple_record(
                     stringify!($struct_name),
                     fields,
                     vec![
-                        $( self.$child_name().explain(meta_map) ),*
+                        $( dispatch_plan_explain(self.$child_name(), meta_map) ),*
                     ],
                 )
             }
@@ -52,10 +53,30 @@ macro_rules! define_plan_node {
                     DfPlanNode {
                         typ: DfNodeType::$variant $( ($inner_name) )?,
                         children: vec![
-                            $($child_name.into_rel_node(),)*
+                            $($child_name,)*
                         ],
                         predicates: vec![
-                            $($attr_name.into_rel_node()),*
+                            $($attr_name,)*
+                        ],
+                    }
+                    .into(),
+                )
+            }
+
+            pub fn new_unchecked(
+                $($child_name : impl Into<optd_core::nodes::PlanNodeOrGroup<DfNodeType>>,)*
+                $($attr_name : $attr_meta_typ),*
+                $(, $inner_name : $inner_typ)?
+            ) -> $struct_name {
+                #[allow(unused_mut, unused)]
+                $struct_name(
+                    DfPlanNode {
+                        typ: DfNodeType::$variant $( ($inner_name) )?,
+                        children: vec![
+                            $($child_name.into(),)*
+                        ],
+                        predicates: vec![
+                            $($attr_name),*
                         ],
                     }
                     .into(),
@@ -63,7 +84,7 @@ macro_rules! define_plan_node {
             }
 
             $(
-                pub fn $child_name(&self) -> $child_meta_typ {
+                pub fn $child_name(&self) -> optd_core::nodes::PlanNodeOrGroup<DfNodeType> {
                     self.0.child($child_id)
                 }
             )*
@@ -77,7 +98,7 @@ macro_rules! define_plan_node {
 
             $(
                 pub fn $inner_name(&self) -> JoinType {
-                    if let DfNodeType :: $variant ($inner_name) = self.0 .0.typ {
+                    if let DfNodeType :: $variant ($inner_name) = self.0 .typ {
                         return $inner_name;
                     } else {
                         unreachable!();

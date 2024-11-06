@@ -40,29 +40,8 @@ pub struct MemoPlanNode<T: NodeType> {
     pub predicates: Vec<PredId>,
 }
 
-impl<T: NodeType> std::fmt::Display for MemoPlanNode<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}", self.typ)?;
-        for child in &self.children {
-            write!(f, " {}", child)?;
-        }
-        for child in &self.predicates {
-            write!(f, " {}", child)?;
-        }
-        write!(f, ")")
-    }
-}
-
-/// Fully unmaterialized predicate node for fast hashing in memo table.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MemoPredNode<T: NodeType> {
-    pub typ: T::PredType,
-    pub children: Vec<PredId>,
-    pub data: Option<Value>,
-}
-
 impl<T: NodeType> MemoPlanNode<T> {
-    pub fn into_rel_node(self) -> PlanNode<T> {
+    pub fn into_plan_node_no_predicates(self) -> PlanNode<T> {
         PlanNode {
             typ: self.typ,
             children: self
@@ -70,16 +49,19 @@ impl<T: NodeType> MemoPlanNode<T> {
                 .into_iter()
                 .map(|x| PlanNodeOrGroup::Group(x))
                 .collect(),
-            predicates: vec![], // TODO: fill in the predicates
+            predicates: Vec::new(),
         }
     }
 }
 
-impl<T: NodeType> std::fmt::Display for MemoPredNode<T> {
+impl<T: NodeType> std::fmt::Display for MemoPlanNode<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}", self.typ)?;
         for child in &self.children {
             write!(f, " {}", child)?;
+        }
+        for pred in &self.predicates {
+            write!(f, " {}", pred)?;
         }
         write!(f, ")")
     }
@@ -249,9 +231,9 @@ pub struct NaiveMemo<T: NodeType> {
     groups: HashMap<GroupId, Group>,
     expr_id_to_expr_node: HashMap<ExprId, ArcMemoPlanNode<T>>,
 
-    // Predicate stuff (TODO: Improve this---this is a working prototype)
-    pred_node_to_pred_id: HashMap<MemoPredNode<T>, PredId>, // TODO: Pred groups not implemented yet
-    pred_id_to_pred_node: HashMap<PredId, MemoPredNode<T>>, // TODO: Pred groups not implemented yet
+    // Predicate stuff. We don't find logically equivalent predicates. Duplicate predicates
+    // will have different IDs.
+    pred_id_to_pred_node: HashMap<PredId, ArcPredNode<T>>,
 
     // Internal states.
     group_expr_counter: usize,
@@ -341,7 +323,7 @@ impl<T: NodeType> Memo<T> for NaiveMemo<T> {
 
     // todo: would be implemented differently with predicate groups
     fn try_get_predicate_binding(&self, pred_id: PredId) -> Option<ArcPredNode<T>> {
-        self.get_pred_from_pred_id(pred_id)
+        todo!()
     }
 }
 
@@ -352,7 +334,6 @@ impl<T: NodeType> NaiveMemo<T> {
             expr_id_to_expr_node: HashMap::new(),
             expr_node_to_expr_id: HashMap::new(),
             groups: HashMap::new(),
-            pred_node_to_pred_id: HashMap::new(),
             pred_id_to_pred_node: HashMap::new(),
             group_expr_counter: 0,
             merged_group_mapping: HashMap::new(),
@@ -373,6 +354,13 @@ impl<T: NodeType> NaiveMemo<T> {
         let id = self.group_expr_counter;
         self.group_expr_counter += 1;
         ExprId(id)
+    }
+
+    /// Get the next pred id. Group id and expr id shares the same counter, so as to make it easier to debug...
+    fn next_pred_id(&mut self) -> PredId {
+        let id = self.group_expr_counter;
+        self.group_expr_counter += 1;
+        PredId(id)
     }
 
     fn verify_integrity(&self) {
@@ -535,45 +523,6 @@ impl<T: NodeType> NaiveMemo<T> {
         Ok((group_id, expr_id))
     }
 
-    pub fn get_pred_from_pred_id(&self, pred_id: PredId) -> Option<ArcPredNode<T>> {
-        let Some(pred_node) = self.pred_id_to_pred_node.get(&pred_id) else {
-            return None;
-        };
-        // recursively materialize
-        let Some(children): Option<Vec<ArcPredNode<T>>> = pred_node
-            .children
-            .iter()
-            .map(|child| self.get_pred_from_pred_id(*child))
-            .collect()
-        else {
-            return None;
-        };
-        Some(Arc::new(PredNode {
-            typ: pred_node.typ.clone(),
-            children,
-            data: pred_node.data.clone(),
-        }))
-    }
-
-    /// This may also be inefficient for the same reason as get_expr_info.
-    /// TODO: Config test?
-    pub fn get_pred_expr_info(&self, pred_node: ArcPredNode<T>) -> PredId {
-        let children_pred_ids = pred_node
-            .children
-            .iter()
-            .map(|child| self.get_pred_expr_info(child.clone()))
-            .collect::<Vec<_>>();
-
-        let memo_node = MemoPredNode {
-            typ: pred_node.typ.clone(),
-            children: children_pred_ids,
-            data: pred_node.data.clone(),
-        };
-        let Some(&pred_id) = self.pred_node_to_pred_id.get(&memo_node) else {
-            unreachable!("not found {}", memo_node)
-        };
-        pred_id
-    }
     /// This is inefficient: usually the optimizer should have a MemoRef instead of passing the full rel node. Should
     /// be only used for debugging purpose.
     #[cfg(test)]
@@ -587,15 +536,10 @@ impl<T: NodeType> NaiveMemo<T> {
             })
             .collect::<Vec<_>>();
 
-        let pred_group_ids = plan_node
-            .predicates
-            .iter()
-            .map(|pred| self.get_pred_expr_info(pred.clone()))
-            .collect::<Vec<_>>();
         let memo_node = MemoPlanNode {
             typ: plan_node.typ.clone(),
             children: children_group_ids,
-            predicates: pred_group_ids,
+            predicates: Vec::new(), // TODO: fix
         };
         let Some(&expr_id) = self.expr_node_to_expr_id.get(&memo_node) else {
             unreachable!("not found {}", memo_node)
@@ -635,24 +579,13 @@ impl<T: NodeType> NaiveMemo<T> {
     }
 
     fn add_new_pred(&mut self, pred_node: ArcPredNode<T>) -> PredId {
-        let children_pred_ids = pred_node
-            .children
-            .iter()
-            .map(|child| self.get_pred_expr_info(pred_node.clone()))
-            .collect::<Vec<_>>();
-
-        let memo_node = MemoPredNode {
-            typ: pred_node.typ.clone(),
-            children: children_pred_ids,
-            data: pred_node.data.clone(),
-        };
-        if let Some(&pred_id) = self.pred_node_to_pred_id.get(&memo_node) {
-            return pred_id;
-        }
-        let pred_id = PredId(self.pred_node_to_pred_id.len());
-        self.pred_node_to_pred_id.insert(memo_node.clone(), pred_id);
-        self.pred_id_to_pred_node.insert(pred_id, memo_node);
+        let pred_id = self.next_pred_id();
+        self.pred_id_to_pred_node.insert(pred_id, pred_node);
         pred_id
+    }
+
+    fn get_pred(&self, pred_id: PredId) -> ArcPredNode<T> {
+        self.pred_id_to_pred_node[&pred_id].clone()
     }
 
     /// If group_id exists, it adds expr_id to the existing group

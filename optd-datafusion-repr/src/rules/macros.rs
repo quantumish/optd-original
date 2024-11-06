@@ -33,15 +33,11 @@ macro_rules! define_picks {
         // Initialize variables for predicates
         $( crate::rules::macros::define_picks!(@pred $predicates); )*
     };
-
-    // Handle each child
-    (@child $pick_one:ident ) => {
-        let $pick_one: PlanNodeOrGroup<DfNodeType>;
+    ( [ $pick_one:ident ] ) => {
+        let $pick_one : PlanNode<DfNodeType>;
     };
-
-    // Handle each predicate
-    (@pred $pred_one:ident ) => {
-        let $pred_one: ArcPredNode<DfNodeType>;
+    ( $pick_one:ident ) => {
+        let $pick_one : PlanNode<DfNodeType>;
     };
 }
 
@@ -66,6 +62,45 @@ macro_rules! define_picks_struct {
             // Generate fields for each predicate
             $( pub $predicates: ArcPredNode<DfNodeType>, )*
         }
+    );
+
+    ( @ $name:ident { ( $typ:expr $(, $children:tt )* ) } { $($rest:tt),* } -> ($($result:tt)*) ) => (
+        crate::rules::macros::define_picks_struct!(@@ $name { $($children),* $(, $rest)* } -> (
+            $($result)*
+        ));
+    );
+
+
+    ( @ $name:ident { [ $pick_one:ident ] } { $($rest:tt),* } -> ($($result:tt)*) ) => (
+        crate::rules::macros::define_picks_struct!(@@ $name { $($rest),* } -> (
+            $($result)*
+            pub $pick_one: PlanNode<DfNodeType>,
+        ));
+    );
+
+    ( @ $name:ident { $pick_one:ident } { $($rest:tt),* } -> ($($result:tt)*) ) => (
+        crate::rules::macros::define_picks_struct!(@@ $name { $($rest),* } -> (
+            $($result)*
+            pub $pick_one: PlanNode<DfNodeType>,
+        ));
+    );
+
+    ( @@ $name:ident { $item:tt $(, $rest:tt )* } -> ($($result:tt)*) ) => (
+        crate::rules::macros::define_picks_struct!(@ $name { $item } { $($rest),* } -> (
+            $($result)*
+        ));
+    );
+
+
+    ( @@ $name:ident { } -> ($($result:tt)*) ) => (
+        crate::rules::macros::define_picks_struct!(@ $name { } { } -> (
+            $($result)*
+        ));
+    );
+
+
+    ($name:ident, $($matcher:tt)+) => {
+        crate::rules::macros::define_picks_struct!(@ $name { $($matcher)+ } {} -> ());
     };
 }
 
@@ -121,9 +156,8 @@ macro_rules! define_rule_inner {
             fn apply(
                 &self,
                 optimizer: &O,
-                mut input: HashMap<usize, PlanNodeOrGroup<DfNodeType>>,
-                mut pred_input: HashMap<usize, ArcPredNode<DfNodeType>>,
-            ) -> Vec<PlanNode<DfNodeType>> {
+                mut input: HashMap<usize, optd_core::nodes::PlanNodeOrGroup<DfNodeType>>,
+            ) -> Vec<optd_core::nodes::PlanNodeOrGroup<DfNodeType>> {
 
                 crate::rules::macros::define_picks!( $($matcher)+ );
 

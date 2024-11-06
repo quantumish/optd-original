@@ -60,7 +60,7 @@ impl LogOpPred {
     }
 
     pub fn children(&self) -> Vec<ArcDfPredNode> {
-        self.0.children
+        self.0.children.clone()
     }
 
     pub fn child(&self, idx: usize) -> ArcDfPredNode {
@@ -94,7 +94,7 @@ impl DfReprPredNode for LogOpPred {
             vec![],
             self.children()
                 .iter()
-                .map(|x| dispatch_pred_explain(*x, meta_map))
+                .map(|x| dispatch_pred_explain(x.clone(), meta_map))
                 .collect(),
         )
     }

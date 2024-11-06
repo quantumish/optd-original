@@ -1,7 +1,6 @@
 //! Typed interface of plan nodes.
 
 mod agg;
-mod apply;
 mod empty_relation;
 mod filter;
 mod join;
@@ -22,7 +21,6 @@ use optd_core::nodes::{
 };
 
 pub use agg::{LogicalAgg, PhysicalAgg};
-pub use apply::{ApplyType, LogicalApply};
 pub use empty_relation::{
     decode_empty_relation_schema, LogicalEmptyRelation, PhysicalEmptyRelation,
 };
@@ -42,10 +40,10 @@ pub use subquery::{DependentJoin, RawDependentJoin}; // Add missing import
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DfPredType {
+    List,
     Constant(ConstantType),
     ColumnRef,
     ExternColumnRef,
-    List,
     UnOp(UnOpType),
     BinOp(BinOpType),
     LogOp(LogOpType),
@@ -78,7 +76,6 @@ pub enum DfNodeType {
     DepJoin(JoinType),
     Sort,
     Agg,
-    Apply(ApplyType),
     EmptyRelation,
     Limit,
     // Physical plan nodes
@@ -108,7 +105,6 @@ impl NodeType for DfNodeType {
                 | Self::Filter
                 | Self::Scan
                 | Self::Join(_)
-                | Self::Apply(_)
                 | Self::Sort
                 | Self::Agg
                 | Self::EmptyRelation
@@ -168,9 +164,6 @@ pub fn dispatch_plan_explain(
         DfNodeType::Filter => LogicalFilter::from_plan_node(plan_node)
             .unwrap()
             .explain(meta_map),
-        DfNodeType::Apply(_) => LogicalApply::from_plan_node(plan_node)
-            .unwrap()
-            .explain(meta_map),
         DfNodeType::EmptyRelation => LogicalEmptyRelation::from_plan_node(plan_node)
             .unwrap()
             .explain(meta_map),
@@ -220,8 +213,8 @@ pub fn dispatch_pred_explain(
     pred_node: ArcDfPredNode,
     meta_map: Option<&PlanNodeMetaMap>,
 ) -> Pretty<'static> {
-    match pred_node.typ {
-        DfPredType::Constant(constant_type) => ConstantPred::from_pred_node(pred_node)
+    match &pred_node.typ {
+        DfPredType::Constant(_) => ConstantPred::from_pred_node(pred_node)
             .unwrap()
             .explain(meta_map),
         DfPredType::ColumnRef => ColumnRefPred::from_pred_node(pred_node)
@@ -233,19 +226,19 @@ pub fn dispatch_pred_explain(
         DfPredType::List => ListPred::from_pred_node(pred_node)
             .unwrap()
             .explain(meta_map),
-        DfPredType::UnOp(un_op_type) => UnOpPred::from_pred_node(pred_node)
+        DfPredType::UnOp(_) => UnOpPred::from_pred_node(pred_node)
             .unwrap()
             .explain(meta_map),
-        DfPredType::BinOp(bin_op_type) => BinOpPred::from_pred_node(pred_node)
+        DfPredType::BinOp(_) => BinOpPred::from_pred_node(pred_node)
             .unwrap()
             .explain(meta_map),
-        DfPredType::LogOp(log_op_type) => LogOpPred::from_pred_node(pred_node)
+        DfPredType::LogOp(_) => LogOpPred::from_pred_node(pred_node)
             .unwrap()
             .explain(meta_map),
-        DfPredType::Func(func_type) => FuncPred::from_pred_node(pred_node)
+        DfPredType::Func(_) => FuncPred::from_pred_node(pred_node)
             .unwrap()
             .explain(meta_map),
-        DfPredType::SortOrder(sort_order_type) => SortOrderPred::from_pred_node(pred_node)
+        DfPredType::SortOrder(_) => SortOrderPred::from_pred_node(pred_node)
             .unwrap()
             .explain(meta_map),
         DfPredType::Between => BetweenPred::from_pred_node(pred_node)
@@ -257,7 +250,7 @@ pub fn dispatch_pred_explain(
         DfPredType::Like => LikePred::from_pred_node(pred_node)
             .unwrap()
             .explain(meta_map),
-        DfPredType::DataType(data_type) => DataTypePred::from_pred_node(pred_node)
+        DfPredType::DataType(_) => DataTypePred::from_pred_node(pred_node)
             .unwrap()
             .explain(meta_map),
         DfPredType::InList => InListPred::from_pred_node(pred_node)
