@@ -209,6 +209,21 @@ pub fn dispatch_plan_explain(
     }
 }
 
+pub fn dispatch_plan_explain_to_string(
+    plan_node: DfPlanNodeOrGroup,
+    meta_map: Option<&PlanNodeMetaMap>,
+) -> String {
+    let mut config = PrettyConfig {
+        need_boundaries: false,
+        reduced_spaces: false,
+        width: 300,
+        ..Default::default()
+    };
+    let mut out = String::new();
+    config.unicode(&mut out, &dispatch_plan_explain(plan_node, meta_map));
+    out
+}
+
 pub fn dispatch_pred_explain(
     pred_node: ArcDfPredNode,
     meta_map: Option<&PlanNodeMetaMap>,
@@ -259,6 +274,21 @@ pub fn dispatch_pred_explain(
     }
 }
 
+pub fn dispatch_pred_explain_to_string(
+    pred_node: ArcDfPredNode,
+    meta_map: Option<&PlanNodeMetaMap>,
+) -> String {
+    let mut config = PrettyConfig {
+        need_boundaries: false,
+        reduced_spaces: false,
+        width: 300,
+        ..Default::default()
+    };
+    let mut out = String::new();
+    config.unicode(&mut out, &dispatch_pred_explain(pred_node, meta_map));
+    out
+}
+
 pub type DfPredNode = PredNode<DfNodeType>;
 pub type ArcDfPredNode = ArcPredNode<DfNodeType>;
 
@@ -268,16 +298,4 @@ pub trait DfReprPredNode: 'static + Clone {
     fn from_pred_node(pred_node: ArcDfPredNode) -> Option<Self>;
 
     fn explain(&self, meta_map: Option<&PlanNodeMetaMap>) -> Pretty<'static>;
-
-    fn explain_to_string(&self, meta_map: Option<&PlanNodeMetaMap>) -> String {
-        let mut config = PrettyConfig {
-            need_boundaries: false,
-            reduced_spaces: false,
-            width: 300,
-            ..Default::default()
-        };
-        let mut out = String::new();
-        config.unicode(&mut out, &self.explain(meta_map));
-        out
-    }
 }

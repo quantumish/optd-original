@@ -20,8 +20,8 @@ use itertools::Itertools;
 use optd_core::cascades::BindingType;
 use optd_datafusion_repr::{
     plan_nodes::{
-        ArcDfPlanNode, ConstantType, DfNodeType, DfReprPlanNode, DfReprPlanNode, PhysicalHashJoin,
-        PhysicalNestedLoopJoin,
+        dispatch_plan_explain_to_string, ArcDfPlanNode, ConstantType, DfNodeType, DfPlanNode,
+        DfReprPlanNode, PhysicalHashJoin, PhysicalNestedLoopJoin,
     },
     properties::schema::Catalog,
     DatafusionOptimizer, MemoExt,
@@ -142,15 +142,13 @@ impl OptdQueryPlanner {
                 PlanType::OptimizedLogicalPlan {
                     optimizer_name: "optd".to_string(),
                 },
-                DfReprPlanNode::from_rel_node(optd_rel.clone())
-                    .unwrap()
-                    .explain_to_string(None),
+                dispatch_plan_explain_to_string(optd_rel.clone(), None),
             ));
         }
 
         tracing::trace!(
             optd_unoptimized_plan = %("\n".to_string()
-            + &PlanNode::from_rel_node(optd_rel.clone())
+            + &DfPlanNode::from_plan_node(optd_rel.clone())
                 .unwrap()
                 .explain_to_string(None)));
 
@@ -164,16 +162,12 @@ impl OptdQueryPlanner {
                     PlanType::OptimizedLogicalPlan {
                         optimizer_name: "optd-heuristic".to_string(),
                     },
-                    DfReprPlanNode::from_rel_node(optd_rel.clone())
-                        .unwrap()
-                        .explain_to_string(None),
+                    dispatch_plan_explain_to_string(optd_rel.clone(), None),
                 ))
             }
             tracing::trace!(
                 optd_optimized_plan = %("\n".to_string()
-                + &PlanNode::from_rel_node(optd_rel.clone())
-                    .unwrap()
-                    .explain_to_string(None)));
+                + &dispatch_plan_explain_to_string(optd_rel.clone(), None)));
         }
 
         let (group_id, optimized_rel, meta) = optimizer.cascades_optimize(optd_rel)?;
@@ -183,7 +177,7 @@ impl OptdQueryPlanner {
                 PlanType::OptimizedPhysicalPlan {
                     optimizer_name: "optd".to_string(),
                 },
-                DfReprPlanNode::from_rel_node(optimized_rel.clone())
+                DfReprPlanNode::from_plan_node(optimized_rel.clone())
                     .unwrap()
                     .explain_to_string(if verbose { Some(&meta) } else { None }),
             ));
@@ -212,9 +206,7 @@ impl OptdQueryPlanner {
 
         tracing::trace!(
             optd_physical_plan = %("\n".to_string()
-            + &PlanNode::from_rel_node(optimized_rel.clone())
-                .unwrap()
-                .explain_to_string(None)));
+            + &dispatch_plan_explain_to_string(optimized_rel.clone(), None)));
 
         ctx.optimizer = Some(&optimizer);
         let physical_plan = ctx.conv_from_optd(optimized_rel, meta).await?;
@@ -278,23 +270,23 @@ impl std::fmt::Display for JoinOrder {
     }
 }
 
-fn get_join_order(rel_node: OptRelNodeRef) -> Option<JoinOrder> {
+fn get_join_order(rel_node: ArcDfPlanNode) -> Option<JoinOrder> {
     match rel_node.typ {
-        OptRelNodeTyp::PhysicalHashJoin(_) => {
-            let join = PhysicalHashJoin::from_rel_node(rel_node.clone()).unwrap();
+        DfNodeType::PhysicalHashJoin(_) => {
+            let join = PhysicalHashJoin::from_plan_node(rel_node.clone()).unwrap();
             let left = get_join_order(join.left().into_rel_node())?;
             let right = get_join_order(join.right().into_rel_node())?;
             Some(JoinOrder::HashJoin(Box::new(left), Box::new(right)))
         }
-        OptRelNodeTyp::PhysicalNestedLoopJoin(_) => {
-            let join = PhysicalNestedLoopJoin::from_rel_node(rel_node.clone()).unwrap();
+        DfNodeType::PhysicalNestedLoopJoin(_) => {
+            let join = PhysicalNestedLoopJoin::from_plan_node(rel_node.clone()).unwrap();
             let left = get_join_order(join.left().into_rel_node())?;
             let right = get_join_order(join.right().into_rel_node())?;
             Some(JoinOrder::NestedLoopJoin(Box::new(left), Box::new(right)))
         }
-        OptRelNodeTyp::PhysicalScan => {
+        DfNodeType::PhysicalScan => {
             let scan =
-                optd_datafusion_repr::plan_nodes::PhysicalScan::from_rel_node(rel_node).unwrap();
+                optd_datafusion_repr::plan_nodes::PhysicalScan::from_plan_node(rel_node).unwrap();
             Some(JoinOrder::Table(scan.table().to_string()))
         }
         _ => {
