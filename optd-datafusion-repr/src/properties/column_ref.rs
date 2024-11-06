@@ -3,9 +3,10 @@ use std::{ops::Deref, sync::Arc};
 
 use crate::plan_nodes::{
     decode_empty_relation_schema, ArcDfPredNode, BinOpType, ConstantPred, DfNodeType, DfPredType,
-    JoinType, LogOpType,
+    DfReprPredNode, JoinType, LogOpType,
 };
 use anyhow::anyhow;
+use itertools::Itertools;
 use optd_core::property::PropertyBuilder;
 use union_find::disjoint_sets::DisjointSets;
 use union_find::union_find::UnionFind;
@@ -277,11 +278,15 @@ impl ColumnRefPropertyBuilder {
     }
 
     fn derive_for_predicate(predicate: ArcDfPredNode) -> GroupColumnRefs {
-        let data = predicate.data;
-        let children = predicate.children;
+        let data = &predicate.data;
+        let children = predicate
+            .children
+            .iter()
+            .map(|x| Self::derive_for_predicate(x.clone()))
+            .collect_vec();
         match predicate.typ {
             DfPredType::ColumnRef => {
-                let col_ref_idx = data.unwrap().as_u64();
+                let col_ref_idx = data.as_ref().unwrap().as_u64();
                 // this is always safe since col_ref_idx was initially a usize in ColumnRefExpr::new()
                 let usize_col_ref_idx = col_ref_idx as usize;
                 let column_refs = vec![ColumnRef::ChildColumnRef {
@@ -291,7 +296,7 @@ impl ColumnRefPropertyBuilder {
             }
             DfPredType::List => {
                 // Concatentate the children column refs.
-                let column_refs = Self::concat_children_col_refs(children);
+                let column_refs = Self::concat_children_col_refs(&children.iter().collect_vec());
                 GroupColumnRefs::new(column_refs, None)
             }
             DfPredType::LogOp(op_type) => {
@@ -374,13 +379,14 @@ impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
         match typ {
             // Should account for PhysicalScan.
             DfNodeType::Scan => {
-                let table_name = ConstantPred::from_pred_node(predicates[0])
+                let table_name = ConstantPred::from_pred_node(predicates[0].clone())
                     .unwrap()
+                    .value()
                     .as_str();
                 let schema = self.catalog.get(&table_name);
                 let column_cnt = schema.fields.len();
                 let column_refs = (0..column_cnt)
-                    .map(|i| ColumnRef::base_table_column_ref(table_name.clone(), i))
+                    .map(|i| ColumnRef::base_table_column_ref(table_name.to_string(), i))
                     .collect();
                 GroupColumnRefs::new(column_refs, None)
             }
@@ -394,7 +400,8 @@ impl PropertyBuilder<DfNodeType> for ColumnRefPropertyBuilder {
             }
             DfNodeType::Projection => {
                 let child = children[0];
-                let exprs = children[1];
+                let exprs = &predicates[0];
+                let exprs = Self::derive_for_predicate(exprs.clone());
                 let column_refs = exprs
                     .column_refs
                     .iter()
