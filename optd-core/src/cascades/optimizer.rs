@@ -3,7 +3,7 @@
 // Use of this source code is governed by an MIT-style license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Display;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -12,7 +12,6 @@ use anyhow::Result;
 use tracing::trace;
 
 use super::memo::{ArcMemoPlanNode, GroupInfo, Memo};
-use super::tasks::OptimizeGroupTask;
 use super::{NaiveMemo, Task};
 use crate::cascades::memo::Winner;
 use crate::cascades::tasks::get_initial_task;
@@ -128,12 +127,12 @@ impl<T: NodeType> CascadesOptimizer<T, NaiveMemo<T>> {
         let tasks = Vec::new();
         // Assign rule IDs
         let transformation_rules: Arc<[(RuleId, Arc<dyn Rule<T, Self>>)]> = transformation_rules
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(i, r)| (i, r.clone()))
             .collect();
         let implementation_rules: Arc<[(RuleId, Arc<dyn Rule<T, Self>>)]> = implementation_rules
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(i, r)| (i + transformation_rules.len(), r.clone()))
             .collect();

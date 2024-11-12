@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, sync::Arc};
+use std::sync::Arc;
 
 use itertools::Itertools;
 use tracing::trace;
@@ -10,7 +10,7 @@ use crate::{
         tasks::{explore_expr::ExploreExprTask, optimize_inputs::OptimizeInputsTask},
         CascadesOptimizer, GroupId, Memo,
     },
-    nodes::{ArcPlanNode, ArcPredNode, NodeType, PlanNode, PlanNodeOrGroup},
+    nodes::{ArcPlanNode, NodeType, PlanNode, PlanNodeOrGroup},
     rules::{Rule, RuleMatcher},
 };
 
@@ -178,8 +178,7 @@ fn transform<T: NodeType, M: Memo<T>>(
     } else {
         picked_datas
             .into_iter()
-            .map(|picked_data| rule.apply(optimizer, picked_data))
-            .flatten()
+            .flat_map(|picked_data| rule.apply(optimizer, picked_data))
             .collect()
     }
 }

@@ -80,7 +80,7 @@ fn compute_cost<T: NodeType, M: Memo<T>>(
     let cost = optimizer.cost();
     let children_group_ids = expr.children.clone();
     let context = RelNodeContext {
-        expr_id: expr_id,
+        expr_id,
         group_id,
         children_group_ids: children_group_ids.clone(),
     };
@@ -204,7 +204,7 @@ impl<T: NodeType, M: Memo<T>> Task<T, M> for OptimizeInputsTask {
         // TODO: add typ to more traces and iteration to traces below
         trace!(task_id = self.task_id, parent_task_id = self.parent_task_id, event = "task_begin", task = "optimize_inputs", iteration = %self.iteration, group_id = %group_id, expr_id = %self.expr_id, expr = %expr);
         let next_child_expr = expr.children.get(self.iteration);
-        if let None = next_child_expr {
+        if next_child_expr.is_none() {
             // TODO: If we want to support interrupting the optimizer, it might
             // behoove us to update the winner more often than this.
             update_winner(self.expr_id, optimizer);
