@@ -19,6 +19,6 @@ optd-core = { path = "../optd-core", version = "0.1" }
 optd-datafusion-repr = { path = "../optd-datafusion-repr", version = "0.1" }
 anyhow = "1"
 async-recursion = "1"
-futures-lite = "2"
+futures-lite.workspace = true
 futures-util = "0.3"
 tracing = "0.1"
