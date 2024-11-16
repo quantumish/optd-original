@@ -3429,7 +3429,7 @@ dependencies = [
 [[package]]
 name = "optd-persistent"
 version = "0.1.0"
-source = "git+https://github.com/cmu-db/optd-experimental?branch=yuchen/orm-integration#6f41207a62b2668e910ef8bd64f13cfcda219af9"
+source = "git+https://github.com/cmu-db/optd-experimental?branch=yuchen/orm-integration#312f03023202033e1c729172e3238704d3dabc7a"
 dependencies = [
  "async-stream",
  "async-trait",

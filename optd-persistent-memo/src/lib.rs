@@ -2,7 +2,7 @@ use optd_core::{
     cascades::{ArcMemoPlanNode, Memo},
     nodes::NodeType,
 };
-use optd_persistent::{self, BackendManager, Memo, StorageResult};
+use optd_persistent::{self, BackendManager, MemoStorage, StorageResult};
 
 /// A memo table implementation based on the `optd-persistent` crate storage.
 pub struct PersistentMemo {
