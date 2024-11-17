@@ -3,19 +3,21 @@
 // Use of this source code is governed by an MIT-style license that can be found in the LICENSE file or at
 // https://opensource.org/licenses/MIT.
 
-use std::sync::Arc;
-
-use itertools::Itertools;
-
 use crate::{
     cascades::GroupId,
     logical_property::{LogicalProperty, LogicalPropertyBuilder},
-    nodes::{ArcPlanNode, ArcPredNode, NodeType, PlanNode, PlanNodeOrGroup, PredNode, Value},
+    nodes::{
+        ArcPlanNode, ArcPredNode, NodeType, PlanNode, PlanNodeOrGroup, PredNode, SerializedNodeTag,
+        SerializedPredTag, Value,
+    },
     physical_property::{PhysicalProperty, PhysicalPropertyBuilder},
 };
+use itertools::Itertools;
+use std::sync::Arc;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, strum::FromRepr)]
+#[repr(u16)]
 pub(crate) enum MemoTestRelTyp {
     Join,
     Project,
@@ -33,12 +35,45 @@ pub(crate) enum MemoTestRelTyp {
     PhysicalHashAgg,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+impl TryFrom<SerializedNodeTag> for MemoTestRelTyp {
+    type Error = u16;
+
+    fn try_from(value: SerializedNodeTag) -> Result<Self, Self::Error> {
+        let SerializedNodeTag(v) = value;
+        let typ = Self::from_repr(v).ok_or_else(|| v)?;
+        Ok(typ)
+    }
+}
+
+impl From<MemoTestRelTyp> for SerializedNodeTag {
+    fn from(value: MemoTestRelTyp) -> Self {
+        SerializedNodeTag(value as u16)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, strum::FromRepr)]
+#[repr(u16)]
 pub(crate) enum MemoTestPredTyp {
     List,
     Expr,
     TableName,
     ColumnRef,
+}
+
+impl TryFrom<SerializedPredTag> for MemoTestPredTyp {
+    type Error = u16;
+
+    fn try_from(value: SerializedPredTag) -> Result<Self, Self::Error> {
+        let SerializedPredTag(v) = value;
+        let typ = Self::from_repr(v).ok_or_else(|| v)?;
+        Ok(typ)
+    }
+}
+
+impl From<MemoTestPredTyp> for SerializedPredTag {
+    fn from(value: MemoTestPredTyp) -> Self {
+        SerializedPredTag(value as u16)
+    }
 }
 
 impl std::fmt::Display for MemoTestRelTyp {

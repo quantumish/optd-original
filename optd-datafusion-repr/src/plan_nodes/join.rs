@@ -11,7 +11,20 @@ use serde::{Deserialize, Serialize};
 use super::macros::define_plan_node;
 use super::{ArcDfPlanNode, ArcDfPredNode, DfNodeType, DfPlanNode, DfReprPlanNode, ListPred};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::FromRepr,
+    strum::EnumCount,
+    strum::EnumIter,
+)]
+#[repr(u8)]
 pub enum JoinType {
     Inner = 1,
     FullOuter,

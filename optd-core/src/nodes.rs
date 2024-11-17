@@ -216,10 +216,36 @@ impl Value {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SerializedNodeTag(pub u16);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SerializedPredTag(pub u16);
+
 pub trait NodeType:
-    PartialEq + Eq + Hash + Clone + 'static + Display + Debug + Send + Sync
+    PartialEq
+    + Eq
+    + Hash
+    + Clone
+    + 'static
+    + Display
+    + Debug
+    + Send
+    + Sync
+    + TryFrom<SerializedNodeTag>
+    + Into<SerializedNodeTag>
 {
-    type PredType: PartialEq + Eq + Hash + Clone + 'static + Display + Debug + Send + Sync;
+    type PredType: PartialEq
+        + Eq
+        + Hash
+        + Clone
+        + 'static
+        + Display
+        + Debug
+        + Send
+        + Sync
+        + TryFrom<SerializedPredTag>
+        + Into<SerializedPredTag>;
 
     fn is_logical(&self) -> bool;
 }
