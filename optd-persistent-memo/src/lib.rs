@@ -6,7 +6,8 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 use backend_manager::{BackendWinnerInfo, MemoBackendManager, PredicateData};
 use futures_lite::future;
 use optd_core::{
-    cascades::{self, ExprId, GroupId, GroupInfo, Memo, MemoPlanNode, PredId},
+    cascades::{self, ExprId, GroupId, GroupInfo, Memo, MemoPlanNode, PredId, WinnerInfo},
+    cost::Statistics,
     nodes::{
         self, ArcPlanNode, NodeType, PlanNodeOrGroup, PredNode, SerializedNodeTag,
         SerializedPredTag,
@@ -317,7 +318,17 @@ impl<T: NodeType> Memo<T> for PersistentMemo<T> {
                 .map(|expr_id| ExprId((*expr_id).try_into().unwrap()))
                 .collect(),
             info: GroupInfo {
-                winner: cascades::Winner::Unknown, // TODO
+                winner: match orm_group.winner {
+                    Some(winner) => cascades::Winner::Full(WinnerInfo {
+                        expr_id: ExprId(self.phys_id_to_expr_id[&winner.physical_expr_id].0),
+                        total_weighted_cost: winner.total_weighted_cost,
+                        operation_weighted_cost: winner.operation_weighted_cost,
+                        total_cost: winner.total_cost,
+                        operation_cost: winner.operation_cost,
+                        statistics: todo!(),
+                    }),
+                    None => cascades::Winner::Unknown,
+                },
             },
             properties: Arc::new([]), // TODO
         };

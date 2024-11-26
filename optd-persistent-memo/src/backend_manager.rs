@@ -47,13 +47,20 @@ impl MemoBackendManager {
         })
     }
 
-    async fn get_winner(&self, winner_id: i32) -> StorageResult<Option<group_winner::Model>> {
-        let winner = group_winner::Entity::find()
-            .filter(group_winner::Column::Id.eq(winner_id))
-            .one(&self.db)
-            .await?;
+    async fn get_winner(
+        &self,
+        winner_id: Option<i32>,
+    ) -> StorageResult<Option<group_winner::Model>> {
+        if let Some(winner_id) = winner_id {
+            let winner = group_winner::Entity::find()
+                .filter(group_winner::Column::Id.eq(winner_id))
+                .one(&self.db)
+                .await?;
 
-        Ok(winner)
+            Ok(Some(winner.unwrap()))
+        } else {
+            Ok(None)
+        }
     }
 
     pub async fn get_group(&self, group_id: i32) -> StorageResult<BackendGroupInfo> {
@@ -73,7 +80,7 @@ impl MemoBackendManager {
             .map(|child| child.logical_expression_id)
             .collect();
 
-        let winner = self.get_winner(group.latest_winner.unwrap()).await?;
+        let winner = self.get_winner(group.latest_winner).await?;
 
         Ok(BackendGroupInfo {
             group_exprs: children,
