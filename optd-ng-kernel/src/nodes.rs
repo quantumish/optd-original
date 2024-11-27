@@ -224,7 +224,12 @@ pub trait NodeType:
 
 pub trait PersistentNodeType: NodeType {
     fn serialize_pred(pred: &ArcPredNode<Self>) -> serde_json::Value;
+
     fn deserialize_pred(data: serde_json::Value) -> ArcPredNode<Self>;
+
+    fn serialize_plan_tag(tag: Self) -> serde_json::Value;
+
+    fn deserialize_plan_tag(data: serde_json::Value) -> Self;
 }
 
 /// A pointer to a plan node

@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 anyhow = "1"
+async-recursion = "1"
 async-trait = "0.1"
 arrow-schema = "47.0.0"
 tracing = "0.1"

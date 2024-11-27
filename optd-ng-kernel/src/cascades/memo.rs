@@ -108,9 +108,6 @@ pub trait Memo<T: NodeType>: 'static + Send + Sync {
     /// Get all groups IDs in the memo table.
     async fn get_all_group_ids(&self) -> Vec<GroupId>;
 
-    /// Get a group by ID
-    async fn get_group(&self, group_id: GroupId) -> &Group;
-
     /// Get a predicate by ID
     async fn get_pred(&self, pred_id: PredId) -> ArcPredNode<T>;
 
@@ -122,17 +119,5 @@ pub trait Memo<T: NodeType>: 'static + Send + Sync {
     // are more efficient way to retrieve the information.
 
     /// Get all expressions in the group.
-    async fn get_all_exprs_in_group(&self, group_id: GroupId) -> Vec<ExprId> {
-        let group = self.get_group(group_id).await;
-        let mut exprs = group.group_exprs.iter().copied().collect_vec();
-        // Sort so that we can get a stable processing order for the expressions, therefore making regression test
-        // yield a stable result across different platforms.
-        exprs.sort();
-        exprs
-    }
-
-    /// Get group info of a group.
-    async fn get_group_info(&self, group_id: GroupId) -> &GroupInfo {
-        &self.get_group(group_id).await.info
-    }
+    async fn get_all_exprs_in_group(&self, group_id: GroupId) -> Vec<ExprId>;
 }

@@ -3248,6 +3248,7 @@ version = "0.1.1"
 dependencies = [
  "anyhow",
  "arrow-schema",
+ "async-recursion",
  "async-trait",
  "chrono",
  "itertools 0.13.0",

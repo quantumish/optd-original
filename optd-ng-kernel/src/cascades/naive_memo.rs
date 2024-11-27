@@ -74,8 +74,15 @@ impl<T: NodeType> Memo<T> for NaiveMemo<T> {
         self.get_all_group_ids_inner()
     }
 
-    async fn get_group(&self, group_id: GroupId) -> &Group {
-        self.get_group_inner(group_id)
+    async fn get_all_exprs_in_group(&self, group_id: GroupId) -> Vec<ExprId> {
+        let mut expr_ids: Vec<ExprId> = self
+            .get_group_inner(group_id)
+            .group_exprs
+            .iter()
+            .copied()
+            .collect();
+        expr_ids.sort();
+        expr_ids
     }
 
     async fn estimated_plan_space(&self) -> usize {
@@ -458,7 +465,7 @@ pub(crate) mod tests {
             group_id,
         )
         .await;
-        assert_eq!(memo.get_group(group_id).await.group_exprs.len(), 2);
+        assert_eq!(memo.get_all_exprs_in_group(group_id).await.len(), 2);
     }
 
     #[tokio::test]

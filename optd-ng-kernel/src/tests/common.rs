@@ -114,6 +114,14 @@ impl PersistentNodeType for MemoTestRelTyp {
         let node: PersistentPredNode<MemoTestRelTyp> = serde_json::from_value(data).unwrap();
         Arc::new(node.into())
     }
+
+    fn serialize_plan_tag(tag: Self) -> serde_json::Value {
+        serde_json::to_value(tag).unwrap()
+    }
+
+    fn deserialize_plan_tag(data: serde_json::Value) -> Self {
+        serde_json::from_value(data).unwrap()
+    }
 }
 
 pub(crate) fn join(
