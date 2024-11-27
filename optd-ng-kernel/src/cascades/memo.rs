@@ -6,8 +6,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use itertools::Itertools;
-
 use super::optimizer::{ExprId, GroupId, PredId};
 use crate::nodes::{ArcPlanNode, ArcPredNode, NodeType, PlanNodeOrGroup};
 use async_trait::async_trait;
