@@ -34,7 +34,7 @@ impl<T: PersistentNodeType> PersistentMemo<T> {
             .execute(&self.db_conn)
             .await?;
         // Ideally, tag should be an enum, and we should populate that enum column based on the tag.
-        sqlx::query("CREATE TABLE group_exprs(group_expr_id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER, tag TEXT, children JSON DEFAULT('[]'), predicates JSON DEFAULT('[]'))")
+        sqlx::query("CREATE TABLE group_exprs(group_expr_id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER, tag TEXT, is_logical bool, children JSON DEFAULT('[]'), predicates JSON DEFAULT('[]'))")
             .execute(&self.db_conn)
             .await?;
         sqlx::query(
@@ -158,12 +158,13 @@ impl<T: PersistentNodeType> PersistentMemo<T> {
                     .last_insert_rowid()
             };
             let expr_id = sqlx::query(
-                "INSERT INTO group_exprs(group_id, tag, children, predicates) VALUES (?, ?, ?, ?)",
+                "INSERT INTO group_exprs(group_id, tag, children, predicates, is_logical) VALUES (?, ?, ?, ?, ?)",
             )
             .bind(group_id)
             .bind(&tag)
             .bind(serde_json::to_value(&children_groups).unwrap())
             .bind(serde_json::to_value(&predicates).unwrap())
+            .bind(rel_node.typ.is_logical())
             .execute(&self.db_conn)
             .await
             .unwrap()
