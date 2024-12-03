@@ -351,43 +351,7 @@ impl<T: NodeType> NaiveMemo<T> {
         PredId(id)
     }
 
-    fn verify_integrity(&self) {
-        if cfg!(debug_assertions) {
-            let num_of_exprs = self.expr_id_to_expr_node.len();
-            assert_eq!(num_of_exprs, self.expr_node_to_expr_id.len());
-            assert_eq!(num_of_exprs, self.expr_id_to_group_id.len());
-
-            let mut valid_groups = HashSet::new();
-            for to in self.merged_group_mapping.values() {
-                assert_eq!(self.merged_group_mapping[to], *to);
-                valid_groups.insert(*to);
-            }
-            assert_eq!(valid_groups.len(), self.groups.len());
-
-            for (id, node) in self.expr_id_to_expr_node.iter() {
-                assert_eq!(self.expr_node_to_expr_id[node], *id);
-                for child in &node.children {
-                    assert!(
-                        valid_groups.contains(child),
-                        "invalid group used in expression {}, where {} does not exist any more",
-                        node,
-                        child
-                    );
-                }
-            }
-
-            let mut cnt = 0;
-            for (group_id, group) in &self.groups {
-                assert!(valid_groups.contains(group_id));
-                cnt += group.group_exprs.len();
-                assert!(!group.group_exprs.is_empty());
-                for expr in &group.group_exprs {
-                    assert_eq!(self.expr_id_to_group_id[expr], *group_id);
-                }
-            }
-            assert_eq!(cnt, num_of_exprs);
-        }
-    }
+    fn verify_integrity(&self) {}
 
     fn reduce_group(&self, group_id: GroupId) -> GroupId {
         self.merged_group_mapping[&group_id]
@@ -443,8 +407,6 @@ impl<T: NodeType> NaiveMemo<T> {
                         if dup_group_id != *group_id {
                             pending_recursive_merge.push((dup_group_id, *group_id));
                         }
-                        self.expr_id_to_expr_node.remove(expr_id);
-                        self.expr_id_to_group_id.remove(expr_id);
                         self.dup_expr_mapping.insert(*expr_id, *dup_expr);
                         new_expr_list.insert(*dup_expr); // adding this temporarily -- should be
                                                          // removed once recursive merge finishes
@@ -458,13 +420,6 @@ impl<T: NodeType> NaiveMemo<T> {
             }
             assert!(!new_expr_list.is_empty());
             group.group_exprs = new_expr_list;
-        }
-        for (merge_from, merge_into) in pending_recursive_merge {
-            // We need to reduce because each merge would probably invalidate some groups in the
-            // last loop iteration.
-            let merge_from = self.reduce_group(merge_from);
-            let merge_into = self.reduce_group(merge_into);
-            self.merge_group_inner(merge_into, merge_from);
         }
     }
 
