@@ -26,6 +26,8 @@ struct Cli {
 async fn main() -> Result<()> {
     env_logger::init();
 
+    unsafe { backtrace_on_stack_overflow::enable() };
+
     let cli = Cli::parse();
 
     let enable_advanced_cost_model = cli.enable_advanced_cost_model;

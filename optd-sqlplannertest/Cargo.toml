@@ -39,6 +39,7 @@ optd-datafusion-bridge = { path = "../optd-datafusion-bridge", version = "0.1" }
 optd-datafusion-repr = { path = "../optd-datafusion-repr", version = "0.1" }
 itertools = "0.13"
 lazy_static = "1.4.0"
+backtrace-on-stack-overflow = "0.3"
 
 [[test]]
 name = "planner_test"
