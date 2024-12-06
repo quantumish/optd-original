@@ -117,18 +117,19 @@ impl SchemaPropertyBuilder {
                 Schema { fields }
             }
             DfPredType::LogOp(_) => Schema {
-                fields: vec![Field::placeholder(); children.len()],
+                fields: vec![Field {
+                    typ: ConstantType::Bool,
+                    ..Field::placeholder()
+                }],
             },
-
+            DfPredType::BinOp(_) => Schema {
+                fields: vec![Field::placeholder()],
+            },
             DfPredType::Cast => Schema {
-                fields: children[0]
-                    .fields
-                    .iter()
-                    .map(|field| Field {
-                        typ: children[1].fields[0].typ,
-                        ..field.clone()
-                    })
-                    .collect(),
+                fields: vec![Field {
+                    typ: children[1].fields[0].typ,
+                    ..children[0].fields[0].clone()
+                }],
             },
             DfPredType::DataType(data_type) => Schema {
                 fields: vec![Field {
@@ -144,7 +145,9 @@ impl SchemaPropertyBuilder {
                 // The real type should be the column type.
                 fields: vec![Field::placeholder()],
             },
-            _ => Schema { fields: vec![] },
+            _ => Schema {
+                fields: vec![Field::placeholder()], // all predicates produce at least one column
+            },
         }
     }
 }
