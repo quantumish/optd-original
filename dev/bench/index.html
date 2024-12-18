@@ -131,6 +131,7 @@
             const map = new Map();
             for (const entry of entries) {
               const {commit, date, tool, benches} = entry;
+              benches.sort((a, b) => a.name < b.name)
               for (const bench of benches) {
                 const result = { commit, date, tool, bench };
                 const arr = map.get(bench.name);
