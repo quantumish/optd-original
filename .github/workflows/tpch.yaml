@@ -5,8 +5,6 @@ on:
   push:
     branches:
       - main
-      # Hack for testing (REMOVE)
-      - continuous-bench-attempt
 
 permissions:
   # deployments permission to deploy GitHub pages website
@@ -40,8 +38,9 @@ jobs:
           output-file-path: output.txt
           gh-pages-branch: gh-pages
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Automatically push the results to the GitHub pages branch.
           auto-push: true
-          # Show alert with commit comment on detecting possible performance regression
+          # Show alert with commit comment on detecting possible performance regression.
           alert-threshold: "125%"
           summary-always: true
           comment-on-alert: true
