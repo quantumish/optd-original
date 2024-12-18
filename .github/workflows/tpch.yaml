@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - continuous-bench-attempt
 
 permissions:
   # deployments permission to deploy GitHub pages website
@@ -37,7 +38,7 @@ jobs:
           tool: "cargo"
           output-file-path: output.txt
           gh-pages-branch: gh-pages
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.BENCHMARK_ACTION_BOT_TOKEN }}
           # Automatically push the results to the GitHub pages branch.
           auto-push: true
           # Show alert with commit comment on detecting possible performance regression.
@@ -46,3 +47,5 @@ jobs:
           comment-on-alert: true
           fail-on-alert: true
           alert-comment-cc-users: "@connortsui20"
+          # Push to dedicated benchmark result repository.
+          gh-repository: "https://github.com/cmu-db/optd-benchmark"
