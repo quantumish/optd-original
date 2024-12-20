@@ -1,6 +1,6 @@
 name: Rust TPC-H Benchmarks
 
-# Do not run this workflow on pull request since this workflow has permission to modify contents.
+# Do NOT run this workflow on pull request since this workflow has permission to modify contents.
 on:
   push:
     branches:
@@ -34,7 +34,7 @@ jobs:
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          name: Rust Benchmark
+          name: TPC-H Planning and Execution Benchmark
           tool: "cargo"
           output-file-path: output.txt
           gh-pages-branch: gh-pages
@@ -48,4 +48,4 @@ jobs:
           fail-on-alert: true
           alert-comment-cc-users: "@connortsui20"
           # Push to dedicated benchmark result repository.
-          gh-repository: "github.com/cmu-db/optd-benchmark"
+          # gh-repository: "github.com/cmu-db/optd-benchmark" # TODO NOT WORKING
