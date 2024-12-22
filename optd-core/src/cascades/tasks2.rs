@@ -1,3 +1,13 @@
+// Copyright (c) 2023-2024 CMU Database Group
+//
+// Use of this source code is governed by an MIT-style license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
+//! The v2 implementation of cascades tasks. The code uses Rust async/await to generate the state machine,
+//! so that the logic is much more clear and easier to follow.
+
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use itertools::Itertools;
@@ -5,6 +15,7 @@ use tracing::trace;
 
 use super::memo::MemoPlanNode;
 use super::rule_match::match_and_pick_expr;
+use super::scheduler::{self, Executor};
 use super::{optimizer::RuleId, CascadesOptimizer, ExprId, GroupId, Memo};
 use crate::cascades::{
     memo::{Winner, WinnerInfo},
@@ -31,6 +42,12 @@ pub enum TaskDesc {
     OptimizeInput(ExprId, GroupId),
 }
 
+unsafe fn extend_to_static<'x>(
+    f: Pin<Box<dyn Future<Output = ()> + 'x>>,
+) -> Pin<Box<dyn Future<Output = ()> + 'static>> {
+    unsafe { std::mem::transmute(f) }
+}
+
 impl<'a, T: NodeType, M: Memo<T>> TaskContext<'a, T, M> {
     pub fn new(optimizer: &'a mut CascadesOptimizer<T, M>) -> Self {
         Self {
@@ -39,24 +56,45 @@ impl<'a, T: NodeType, M: Memo<T>> TaskContext<'a, T, M> {
         }
     }
 
-    pub async fn fire_optimize(&mut self, group_id: GroupId) {
-        self.optimize_group(SearchContext {
-            group_id,
-            upper_bound: None,
-        })
-        .await;
+    pub fn fire_optimize(&mut self, group_id: GroupId) {
+        let executor = Executor::new();
+        executor.spawn(unsafe {
+            extend_to_static(Box::pin(async {
+                (Box::pin(self.optimize_group(SearchContext {
+                    group_id,
+                    upper_bound: None,
+                })) as Pin<Box<dyn Future<Output = ()>>>)
+                    .await
+            }))
+        });
+        executor.run();
     }
 
     async fn optimize_group(&mut self, ctx: SearchContext) {
-        Box::pin(self.optimize_group_inner(ctx)).await;
+        scheduler::spawn(unsafe {
+            extend_to_static(Box::pin(async {
+                (Box::pin(self.optimize_group_inner(ctx)) as Pin<Box<dyn Future<Output = ()>>>)
+                    .await
+            }))
+        });
     }
 
     async fn optimize_expr(&mut self, ctx: SearchContext, expr_id: ExprId, exploring: bool) {
-        Box::pin(self.optimize_expr_inner(ctx, expr_id, exploring)).await;
+        scheduler::spawn(unsafe {
+            extend_to_static(Box::pin(async {
+                (Box::pin(self.optimize_expr_inner(ctx, expr_id, exploring))
+                    as Pin<Box<dyn Future<Output = ()>>>)
+                    .await
+            }))
+        });
     }
 
     async fn explore_group(&mut self, ctx: SearchContext) {
-        Box::pin(self.explore_group_inner(ctx)).await;
+        scheduler::spawn(unsafe {
+            extend_to_static(Box::pin(async {
+                (Box::pin(self.explore_group_inner(ctx)) as Pin<Box<dyn Future<Output = ()>>>).await
+            }))
+        });
     }
 
     async fn apply_rule(
@@ -66,11 +104,23 @@ impl<'a, T: NodeType, M: Memo<T>> TaskContext<'a, T, M> {
         expr_id: ExprId,
         exploring: bool,
     ) {
-        Box::pin(self.apply_rule_inner(ctx, rule_id, expr_id, exploring)).await;
+        scheduler::spawn(unsafe {
+            extend_to_static(Box::pin(async {
+                (Box::pin(self.apply_rule_inner(ctx, rule_id, expr_id, exploring))
+                    as Pin<Box<dyn Future<Output = ()>>>)
+                    .await
+            }))
+        });
     }
 
     async fn optimize_input(&mut self, ctx: SearchContext, expr_id: ExprId) {
-        Box::pin(self.optimize_input_inner(ctx, expr_id)).await;
+        scheduler::spawn(unsafe {
+            extend_to_static(Box::pin(async {
+                (Box::pin(self.optimize_input_inner(ctx, expr_id))
+                    as Pin<Box<dyn Future<Output = ()>>>)
+                    .await
+            }))
+        });
     }
 
     async fn optimize_group_inner(&mut self, ctx: SearchContext) {

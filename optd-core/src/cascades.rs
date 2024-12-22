@@ -7,7 +7,8 @@
 
 mod memo;
 mod optimizer;
-pub mod rule_match;
+pub(crate) mod rule_match;
+pub(crate) mod scheduler;
 mod tasks2;
 
 pub use memo::{Memo, NaiveMemo};
