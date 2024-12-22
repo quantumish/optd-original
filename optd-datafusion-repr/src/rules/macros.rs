@@ -79,12 +79,19 @@ macro_rules! define_rule_discriminant {
     };
 }
 
-macro_rules! define_impl_rule {
+// macro_rules! define_impl_rule {
+//     ($name:ident, $apply:ident, $($matcher:tt)+) => {
+//         crate::rules::macros::define_rule_inner! { true, false, $name, $apply, $($matcher)+ }
+//     };
+// }
+
+macro_rules! define_impl_rule_discriminant {
     ($name:ident, $apply:ident, $($matcher:tt)+) => {
-        crate::rules::macros::define_rule_inner! { true, false, $name, $apply, $($matcher)+ }
+        crate::rules::macros::define_rule_inner! { true, true, $name, $apply, $($matcher)+ }
     };
 }
 
 pub(crate) use {
-    define_impl_rule, define_matcher, define_rule, define_rule_discriminant, define_rule_inner,
+    define_impl_rule_discriminant, define_matcher, define_rule, define_rule_discriminant,
+    define_rule_inner,
 };
