@@ -529,6 +529,8 @@ impl OptdPlanContext<'_> {
         let right_exec = self.conv_from_optd_plan_node(node.right(), meta).await?;
         let join_type = match node.join_type() {
             JoinType::Inner => datafusion::logical_expr::JoinType::Inner,
+            JoinType::LeftOuter => datafusion::logical_expr::JoinType::Left,
+            JoinType::LeftMark => datafusion::logical_expr::JoinType::LeftMark,
             _ => unimplemented!(),
         };
         let left_exprs = node.left_keys().to_vec();
