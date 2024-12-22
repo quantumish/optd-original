@@ -91,11 +91,7 @@ PhysicalSort
         │   ├── InList { expr: Cast { cast_to: Int64, child: #10 }, list: [ 49(i64), 14(i64), 23(i64), 45(i64), 19(i64), 3(i64), 36(i64), 9(i64) ], negated: false }
         │   └── Not
         │       └── [ #14 ]
-        └── PhysicalNestedLoopJoin
-            ├── join_type: LeftMark
-            ├── cond:Eq
-            │   ├── #1
-            │   └── #14
+        └── PhysicalHashJoin { join_type: LeftMark, left_keys: [ #1 ], right_keys: [ #0 ] }
             ├── PhysicalNestedLoopJoin { join_type: Inner, cond: true }
             │   ├── PhysicalScan { table: partsupp }
             │   └── PhysicalScan { table: part }

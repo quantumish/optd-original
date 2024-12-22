@@ -262,12 +262,7 @@ PhysicalLimit { skip: 0(i64), fetch: 100(i64) }
             │       │   └── "AFRICA"
             │       └── PhysicalScan { table: region }
             └── PhysicalProjection { exprs: [ #0, #2 ] }
-                └── PhysicalNestedLoopJoin
-                    ├── join_type: LeftOuter
-                    ├── cond:And
-                    │   └── Eq
-                    │       ├── #0
-                    │       └── #1
+                └── PhysicalHashJoin { join_type: LeftOuter, left_keys: [ #0 ], right_keys: [ #0 ] }
                     ├── PhysicalAgg { aggrs: [], groups: [ #0 ] }
                     │   └── PhysicalNestedLoopJoin { join_type: Inner, cond: true }
                     │       ├── PhysicalNestedLoopJoin { join_type: Inner, cond: true }

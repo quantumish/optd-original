@@ -62,36 +62,29 @@ LogicalProjection { exprs: [ #0, #1 ] }
                                     ├── LogicalAgg { exprs: [], groups: [ #0 ] }
                                     │   └── LogicalScan { table: t1 }
                                     └── LogicalScan { table: t2 }
-PhysicalProjection { exprs: [ #0, #1 ], cost: {compute=4033080,io=4000}, stat: {row_cnt=10} }
-└── PhysicalProjection { exprs: [ #0, #1, #2, #4 ], cost: {compute=4033050,io=4000}, stat: {row_cnt=10} }
-    └── PhysicalFilter
-        ├── cond:Gt
-        │   ├── #4
-        │   └── 100(i64)
-        ├── cost: {compute=4033000,io=4000}
-        ├── stat: {row_cnt=10}
-        └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=4030000,io=4000}, stat: {row_cnt=1000} }
-            ├── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-            └── PhysicalNestedLoopJoin
-                ├── join_type: LeftOuter
-                ├── cond:And
-                │   └── Eq
-                │       ├── #0
-                │       └── #1
-                ├── cost: {compute=4018000,io=3000}
-                ├── stat: {row_cnt=10000}
-                ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
-                │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-                └── PhysicalAgg
-                    ├── aggrs:Agg(Sum)
-                    │   └── [ Cast { cast_to: Int64, child: #2 } ]
-                    ├── groups: [ #0 ]
-                    ├── cost: {compute=14000,io=2000}
-                    ├── stat: {row_cnt=1000}
-                    └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=6000,io=2000}, stat: {row_cnt=1000} }
-                        ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
-                        │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-                        └── PhysicalScan { table: t2, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+PhysicalProjection { exprs: [ #0, #1 ], cost: {compute=24100,io=4000}, stat: {row_cnt=10} }
+└── PhysicalProjection { exprs: [ #3, #4, #0, #2 ], cost: {compute=24070,io=4000}, stat: {row_cnt=10} }
+    └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=24020,io=4000}, stat: {row_cnt=10} }
+        ├── PhysicalFilter
+        │   ├── cond:Gt
+        │   │   ├── #2
+        │   │   └── 100(i64)
+        │   ├── cost: {compute=23000,io=3000}
+        │   ├── stat: {row_cnt=10}
+        │   └── PhysicalHashJoin { join_type: LeftOuter, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=20000,io=3000}, stat: {row_cnt=1000} }
+        │       ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
+        │       │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        │       └── PhysicalAgg
+        │           ├── aggrs:Agg(Sum)
+        │           │   └── [ Cast { cast_to: Int64, child: #2 } ]
+        │           ├── groups: [ #0 ]
+        │           ├── cost: {compute=14000,io=2000}
+        │           ├── stat: {row_cnt=1000}
+        │           └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=6000,io=2000}, stat: {row_cnt=1000} }
+        │               ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
+        │               │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        │               └── PhysicalScan { table: t2, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
 */
 
 -- Test whether the optimizer can unnest correlated subqueries with (scalar op group agg)
@@ -168,53 +161,39 @@ LogicalProjection { exprs: [ #0, #1 ] }
                                                     ├── LogicalAgg { exprs: [], groups: [ #0 ] }
                                                     │   └── LogicalScan { table: t1 }
                                                     └── LogicalScan { table: t2 }
-PhysicalProjection { exprs: [ #0, #1 ], cost: {compute=44228080,io=5000}, stat: {row_cnt=10} }
-└── PhysicalProjection { exprs: [ #0, #1, #2, #4 ], cost: {compute=44228050,io=5000}, stat: {row_cnt=10} }
-    └── PhysicalFilter
-        ├── cond:Gt
-        │   ├── #4
-        │   └── 100(i64)
-        ├── cost: {compute=44228000,io=5000}
-        ├── stat: {row_cnt=10}
-        └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=44225000,io=5000}, stat: {row_cnt=1000} }
-            ├── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-            └── PhysicalNestedLoopJoin
-                ├── join_type: LeftOuter
-                ├── cond:And
-                │   └── Eq
-                │       ├── #0
-                │       └── #1
-                ├── cost: {compute=44123000,io=4000}
-                ├── stat: {row_cnt=100000}
-                ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
-                │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-                └── PhysicalAgg
-                    ├── aggrs:Agg(Sum)
-                    │   └── [ #2 ]
-                    ├── groups: [ #0 ]
-                    ├── cost: {compute=4119000,io=3000}
-                    ├── stat: {row_cnt=10000}
-                    └── PhysicalProjection { exprs: [ #0, #2, #3 ], cost: {compute=4059000,io=3000}, stat: {row_cnt=10000} }
-                        └── PhysicalNestedLoopJoin
-                            ├── join_type: LeftOuter
-                            ├── cond:And
-                            │   └── Eq
-                            │       ├── #0
-                            │       └── #1
-                            ├── cost: {compute=4019000,io=3000}
-                            ├── stat: {row_cnt=10000}
-                            ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
-                            │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-                            └── PhysicalAgg
-                                ├── aggrs:Agg(Sum)
-                                │   └── [ Cast { cast_to: Int64, child: #2 } ]
-                                ├── groups: [ #0, #1 ]
-                                ├── cost: {compute=15000,io=2000}
-                                ├── stat: {row_cnt=1000}
-                                └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=6000,io=2000}, stat: {row_cnt=1000} }
-                                    ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
-                                    │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-                                    └── PhysicalScan { table: t2, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+PhysicalProjection { exprs: [ #0, #1 ], cost: {compute=41100,io=5000}, stat: {row_cnt=10} }
+└── PhysicalProjection { exprs: [ #3, #4, #0, #2 ], cost: {compute=41070,io=5000}, stat: {row_cnt=10} }
+    └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=41020,io=5000}, stat: {row_cnt=10} }
+        ├── PhysicalFilter
+        │   ├── cond:Gt
+        │   │   ├── #2
+        │   │   └── 100(i64)
+        │   ├── cost: {compute=40000,io=4000}
+        │   ├── stat: {row_cnt=10}
+        │   └── PhysicalHashJoin { join_type: LeftOuter, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=37000,io=4000}, stat: {row_cnt=1000} }
+        │       ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
+        │       │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        │       └── PhysicalAgg
+        │           ├── aggrs:Agg(Sum)
+        │           │   └── [ #2 ]
+        │           ├── groups: [ #0 ]
+        │           ├── cost: {compute=31000,io=3000}
+        │           ├── stat: {row_cnt=1000}
+        │           └── PhysicalProjection { exprs: [ #0, #2, #3 ], cost: {compute=25000,io=3000}, stat: {row_cnt=1000} }
+        │               └── PhysicalHashJoin { join_type: LeftOuter, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=21000,io=3000}, stat: {row_cnt=1000} }
+        │                   ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
+        │                   │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        │                   └── PhysicalAgg
+        │                       ├── aggrs:Agg(Sum)
+        │                       │   └── [ Cast { cast_to: Int64, child: #2 } ]
+        │                       ├── groups: [ #0, #1 ]
+        │                       ├── cost: {compute=15000,io=2000}
+        │                       ├── stat: {row_cnt=1000}
+        │                       └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=6000,io=2000}, stat: {row_cnt=1000} }
+        │                           ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
+        │                           │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        │                           └── PhysicalScan { table: t2, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
 */
 
 -- Test whether the optimizer can unnest correlated subqueries with scalar agg in select list
@@ -264,18 +243,11 @@ LogicalProjection { exprs: [ #0, #2 ] }
                                 ├── LogicalAgg { exprs: [], groups: [ #0 ] }
                                 │   └── LogicalScan { table: t1 }
                                 └── LogicalScan { table: t2 }
-PhysicalProjection { exprs: [ #0, #3 ], cost: {compute=4038000,io=4000}, stat: {row_cnt=1000} }
-└── PhysicalProjection { exprs: [ #0, #1, #2, #4 ], cost: {compute=4035000,io=4000}, stat: {row_cnt=1000} }
-    └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=4030000,io=4000}, stat: {row_cnt=1000} }
-        ├── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-        └── PhysicalNestedLoopJoin
-            ├── join_type: LeftOuter
-            ├── cond:And
-            │   └── Eq
-            │       ├── #0
-            │       └── #1
-            ├── cost: {compute=4018000,io=3000}
-            ├── stat: {row_cnt=10000}
+PhysicalProjection { exprs: [ #0, #3 ], cost: {compute=29000,io=4000}, stat: {row_cnt=1000} }
+└── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=26000,io=4000}, stat: {row_cnt=1000} }
+    ├── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+    └── PhysicalProjection { exprs: [ #0, #2 ], cost: {compute=23000,io=3000}, stat: {row_cnt=1000} }
+        └── PhysicalHashJoin { join_type: LeftOuter, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=20000,io=3000}, stat: {row_cnt=1000} }
             ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
             │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
             └── PhysicalAgg
@@ -359,37 +331,30 @@ LogicalProjection { exprs: [ #0, #1 ] }
                                         └── LogicalJoin { join_type: Inner, cond: true }
                                             ├── LogicalScan { table: t2 }
                                             └── LogicalScan { table: t3 }
-PhysicalProjection { exprs: [ #0, #1 ], cost: {compute=4036080,io=5000}, stat: {row_cnt=10} }
-└── PhysicalProjection { exprs: [ #0, #1, #2, #4 ], cost: {compute=4036050,io=5000}, stat: {row_cnt=10} }
-    └── PhysicalFilter
-        ├── cond:Gt
-        │   ├── #4
-        │   └── 100(i64)
-        ├── cost: {compute=4036000,io=5000}
-        ├── stat: {row_cnt=10}
-        └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=4033000,io=5000}, stat: {row_cnt=1000} }
-            ├── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-            └── PhysicalNestedLoopJoin
-                ├── join_type: LeftOuter
-                ├── cond:And
-                │   └── Eq
-                │       ├── #0
-                │       └── #1
-                ├── cost: {compute=4021000,io=4000}
-                ├── stat: {row_cnt=10000}
-                ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
-                │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-                └── PhysicalAgg
-                    ├── aggrs:Agg(Sum)
-                    │   └── [ Cast { cast_to: Int64, child: #2 } ]
-                    ├── groups: [ #0 ]
-                    ├── cost: {compute=17000,io=3000}
-                    ├── stat: {row_cnt=1000}
-                    └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=9000,io=3000}, stat: {row_cnt=1000} }
-                        ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
-                        │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-                        └── PhysicalHashJoin { join_type: Inner, left_keys: [ #1 ], right_keys: [ #0 ], cost: {compute=3000,io=2000}, stat: {row_cnt=1000} }
-                            ├── PhysicalScan { table: t2, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
-                            └── PhysicalScan { table: t3, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+PhysicalProjection { exprs: [ #0, #1 ], cost: {compute=27100,io=5000}, stat: {row_cnt=10} }
+└── PhysicalProjection { exprs: [ #3, #4, #0, #2 ], cost: {compute=27070,io=5000}, stat: {row_cnt=10} }
+    └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=27020,io=5000}, stat: {row_cnt=10} }
+        ├── PhysicalFilter
+        │   ├── cond:Gt
+        │   │   ├── #2
+        │   │   └── 100(i64)
+        │   ├── cost: {compute=26000,io=4000}
+        │   ├── stat: {row_cnt=10}
+        │   └── PhysicalHashJoin { join_type: LeftOuter, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=23000,io=4000}, stat: {row_cnt=1000} }
+        │       ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
+        │       │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        │       └── PhysicalAgg
+        │           ├── aggrs:Agg(Sum)
+        │           │   └── [ Cast { cast_to: Int64, child: #2 } ]
+        │           ├── groups: [ #0 ]
+        │           ├── cost: {compute=17000,io=3000}
+        │           ├── stat: {row_cnt=1000}
+        │           └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ], cost: {compute=9000,io=3000}, stat: {row_cnt=1000} }
+        │               ├── PhysicalAgg { aggrs: [], groups: [ #0 ], cost: {compute=3000,io=1000}, stat: {row_cnt=1000} }
+        │               │   └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        │               └── PhysicalHashJoin { join_type: Inner, left_keys: [ #1 ], right_keys: [ #0 ], cost: {compute=3000,io=2000}, stat: {row_cnt=1000} }
+        │                   ├── PhysicalScan { table: t2, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        │                   └── PhysicalScan { table: t3, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
+        └── PhysicalScan { table: t1, cost: {compute=0,io=1000}, stat: {row_cnt=1000} }
 */
 

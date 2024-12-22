@@ -71,12 +71,7 @@ PhysicalSort
         │   │       ├── Cast { cast_to: Date32, child: "1993-07-01" }
         │   │       └── INTERVAL_MONTH_DAY_NANO (3, 0, 0)
         │   └── #9
-        └── PhysicalNestedLoopJoin
-            ├── join_type: LeftMark
-            ├── cond:And
-            │   └── Eq
-            │       ├── #0
-            │       └── #9
+        └── PhysicalHashJoin { join_type: LeftMark, left_keys: [ #0 ], right_keys: [ #0 ] }
             ├── PhysicalScan { table: orders }
             └── PhysicalProjection { exprs: [ #16, #0, #1, #2, #3, #4, #5, #6, #7, #8, #9, #10, #11, #12, #13, #14, #15 ] }
                 └── PhysicalHashJoin { join_type: Inner, left_keys: [ #0 ], right_keys: [ #0 ] }

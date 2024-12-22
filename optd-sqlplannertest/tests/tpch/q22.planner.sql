@@ -121,12 +121,7 @@ PhysicalSort
             │   │   └── #8
             │   └── Not
             │       └── [ #9 ]
-            └── PhysicalNestedLoopJoin
-                ├── join_type: LeftMark
-                ├── cond:And
-                │   └── Eq
-                │       ├── #0
-                │       └── #9
+            └── PhysicalHashJoin { join_type: LeftMark, left_keys: [ #0 ], right_keys: [ #0 ] }
                 ├── PhysicalNestedLoopJoin { join_type: Inner, cond: true }
                 │   ├── PhysicalScan { table: customer }
                 │   └── PhysicalAgg
