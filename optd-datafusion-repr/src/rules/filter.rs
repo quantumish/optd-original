@@ -38,41 +38,35 @@ pub(crate) fn simplify_log_expr(log_expr: ArcDfPredNode, changed: &mut bool) -> 
         if let DfPredType::Constant(ConstantType::Bool) = new_child.typ {
             let data = ConstantPred::from_pred_node(new_child).unwrap().value();
             *changed = true;
-            // TrueExpr
-            if data.as_bool() {
-                if op == LogOpType::And {
-                    // skip True in And
-                    continue;
-                }
-                if op == LogOpType::Or {
+
+            match (data.as_bool(), op) {
+                (true, LogOpType::Or) => {
                     // replace whole exprList with True
                     return ConstantPred::bool(true).into_pred_node();
                 }
-                unreachable!("no other type in logOp");
+                (false, LogOpType::And) => {
+                    // replace whole exprList with False
+                    return ConstantPred::bool(false).into_pred_node();
+                }
+                _ => {
+                    // skip True in `And`, and False in `Or`
+                    continue;
+                }
             }
-            // FalseExpr
-            if op == LogOpType::And {
-                // replace whole exprList with False
-                return ConstantPred::bool(false).into_pred_node();
-            }
-            if op == LogOpType::Or {
-                // skip False in Or
-                continue;
-            }
-            unreachable!("no other type in logOp");
         } else if !new_children_set.contains(&new_child) {
             new_children_set.insert(new_child.clone());
             new_children.push(new_child);
         }
     }
     if new_children.is_empty() {
-        if op == LogOpType::And {
-            return ConstantPred::bool(true).into_pred_node();
+        match op {
+            LogOpType::And => {
+                return ConstantPred::bool(true).into_pred_node();
+            }
+            LogOpType::Or => {
+                return ConstantPred::bool(false).into_pred_node();
+            }
         }
-        if op == LogOpType::Or {
-            return ConstantPred::bool(false).into_pred_node();
-        }
-        unreachable!("no other type in logOp");
     }
     if new_children.len() == 1 {
         *changed = true;
