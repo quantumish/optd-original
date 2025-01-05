@@ -105,7 +105,9 @@ impl DatafusionOptimizer {
         rule_wrappers.push(Arc::new(rules::FilterInnerJoinTransposeRule::new()));
         rule_wrappers.push(Arc::new(rules::FilterSortTransposeRule::new()));
         rule_wrappers.push(Arc::new(rules::FilterAggTransposeRule::new()));
-        rule_wrappers.push(Arc::new(rules::HashJoinRule::new()));
+        rule_wrappers.push(Arc::new(rules::HashJoinInnerRule::new()));
+        rule_wrappers.push(Arc::new(rules::HashJoinLeftOuterRule::new()));
+        rule_wrappers.push(Arc::new(rules::HashJoinLeftMarkRule::new()));
         rule_wrappers.push(Arc::new(rules::JoinCommuteRule::new()));
         rule_wrappers.push(Arc::new(rules::JoinAssocRule::new()));
         rule_wrappers.push(Arc::new(rules::ProjectionPullUpJoin::new()));
@@ -177,7 +179,7 @@ impl DatafusionOptimizer {
         for rule in rules {
             rule_wrappers.push(rule);
         }
-        rule_wrappers.push(Arc::new(rules::HashJoinRule::new()));
+        rule_wrappers.push(Arc::new(rules::HashJoinInnerRule::new()));
         rule_wrappers.insert(0, Arc::new(rules::JoinCommuteRule::new()));
         rule_wrappers.insert(1, Arc::new(rules::JoinAssocRule::new()));
         rule_wrappers.insert(2, Arc::new(rules::ProjectionPullUpJoin::new()));
