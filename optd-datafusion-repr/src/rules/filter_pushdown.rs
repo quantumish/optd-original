@@ -17,7 +17,6 @@
 
 use core::panic;
 use std::collections::HashSet;
-use std::ops::Not;
 use std::vec;
 
 use optd_core::nodes::PlanNodeOrGroup;
@@ -550,12 +549,14 @@ mod tests {
                 )
                 .into_pred_node(),
                 BinOpPred::new(
-                    // This one stay in join condition
+                    // This one stays in the join condition.
                     ColumnRefPred::new(2).into_pred_node(),
                     ColumnRefPred::new(8).into_pred_node(),
                     BinOpType::Eq,
                 )
                 .into_pred_node(),
+                // This one stays in the join condition.
+                ConstantPred::bool(true).into_pred_node(),
             ],
         );
 
@@ -567,7 +568,50 @@ mod tests {
         );
 
         let plan = test_optimizer.optimize(join.into_plan_node()).unwrap();
-        println!("{}", plan.explain_to_string(None));
+        let join = LogicalJoin::from_plan_node(plan.clone()).unwrap();
+
+        assert_eq!(join.join_type(), &JoinType::LeftOuter);
+
+        {
+            // Examine join conditions.
+            let join_conds = LogOpPred::from_pred_node(join.cond()).unwrap();
+            assert!(matches!(join_conds.op_type(), LogOpType::And));
+            assert_eq!(join_conds.children().len(), 2);
+            let bin_op_with_both_ref =
+                BinOpPred::from_pred_node(join_conds.children()[0].clone()).unwrap();
+            assert!(matches!(bin_op_with_both_ref.op_type(), BinOpType::Eq));
+            let col_2 = ColumnRefPred::from_pred_node(bin_op_with_both_ref.left_child()).unwrap();
+            let col_8 = ColumnRefPred::from_pred_node(bin_op_with_both_ref.right_child()).unwrap();
+            assert_eq!(col_2.index(), 2);
+            assert_eq!(col_8.index(), 8);
+            let constant_true =
+                ConstantPred::from_pred_node(join_conds.children()[1].clone()).unwrap();
+            assert_eq!(constant_true.value().as_bool(), true);
+        }
+
+        {
+            // Examine left child filter + condition
+            let filter_left =
+                LogicalFilter::from_plan_node(join.left().unwrap_plan_node()).unwrap();
+            let bin_op = BinOpPred::from_pred_node(filter_left.cond()).unwrap();
+            assert!(matches!(bin_op.op_type(), BinOpType::Eq));
+            let col = ColumnRefPred::from_pred_node(bin_op.left_child()).unwrap();
+            let constant = ConstantPred::from_pred_node(bin_op.right_child()).unwrap();
+            assert_eq!(col.index(), 0);
+            assert_eq!(constant.value().as_i32(), 5);
+        }
+
+        {
+            // Examine right child filter + condition
+            let filter_right =
+                LogicalFilter::from_plan_node(join.right().unwrap_plan_node()).unwrap();
+            let bin_op = BinOpPred::from_pred_node(filter_right.cond()).unwrap();
+            assert!(matches!(bin_op.op_type(), BinOpType::Eq));
+            let col = ColumnRefPred::from_pred_node(bin_op.left_child()).unwrap();
+            let constant = ConstantPred::from_pred_node(bin_op.right_child()).unwrap();
+            assert_eq!(col.index(), 3);
+            assert_eq!(constant.value().as_i32(), 6);
+        }
     }
 
     #[test]
