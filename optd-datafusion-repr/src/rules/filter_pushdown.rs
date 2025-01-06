@@ -17,6 +17,7 @@
 
 use core::panic;
 use std::collections::HashSet;
+use std::ops::Not;
 use std::vec;
 
 use optd_core::nodes::PlanNodeOrGroup;
@@ -162,13 +163,13 @@ fn apply_filter_merge(
 
 // Rule to split predicates in a join condition into those that can be pushed down as filters.
 define_rule!(
-    InnerJoinSplitFilterRule,
+    JoinInnerSplitFilterRule,
     apply_join_split_filter,
     (Join(JoinType::Inner), child_a, child_b)
 );
 
 define_rule!(
-    LeftOuterJoinSplitFilterRule,
+    JoinLeftOuterSplitFilterRule,
     apply_join_split_filter,
     (Join(JoinType::LeftOuter), child_a, child_b)
 );
@@ -177,7 +178,7 @@ fn apply_join_split_filter(
     optimizer: &impl Optimizer<DfNodeType>,
     binding: ArcDfPlanNode,
 ) -> Vec<PlanNodeOrGroup<DfNodeType>> {
-    let join = LogicalJoin::from_plan_node(binding).unwrap();
+    let join = LogicalJoin::from_plan_node(binding.clone()).unwrap();
     let left_child = join.left();
     let right_child = join.right();
     let join_cond = join.cond();
@@ -207,9 +208,10 @@ fn apply_join_split_filter(
                 })
                 .unwrap(),
             ),
-            JoinCondDependency::Both => keep_conds.push(expr),
-            JoinCondDependency::None => {
-                unreachable!("join condition should always involve at least one relation");
+            JoinCondDependency::Both | JoinCondDependency::None => {
+                // JoinCondDependency::None could happy if there are no column refs in the predicate.
+                // e.g. true for CrossJoin.
+                keep_conds.push(expr);
             }
         }
     };
@@ -524,7 +526,7 @@ mod tests {
 
     #[test]
     fn join_split_filter() {
-        let mut test_optimizer = new_test_optimizer(Arc::new(LeftOuterJoinSplitFilterRule::new()));
+        let mut test_optimizer = new_test_optimizer(Arc::new(JoinLeftOuterSplitFilterRule::new()));
 
         let scan1 = LogicalScan::new("customer".into());
 
