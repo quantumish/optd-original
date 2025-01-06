@@ -450,6 +450,8 @@ fn apply_filter_agg_transpose(
 mod tests {
     use std::sync::Arc;
 
+    use optd_core::nodes::Value;
+
     use super::*;
     use crate::plan_nodes::{BinOpPred, BinOpType, ConstantPred, LogicalScan};
     use crate::testing::new_test_optimizer;
@@ -586,7 +588,7 @@ mod tests {
             assert_eq!(col_8.index(), 8);
             let constant_true =
                 ConstantPred::from_pred_node(join_conds.children()[1].clone()).unwrap();
-            assert_eq!(constant_true.value().as_bool(), true);
+            assert_eq!(constant_true.value(), Value::Bool(true));
         }
 
         {
