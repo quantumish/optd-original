@@ -61,14 +61,9 @@ PhysicalSort
         ├── aggrs:Agg(Count)
         │   └── [ #8 ]
         ├── groups: [ #0 ]
-        └── PhysicalNestedLoopJoin
-            ├── join_type: LeftOuter
-            ├── cond:And
-            │   ├── Eq
-            │   │   ├── #0
-            │   │   └── #9
-            │   └── Like { expr: #16, pattern: "%special%requests%", negated: true, case_insensitive: false }
+        └── PhysicalHashJoin { join_type: LeftOuter, left_keys: [ #0 ], right_keys: [ #1 ] }
             ├── PhysicalScan { table: customer }
-            └── PhysicalScan { table: orders }
+            └── PhysicalFilter { cond: Like { expr: #8, pattern: "%special%requests%", negated: true, case_insensitive: false } }
+                └── PhysicalScan { table: orders }
 */
 

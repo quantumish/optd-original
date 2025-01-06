@@ -38,13 +38,13 @@ group_id=!6 winner=21 weighted_cost=1003000 cost={compute=1001000,io=2000} stat=
   P4=(Constant(Bool) true)
   P32=(List (ColumnRef 2(u64)) (ColumnRef 3(u64)) (ColumnRef 0(u64)) (ColumnRef 1(u64)))
   P37=(List (ColumnRef 0(u64)) (ColumnRef 1(u64)) (ColumnRef 2(u64)) (ColumnRef 3(u64)))
-  step=1/1 apply_rule group_id=!6 applied_expr_id=5 produced_expr_id=5 rule_id=19
+  step=1/1 apply_rule group_id=!6 applied_expr_id=5 produced_expr_id=5 rule_id=22
   step=1/5 apply_rule group_id=!6 applied_expr_id=5 produced_expr_id=21 rule_id=2
   step=1/8 decide_winner group_id=!6 proposed_winner_expr=21 children_winner_exprs=[23,23] total_weighted_cost=1003000
-  step=2/9 apply_rule group_id=!6 applied_expr_id=5 produced_expr_id=42 rule_id=13
-  step=2/10 apply_rule group_id=!6 applied_expr_id=42 produced_expr_id=49 rule_id=17
-  step=2/11 apply_rule group_id=!6 applied_expr_id=49 produced_expr_id=42 rule_id=17
-  step=2/12 apply_rule group_id=!6 applied_expr_id=49 produced_expr_id=49 rule_id=17
+  step=2/9 apply_rule group_id=!6 applied_expr_id=5 produced_expr_id=42 rule_id=16
+  step=2/10 apply_rule group_id=!6 applied_expr_id=42 produced_expr_id=49 rule_id=20
+  step=2/11 apply_rule group_id=!6 applied_expr_id=49 produced_expr_id=42 rule_id=20
+  step=2/12 apply_rule group_id=!6 applied_expr_id=49 produced_expr_id=49 rule_id=20
 group_id=!12 winner=17 weighted_cost=11908.75477931522 cost={compute=9908.75477931522,io=2000} stat={row_cnt=1000} | (PhysicalSort !31 P10)
   schema=[t1v1:Int32, t1v2:Int32, t1v1:Int32, t1v2:Int32]
   column_ref=[t1.0, t1.1, t1.0, t1.1]
@@ -79,26 +79,26 @@ group_id=!31 winner=28 weighted_cost=5000 cost={compute=3000,io=2000} stat={row_
   step=1/4 apply_rule group_id=!9 applied_expr_id=8 produced_expr_id=19 rule_id=3
   step=1/9 decide_winner group_id=!9 proposed_winner_expr=19 children_winner_exprs=[21] total_weighted_cost=1033000
   step=1/10 apply_rule group_id=!9 applied_expr_id=15 produced_expr_id=25 rule_id=2
-  step=1/11 apply_rule group_id=!9 applied_expr_id=15 produced_expr_id=28 rule_id=12
+  step=1/11 apply_rule group_id=!9 applied_expr_id=15 produced_expr_id=28 rule_id=13
   step=1/12 decide_winner group_id=!9 proposed_winner_expr=28 children_winner_exprs=[23,23] total_weighted_cost=5000
   step=2/2 decide_winner group_id=!9 proposed_winner_expr=28 children_winner_exprs=[23,23] total_weighted_cost=5000
-  step=2/3 apply_rule group_id=!9 applied_expr_id=15 produced_expr_id=33 rule_id=13
-  step=2/4 apply_rule group_id=!31 applied_expr_id=30 produced_expr_id=36 rule_id=13
-  step=2/5 apply_rule group_id=!31 applied_expr_id=36 produced_expr_id=38 rule_id=17
-  step=2/6 apply_rule group_id=!31 applied_expr_id=38 produced_expr_id=36 rule_id=17
-  step=2/7 apply_rule group_id=!31 applied_expr_id=38 produced_expr_id=38 rule_id=17
-  step=2/8 apply_rule group_id=!31 applied_expr_id=36 produced_expr_id=45 rule_id=21
+  step=2/3 apply_rule group_id=!9 applied_expr_id=15 produced_expr_id=33 rule_id=16
+  step=2/4 apply_rule group_id=!31 applied_expr_id=30 produced_expr_id=36 rule_id=16
+  step=2/5 apply_rule group_id=!31 applied_expr_id=36 produced_expr_id=38 rule_id=20
+  step=2/6 apply_rule group_id=!31 applied_expr_id=38 produced_expr_id=36 rule_id=20
+  step=2/7 apply_rule group_id=!31 applied_expr_id=38 produced_expr_id=38 rule_id=20
+  step=2/8 apply_rule group_id=!31 applied_expr_id=36 produced_expr_id=45 rule_id=24
   step=2/13 apply_rule group_id=!31 applied_expr_id=45 produced_expr_id=36 rule_id=8
   step=2/14 apply_rule group_id=!31 applied_expr_id=45 produced_expr_id=38 rule_id=8
   step=2/15 apply_rule group_id=!31 applied_expr_id=45 produced_expr_id=30 rule_id=9
   step=2/16 apply_rule group_id=!9 applied_expr_id=33 produced_expr_id=58 rule_id=1
   step=2/17 apply_rule group_id=!31 applied_expr_id=30 produced_expr_id=60 rule_id=2
-  step=2/18 apply_rule group_id=!31 applied_expr_id=30 produced_expr_id=28 rule_id=12
+  step=2/18 apply_rule group_id=!31 applied_expr_id=30 produced_expr_id=28 rule_id=13
   step=2/19 decide_winner group_id=!31 proposed_winner_expr=28 children_winner_exprs=[23,23] total_weighted_cost=5000
-  step=2/20 apply_rule group_id=!31 applied_expr_id=33 produced_expr_id=38 rule_id=17
-  step=2/21 apply_rule group_id=!31 applied_expr_id=33 produced_expr_id=33 rule_id=17
-  step=2/22 apply_rule group_id=!31 applied_expr_id=33 produced_expr_id=45 rule_id=21
-  step=2/23 apply_rule group_id=!31 applied_expr_id=33 produced_expr_id=8 rule_id=21
+  step=2/20 apply_rule group_id=!31 applied_expr_id=33 produced_expr_id=38 rule_id=20
+  step=2/21 apply_rule group_id=!31 applied_expr_id=33 produced_expr_id=33 rule_id=20
+  step=2/22 apply_rule group_id=!31 applied_expr_id=33 produced_expr_id=45 rule_id=24
+  step=2/23 apply_rule group_id=!31 applied_expr_id=33 produced_expr_id=8 rule_id=24
   step=2/24 apply_rule group_id=!31 applied_expr_id=36 produced_expr_id=58 rule_id=1
   step=2/25 apply_rule group_id=!31 applied_expr_id=38 produced_expr_id=71 rule_id=1
   step=2/26 apply_rule group_id=!31 applied_expr_id=45 produced_expr_id=73 rule_id=3

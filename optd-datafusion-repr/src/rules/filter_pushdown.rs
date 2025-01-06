@@ -24,7 +24,7 @@ use optd_core::optimizer::Optimizer;
 use optd_core::rules::{Rule, RuleMatcher};
 
 use super::filter::simplify_log_expr;
-use super::macros::{define_rule, define_rule_discriminant};
+use super::macros::define_rule;
 use crate::plan_nodes::{
     ArcDfPlanNode, ArcDfPredNode, ColumnRefPred, DfNodeType, DfPredType, DfReprPlanNode,
     DfReprPredNode, JoinType, ListPred, LogOpPred, LogOpType, LogicalAgg, LogicalFilter,
@@ -177,7 +177,6 @@ fn apply_join_split_filter(
     optimizer: &impl Optimizer<DfNodeType>,
     binding: ArcDfPlanNode,
 ) -> Vec<PlanNodeOrGroup<DfNodeType>> {
-    println!("Applying JoinSplitFilterRule");
     let join = LogicalJoin::from_plan_node(binding).unwrap();
     let left_child = join.left();
     let right_child = join.right();
