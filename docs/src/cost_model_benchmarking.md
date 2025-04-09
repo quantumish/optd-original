@@ -1,7 +1,7 @@
 # Cost Model Cardinality Benchmarking
 
 ## Overview
-You can benchmark the cardinality estimates of optd's cost model against other DBMSs using the optd-perfbench module.
+You can benchmark the cardinality estimates of optd_og's cost model against other DBMSs using the optd_og-perfbench module.
 
 All aspects of benchmarking (except for setting up comparison DBMSs) are handled automatically. This includes loading workload data, building statistics, gathering the true cardinality of workload queries, running explains on workload queries, and aggregating cardinality estimation results.
 
@@ -14,20 +14,20 @@ First, you need to manually install, configure, and start the DBMS(s) being comp
 
 Once the DBMS(s) being compared against are set up, run this to quickly get started. It should take a few minutes on the first run and a few seconds on subsequent runs. This specific command that tests TPC-H with scale factor 0.01 is **run in a CI script** before every merge to main, so it should be very reliable.
 ```
-cargo run --release --bin optd-perfbench cardbench tpch --scale-factor 0.01
+cargo run --release --bin optd_og-perfbench cardbench tpch --scale-factor 0.01
 ```
 
 After this, you can try out different workloads and scale factors based on the CLI options.
 
-Roughly speaking, there are two main ways the benchmarking system is used: (a) to compare the cardinality estimates of optd against another system *in aggregate* or (b) to investigate the cardinality estimates of a small subset of queries. The command above is for use case (a). The system automatically outputs a variety of *aggregate* information about the q-error including median, p95, max, and more. Additionally, the system outputs *comparative* information which shows the # of queries in which a given DBMS performs the best or is tied for the best.
+Roughly speaking, there are two main ways the benchmarking system is used: (a) to compare the cardinality estimates of optd_og against another system *in aggregate* or (b) to investigate the cardinality estimates of a small subset of queries. The command above is for use case (a). The system automatically outputs a variety of *aggregate* information about the q-error including median, p95, max, and more. Additionally, the system outputs *comparative* information which shows the # of queries in which a given DBMS performs the best or is tied for the best.
 
 For use case (b), you will want to set the `RUST_LOG` environment variable to `info` and use the `--query-ids` parameter. Setting `RUST_LOG` to `info` will show the results of the explain commands on all DBMSs and `--query-ids` will let you only run specific queries to avoid cluttering the output.
 ```
-RUST_LOG=info cargo run --release --bin optd-perfbench cardbench tpch --scale-factor 0.01 --query-ids 2
+RUST_LOG=info cargo run --release --bin optd_og-perfbench cardbench tpch --scale-factor 0.01 --query-ids 2
 ```
 
 ## Supporting More Queries
-Currently, we are missing support for a few queries in TPC-H, JOB, and JOB-light. An *approximate* list of supported queries can be found in the `[workload].rs` files (e.g. `tpch.rs` and `job.rs`). If `--query-ids` is ommitted from the command, we use the list of supported queries as defined in the `[workload].rs` file by default. Some of these queries are not supported by DataFusion, some by optd, and some because we run into an OOM error when trying to execute them on Postgres. Because of the last point, the set of supported queries may be different on different machines. The list of queries in `[workload].rs` (at least the one in `tpch.rs`) is tested to be working on the CI machine.
+Currently, we are missing support for a few queries in TPC-H, JOB, and JOB-light. An *approximate* list of supported queries can be found in the `[workload].rs` files (e.g. `tpch.rs` and `job.rs`). If `--query-ids` is ommitted from the command, we use the list of supported queries as defined in the `[workload].rs` file by default. Some of these queries are not supported by DataFusion, some by optd_og, and some because we run into an OOM error when trying to execute them on Postgres. Because of the last point, the set of supported queries may be different on different machines. The list of queries in `[workload].rs` (at least the one in `tpch.rs`) is tested to be working on the CI machine.
 
 The *definitive* list of supported queries on your machine can be found by running `dev_scripts/which_queries_work.sh`, which simply runs the benchmarking system for each query individually. While this script does take a long time to complete when first run, it has the nice side effect of warming up all your caches so that subsequent runs are fast. The script outputs a string to replace the `WORKING_*QUERY_IDS` variable in `[workload].rs` as well as another string to use as the `--query-ids` argument. If you are use `which_queries_work.sh` to figure out the queries that work on your machine, you probably want to use `--query-ids` instead of setting `WORKING_*QUERY_IDS`.
 

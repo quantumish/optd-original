@@ -1,22 +1,22 @@
 [workspace]
 members = [
-    "datafusion-optd-cli",
-    "optd-core",
-    "optd-datafusion-bridge",
-    "optd-datafusion-repr",
-    "optd-sqlplannertest",
-    "optd-adaptive-demo",
-    "optd-gungnir",
-    "optd-perfbench",
-    "optd-datafusion-repr-adv-cost",
-    "optd-sqllogictest",
+    "datafusion-optd_og-cli",
+    "optd_og-core",
+    "optd_og-datafusion-bridge",
+    "optd_og-datafusion-repr",
+    "optd_og-sqlplannertest",
+    "optd_og-adaptive-demo",
+    "optd_og-gungnir",
+    "optd_og-perfbench",
+    "optd_og-datafusion-repr-adv-cost",
+    "optd_og-sqllogictest",
 ]
 resolver = "2"
 
 [workspace.package]
 version = "0.1.1"
-edition = "2021"
-homepage = "https://github.com/cmu-db/optd"
+edition = "2024"
+homepage = "https://github.com/cmu-db/optd_og"
 keywords = ["sql", "database", "optimizer", "datafusion"]
 license = "MIT"
-repository = "https://github.com/cmu-db/optd"
+repository = "https://github.com/cmu-db/optd_og"

@@ -8,9 +8,9 @@
       </g>
     </marker>
   </defs>
-  <g id="optd-datafusion-overview" stroke="none" fill-opacity="1" fill="none" stroke-opacity="1" stroke-dasharray="none">
-    <title>optd-datafusion-overview</title>
-    <g id="optd-datafusion-overview_Layer_1">
+  <g id="optd_og-datafusion-overview" stroke="none" fill-opacity="1" fill="none" stroke-opacity="1" stroke-dasharray="none">
+    <title>optd_og-datafusion-overview</title>
+    <g id="optd_og-datafusion-overview_Layer_1">
       <title>Layer 1</title>
       <g id="Graphic_2">
         <rect x="145" y="172.5" width="776.5" height="109" fill="white"/>
@@ -27,7 +27,7 @@
       </g>
       <g id="Graphic_4">
         <text transform="translate(755.3 391.552)" fill="black">
-          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="3623768e-19" y="15">optd</tspan>
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="3623768e-19" y="15">optd_og</tspan>
         </text>
       </g>
       <g id="Graphic_6">
@@ -82,7 +82,7 @@
         <rect x="409" y="333.25" width="124.5" height="54.5" fill="white"/>
         <rect x="409" y="333.25" width="124.5" height="54.5" stroke="gray" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"/>
         <text transform="translate(414 351.276)" fill="black">
-          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="3.906" y="15">optd Optimizer</tspan>
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="3.906" y="15">optd_og Optimizer</tspan>
         </text>
       </g>
       <g id="Line_16">
@@ -91,7 +91,7 @@
       <g id="Graphic_17">
         <text transform="translate(307.76475 342.052)" fill="black">
           <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="0" y="15">Logical Plan</tspan>
-          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="6.512" y="33.448">(optd repr)</tspan>
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="6.512" y="33.448">(optd_og repr)</tspan>
         </text>
       </g>
       <g id="Graphic_18">
@@ -108,7 +108,7 @@
       <g id="Graphic_20">
         <text transform="translate(544.9867 342.052)" fill="black">
           <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="0" y="15">Physical Plan</tspan>
-          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="10.512" y="33.448">(optd repr)</tspan>
+          <tspan font-family="Helvetica Neue" font-size="16" fill="black" x="10.512" y="33.448">(optd_og repr)</tspan>
         </text>
       </g>
       <g id="Graphic_21">

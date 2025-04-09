@@ -8,7 +8,7 @@ Currently, we hard code decimal type to have `15, 2` precision. Type inferences 
 
 ## Expression
 
-optd supports exploring SQL expressions in the optimization process. However, this might be super inefficient as optimizing a plan node (i.e., join to hash join) usually needs the full binding of an expression tree. This could have exponential plan space and is super inefficient.
+optd_og supports exploring SQL expressions in the optimization process. However, this might be super inefficient as optimizing a plan node (i.e., join to hash join) usually needs the full binding of an expression tree. This could have exponential plan space and is super inefficient.
 
 ## Bindings
 

@@ -4,7 +4,7 @@
 You can run this demo with the following command:
 
 ```shell
-cargo run --release --bin optd-adaptive-tpch-q8
+cargo run --release --bin optd_og-adaptive-tpch-q8
 ```
 
 In this demo, we create the TPC-H schema with test data of scale 0.01. There are 8 tables in TPC-H Q8, and it is impossible to enumerate all join combinations in one run. The demo will run this query multiple times, each time exploring a subset of the plan space. Therefore, optimization will be fast for each iteration, and as the plan space is more explored in each iteration, the produced plan will converge to the optimal join order.

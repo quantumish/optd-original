@@ -1,8 +1,8 @@
 # Summary
 
-# optd book
+# optd_og book
 
-[Intro to optd]()
+[Intro to optd_og]()
 - [The Core]()
   - [Plan Representation]()
   - [Memo Table and Logical Equivalence]()
@@ -37,7 +37,7 @@
   - [sqllogictest]()
   - [perfbench]()
 - [Debugging and Tracing]()
-  - [optd-core Tracing]()
+  - [optd_og-core Tracing]()
   - [Memo Table Visualization]()
   - [Optimizer Dump]()
 - [Contribution Guide]()
@@ -50,7 +50,7 @@
 ---
 
 # DEPRECATED
-- [old optd book]()
+- [old optd_og book]()
   - [Core Framework]()
     - [Optimizer](./optimizer.md)
     - [Plan Representation](./plan_repr.md)

@@ -3,7 +3,7 @@
 You can run this demo with the following command:
 
 ```shell
-cargo run --release --bin optd-adaptive-three-join
+cargo run --release --bin optd_og-adaptive-three-join
 ```
 
 We create 3 tables and join them. The underlying data are getting updated every time the query is executed.

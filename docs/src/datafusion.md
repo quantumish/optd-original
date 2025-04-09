@@ -1,19 +1,19 @@
 # Integration with Datafusion
 
-optd is currently used as a physical optimizer for Apache Arrow Datafusion. To interact with Datafusion, you may use the following command to start the Datafusion cli.
+optd_og is currently used as a physical optimizer for Apache Arrow Datafusion. To interact with Datafusion, you may use the following command to start the Datafusion cli.
 
 ```bash
-cargo run --bin datafusion-optd-cli
-cargo run --bin datafusion-optd-cli -- -f datafusion-optd-cli/tpch-sf0_01/test.sql # run TPC-H queries
+cargo run --bin datafusion-optd_og-cli
+cargo run --bin datafusion-optd_og-cli -- -f datafusion-optd_og-cli/tpch-sf0_01/test.sql # run TPC-H queries
 ```
 
-optd is designed as a flexible optimizer framework that can be used in any database systems. The core of optd is in `optd-core`, which contains the Cascades optimizer implementation and the definition of key structures in the optimization process. Users can implement the interfaces and use optd in their own database systems by using the `optd-core` crate.
+optd_og is designed as a flexible optimizer framework that can be used in any database systems. The core of optd_og is in `optd_og-core`, which contains the Cascades optimizer implementation and the definition of key structures in the optimization process. Users can implement the interfaces and use optd_og in their own database systems by using the `optd_og-core` crate.
 
-The optd Datafusion representation contains Datafusion plan nodes, SQL expressions, optimizer rules, properties, and cost models, as in the `optd-datafusion-repr` crate.
+The optd_og Datafusion representation contains Datafusion plan nodes, SQL expressions, optimizer rules, properties, and cost models, as in the `optd_og-datafusion-repr` crate.
 
-The `optd-datafusion-bridge` crate contains necessary code to convert Datafusion logical plans into optd Datafusion representation and convert optd Datafusion representation back into Datafusion physical plans. It implements the `QueryPlanner` trait so that it can be easily integrated into Datafusion.
+The `optd_og-datafusion-bridge` crate contains necessary code to convert Datafusion logical plans into optd_og Datafusion representation and convert optd_og Datafusion representation back into Datafusion physical plans. It implements the `QueryPlanner` trait so that it can be easily integrated into Datafusion.
 
-![integration with Datafusion](./optd-cascades/optd-datafusion-overview.svg)
+![integration with Datafusion](./optd_og-cascades/optd_og-datafusion-overview.svg)
 
 ## Plan Nodes
 
@@ -31,7 +31,7 @@ Sort child:PlanNode sort_exprs:ExprList <- requiring SortExprs
 
 Note that only `ExprList` or `List` can have variable number of children. All plan nodes only have a fixed number of children. For projections and aggregations where users will need to provide a list of expressions, they will have `List` node as their direct child.
 
-Developers can use the `define_plan_node` macro to add new plan nodes into the optd-datafusion-repr.
+Developers can use the `define_plan_node` macro to add new plan nodes into the optd_og-datafusion-repr.
 
 ```rust
 #[derive(Clone, Debug)]
@@ -70,9 +70,9 @@ LogicalJoin { #0 = #3 }
   Scan t2
 ```
 
-in the optd representation.
+in the optd_og representation.
 
-For SQL expressions, the optd Datafusion representation does not do cost-based searches on expressions, though this is supported in optd-core. Each SQL expression can only have one binding in the current implementation.
+For SQL expressions, the optd_og Datafusion representation does not do cost-based searches on expressions, though this is supported in optd_og-core. Each SQL expression can only have one binding in the current implementation.
 
 ## Explain
 

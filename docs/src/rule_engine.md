@@ -1,10 +1,10 @@
 # Rules and Rule Engine
 
-optd has a rule match engine based on Rust macros so that it is easier for developers to programmatically define a rule.
+optd_og has a rule match engine based on Rust macros so that it is easier for developers to programmatically define a rule.
 
 ## Define a Rule Matcher
 
-optd developers can define a rule by either implementing the `Rule` trait or use the helper macros. Both examples can be found under `optd-datafusion-repr/src/rules`.
+optd_og developers can define a rule by either implementing the `Rule` trait or use the helper macros. Both examples can be found under `optd_og-datafusion-repr/src/rules`.
 
 ```rust
 // A join B -> B join A
@@ -17,7 +17,7 @@ define_rule!(
 
 Developers can use the `define_rule!` macro to define a rule by providing a rule matcher and a transformation function. As in the above `JoinCommuteRule` example, the rule matcher is `(Join(JoinType::Inner), left, right, [cond])`, which is a Lisp representation of the rule.
 
-The join plan node in the optd Datafusion representation is: the `typ` field is `Join(JoinType)`, and the children are left child, right child, and the join condition. Therefore, this rule matches the inner join node, and retrieves left child, right child, and cond back.
+The join plan node in the optd_og Datafusion representation is: the `typ` field is `Join(JoinType)`, and the children are left child, right child, and the join condition. Therefore, this rule matches the inner join node, and retrieves left child, right child, and cond back.
 
 ```rust
 // (A join B) join C -> A join (B join C)
@@ -35,7 +35,7 @@ define_rule!(
 
 The above example is the join assoc rule. It matches a left-deep join tree. The following figure is the visual representation of the two matchers:
 
-![rule matcher visualization](./optd-cascades/optd-rule-1.svg)
+![rule matcher visualization](./optd_og-cascades/optd_og-rule-1.svg)
 
 Note that variables like `a`, `b`, `c` will only match the group ID of a child, while `[cond1]` will expand the group IDs and retrieve the concrete expressions. `[xxx]` is useful when matching the SQL expression child.
 
@@ -66,17 +66,17 @@ Users can expect `a`, `b`, `c` to be a `OptRelNodeTyp::Placeholder` type as the 
 
 One crucial step in the Cascades apply rule step is to generate bindings for a rule. From the optimizer's perspective, it will only see `RelMemoNode` during the search process, which only contains the current node type and the children group IDs. It will need to recursively match the children so as to provide the rule transformation function a structure to process. For example, let us go through the example of applying the join assoc rule in the plan space.
 
-![join assoc rule bindings](./optd-cascades/optd-rule-2.svg)
+![join assoc rule bindings](./optd_og-cascades/optd_og-rule-2.svg)
 
 As in the above figure, we first discover that two expressions in group 1 match the top-most node in the matcher. Therefore, it iterates all expressions and explore the child groups and matches the expressions in the child group with the child node in the matcher. Group 2 has two expressions that match the left side of the matcher, and group 3 also has two expressions satisfying the matcher requirement. Therefore, we have 4 bindings for this matcher in the plan space, and the rule transformation function will be invoked for 4 times for each of the bindings.
 
-Currently, optd generates all bindings at once and invoke the rule transformation function for each of the bindings. This could be improved in the future that we have a `BindingsIterator` that generates one binding at a time.
+Currently, optd_og generates all bindings at once and invoke the rule transformation function for each of the bindings. This could be improved in the future that we have a `BindingsIterator` that generates one binding at a time.
 
 ## Rule Engine
 
 ### IR Representation
 
-The rule engine matches the plan space based on a rule matcher IR defined in `optd-core/src/rules/ir.rs`. Currently, the IR contains 6 primitives that define the match pattern:
+The rule engine matches the plan space based on a rule matcher IR defined in `optd_og-core/src/rules/ir.rs`. Currently, the IR contains 6 primitives that define the match pattern:
 
 ```rust
 pub enum RuleMatcher<T: RelNodeTyp> {
