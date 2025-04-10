@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 datafusion-optd_og-cli = { path = "../datafusion-optd_og-cli" }
 rand = "0.8"
-datafusion = { version = "45.0.0", features = [
+datafusion = { version = "46.0.1", features = [
     "avro",
     "crypto_expressions",
     "encoding_expressions",

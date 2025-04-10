@@ -235,7 +235,7 @@ impl OptdPlanContext<'_> {
                 .into_pred_node())
             }
             Expr::AggregateFunction(x) => {
-                let args = self.conv_into_optd_og_expr_list(&x.args, context, dep_ctx, subqueries)?;
+                let args = self.conv_into_optd_og_expr_list(&x.params.args, context, dep_ctx, subqueries)?;
                 Ok(
                     FuncPred::new(FuncType::new_agg(x.func.name().to_string()), args)
                         .into_pred_node(),

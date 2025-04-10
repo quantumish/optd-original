@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-datafusion = { version = "45.0.0", features = [
+datafusion = { version = "46.0.1", features = [
     "avro",
     "crypto_expressions",
     "encoding_expressions",

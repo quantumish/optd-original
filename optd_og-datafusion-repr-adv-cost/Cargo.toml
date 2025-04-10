@@ -12,7 +12,7 @@ repository = { workspace = true }
 anyhow = "1"
 arrow-schema = "54.3.1"
 assert_approx_eq = "1.1.0"
-datafusion = "45.0.0"
+datafusion = "46.0.1"
 ordered-float = "4"
 optd_og-datafusion-repr = { path = "../optd_og-datafusion-repr", version = "0.1" }
 optd_og-core = { path = "../optd_og-core", version = "0.1" }
