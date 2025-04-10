@@ -1,0 +1,25 @@
+[package]
+name = "optd_og-datafusion-repr-adv-cost"
+description = "datafusion plan representation for optd_og"
+version = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = "1"
+arrow-schema = "53.3.0"
+assert_approx_eq = "1.1.0"
+datafusion = "43.0.0"
+ordered-float = "4"
+optd_og-datafusion-repr = { path = "../optd_og-datafusion-repr", version = "0.1" }
+optd_og-core = { path = "../optd_og-core", version = "0.1" }
+serde = { version = "1.0", features = ["derive"] }
+rayon = "1.10"
+itertools = "0.13"
+test-case = "3.3"
+tracing = "0.1"
+optd_og-gungnir = { path = "../optd_og-gungnir", version = "0.1" }
+serde_with = { version = "3.7.0", features = ["json"] }

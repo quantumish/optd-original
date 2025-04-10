@@ -1,0 +1,25 @@
+[package]
+name = "optd_og-datafusion-bridge"
+description = "datafusion bridge for optd_og"
+version = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+datafusion = "43.0.0"
+datafusion-expr = "43.0.0"
+async-trait = "0.1"
+itertools = "0.13"
+optd_og-core = { path = "../optd_og-core", version = "0.1" }
+optd_og-datafusion-repr = { path = "../optd_og-datafusion-repr", version = "0.1" }
+optd_og-datafusion-repr-adv-cost = { path = "../optd_og-datafusion-repr-adv-cost", version = "0.1" }
+anyhow = "1"
+async-recursion = "1"
+futures-lite = "2"
+futures-util = "0.3"
+tracing = "0.1"

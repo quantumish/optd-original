@@ -1,0 +1,26 @@
+[package]
+name = "optd_og-core"
+description = "core library for optd_og"
+version = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+tracing = "0.1"
+ordered-float = "4"
+itertools = "0.13"
+serde = { version = "1.0", features = ["derive", "rc"] }
+arrow-schema = "54.3.1"
+chrono = "0.4.39"
+erased-serde = "0.4"
+pollster = "0.4"
+stacker = "0.1"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"

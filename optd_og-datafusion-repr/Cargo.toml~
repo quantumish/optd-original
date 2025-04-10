@@ -1,0 +1,24 @@
+[package]
+name = "optd_og-datafusion-repr"
+description = "datafusion plan representation for optd_og"
+version = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+arrow-schema = "53.3.0"
+tracing = "0.1"
+pretty-xmlish = "0.1"
+itertools = "0.13"
+optd_og-core = { path = "../optd_og-core", version = "0.1" }
+camelpaste = "0.1"
+datafusion-expr = "43.0.0"
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3.3"
+heck = "0.5"

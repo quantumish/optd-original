@@ -1,0 +1,37 @@
+- sql: |
+    create table t1(t1v1 int, t1v2 int);
+    create table t2(t2v1 int, t2v3 int);
+    create table t3(t3v2 int, t3v4 int);
+  tasks:
+    - execute
+# - sql: |
+#     select * from t1 where t1v1 in (select t2v1 from t2);
+#   desc: Test whether the optimizer can unnest "in" subqueries. -- failing with unsupported expression
+#   tasks:
+#     - explain_logical
+- sql: |
+    select * from t1 where (select sum(t2v3) from t2 where t2v1 = t1v1) > 100;
+  desc: Test whether the optimizer can unnest correlated subqueries with (scalar op agg)
+  tasks:
+    - explain[verbose]:logical_optd_og,optimized_logical_optd_og,physical_optd_og
+- sql: |
+    select * from t1 where (select sum(sumt2v3) from (select t2v1, sum(t2v3) as sumt2v3 from t2 where t2v1 = t1v1 group by t2v1)) > 100;
+  desc: Test whether the optimizer can unnest correlated subqueries with (scalar op group agg)
+  tasks:
+    - explain[verbose]:logical_optd_og,optimized_logical_optd_og,physical_optd_og
+- sql: |
+    select t1v1, (select sum(t2v3) from t2 where t2v1 = t1v1) as sum from t1;
+  desc: Test whether the optimizer can unnest correlated subqueries with scalar agg in select list
+  tasks:
+    - explain[verbose]:logical_optd_og,optimized_logical_optd_og,physical_optd_og
+# - sql: |
+#     select * from t1 where exists (select * from t2 where t2v1 = t1v1);
+#   desc: Test whether the optimizer can unnest correlated subqueries with exists
+#   tasks:
+#     - explain[verbose]:logical_optd_og,optimized_logical_optd_og,physical_optd_og
+# todo: a test case on quantifier (any/all)
+- sql: |
+    select * from t1 where (select sum(t2v3) from (select * from t2, t3 where t2v1 = t1v1 and t2v3 = t3v2)) > 100;
+  desc: Test whether the optimizer can unnest correlated subqueries.
+  tasks:
+    - explain[verbose]:logical_optd_og,optimized_logical_optd_og,physical_optd_og
