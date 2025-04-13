@@ -86,7 +86,7 @@ pub struct GroupInfo {
 }
 
 pub struct Group {
-    pub(crate) group_exprs: HashSet<ExprId>,
+    pub group_exprs: HashSet<ExprId>,
     pub(crate) info: GroupInfo,
     pub(crate) properties: Arc<[Box<dyn LogicalProperty>]>,
 }
