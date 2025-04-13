@@ -18,8 +18,8 @@ use super::adv_stats::stats::{
 };
 
 pub struct AdvStats<
-    M: MostCommonValues + Serialize + DeserializeOwned,
-    D: Distribution + Serialize + DeserializeOwned,
+    M: MostCommonValues + Clone + Serialize + DeserializeOwned,
+    D: Distribution + Clone + Serialize + DeserializeOwned,
 > {
     pub(crate) per_table_stats_map: BaseTableStats<M, D>,
 }
@@ -39,8 +39,8 @@ const DEFAULT_UNK_SEL: f64 = 0.005;
 const UNIMPLEMENTED_SEL: f64 = 0.01;
 
 impl<
-        M: MostCommonValues + Serialize + DeserializeOwned,
-        D: Distribution + Serialize + DeserializeOwned,
+        M: MostCommonValues + Clone + Serialize + DeserializeOwned,
+        D: Distribution + Clone + Serialize + DeserializeOwned,
     > AdvStats<M, D>
 {
     pub fn new(per_table_stats_map: BaseTableStats<M, D>) -> Self {

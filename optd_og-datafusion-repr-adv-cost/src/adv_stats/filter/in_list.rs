@@ -16,8 +16,8 @@ use crate::adv_stats::stats::{Distribution, MostCommonValues};
 use crate::adv_stats::{AdvStats, UNIMPLEMENTED_SEL};
 
 impl<
-        M: MostCommonValues + Serialize + DeserializeOwned,
-        D: Distribution + Serialize + DeserializeOwned,
+        M: MostCommonValues + Clone + Serialize + DeserializeOwned,
+        D: Distribution + Clone + Serialize + DeserializeOwned,
     > AdvStats<M, D>
 {
     /// Only support colA in (val1, val2, val3) where colA is a column ref and

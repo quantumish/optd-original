@@ -11,8 +11,8 @@ use super::AdvStats;
 use crate::adv_stats::stats::{Distribution, MostCommonValues};
 
 impl<
-        M: MostCommonValues + Serialize + DeserializeOwned,
-        D: Distribution + Serialize + DeserializeOwned,
+        M: MostCommonValues + Clone + Serialize + DeserializeOwned,
+        D: Distribution + Clone + Serialize + DeserializeOwned,
     > AdvStats<M, D>
 {
     pub(crate) fn get_limit_row_cnt(&self, child_row_cnt: f64, fetch_expr: ArcDfPredNode) -> f64 {

@@ -244,6 +244,7 @@ impl<'a, T: NodeType, M: Memo<T>> TaskContext<'a, T, M> {
         self.on_task_start();
         let SearchContext { group_id, .. } = ctx;
         trace!(event = "task_begin", task = "apply_rule", expr_id = %expr_id, exploring = %exploring);
+		
         if self.optimizer.is_rule_fired(expr_id, rule_id) {
             trace!(event = "task_end", task = "apply_rule", expr_id = %expr_id, exploring = %exploring, outcome = "rule already fired");
             return;
@@ -327,8 +328,8 @@ impl<'a, T: NodeType, M: Memo<T>> TaskContext<'a, T, M> {
                 break;
             }
 
-            trace!(event = "before_apply_rule", task = "apply_rule", input_binding=%binding);
-            let applied = rule.apply(self.optimizer, binding);
+            trace!(event = "before_apply_rule", task = "apply_rule", input_binding=%binding);			
+			let applied = rule.apply(self.optimizer, binding);
             for expr in applied {
                 trace!(event = "after_apply_rule", task = "apply_rule", output_binding=%expr);
                 // TODO: remove clone in the below line

@@ -26,8 +26,8 @@ mod in_list;
 mod like;
 
 impl<
-        M: MostCommonValues + Serialize + DeserializeOwned,
-        D: Distribution + Serialize + DeserializeOwned,
+        M: MostCommonValues + Clone + Serialize + DeserializeOwned,
+        D: Distribution + Clone + Serialize + DeserializeOwned,
     > AdvStats<M, D>
 {
     pub(crate) fn get_filter_row_cnt(

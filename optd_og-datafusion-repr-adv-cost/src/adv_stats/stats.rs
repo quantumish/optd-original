@@ -105,7 +105,7 @@ enum StatType {
     Partial, // Only mcvs, n_distinct, null_frac.
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ColumnCombValueStats<M: MostCommonValues, D: Distribution> {
     pub mcvs: M,          // Does NOT contain full nulls.
     pub distr: Option<D>, // Does NOT contain mcvs; optional.
@@ -125,10 +125,10 @@ impl<M: MostCommonValues, D: Distribution> ColumnCombValueStats<M, D> {
 }
 
 #[serde_with::serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TableStats<
-    M: MostCommonValues + Serialize + DeserializeOwned,
-    D: Distribution + Serialize + DeserializeOwned,
+    M: MostCommonValues + Clone + Serialize + DeserializeOwned,
+    D: Distribution + Clone + Serialize + DeserializeOwned,
 > {
     pub row_cnt: usize,
     #[serde_as(as = "HashMap<serde_with::json::JsonString, _>")]
@@ -136,8 +136,8 @@ pub struct TableStats<
 }
 
 impl<
-        M: MostCommonValues + Serialize + DeserializeOwned,
-        D: Distribution + Serialize + DeserializeOwned,
+        M: MostCommonValues + Clone + Serialize + DeserializeOwned,
+        D: Distribution + Clone + Serialize + DeserializeOwned,
     > TableStats<M, D>
 {
     pub fn new(

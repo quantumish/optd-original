@@ -26,8 +26,8 @@ const FULL_WILDCARD_SEL_FACTOR: f64 = 5.0;
 const FIXED_CHAR_SEL_FACTOR: f64 = 0.2;
 
 impl<
-        M: MostCommonValues + Serialize + DeserializeOwned,
-        D: Distribution + Serialize + DeserializeOwned,
+        M: MostCommonValues + Clone + Serialize + DeserializeOwned,
+        D: Distribution + Clone + Serialize + DeserializeOwned,
     > AdvStats<M, D>
 {
     /// Compute the selectivity of a (NOT) LIKE expression.

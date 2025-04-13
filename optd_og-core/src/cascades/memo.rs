@@ -320,7 +320,7 @@ impl<T: NodeType> Memo<T> for NaiveMemo<T> {
     }
 
     fn reduce_group(&self, group_id: GroupId) -> GroupId {
-        self.merged_group_mapping[&group_id]
+		self.merged_group_mapping[&group_id]
     }
 }
 
