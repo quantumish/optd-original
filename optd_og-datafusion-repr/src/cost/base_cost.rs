@@ -13,7 +13,7 @@ use crate::plan_nodes::{ArcDfPredNode, ConstantPred, DfNodeType, DfReprPredNode}
 
 #[derive(Debug, Clone)]
 pub struct DfStatistics {
-    row_cnt: f64,
+    pub row_cnt: f64,
 }
 
 pub struct DfCostModel {
