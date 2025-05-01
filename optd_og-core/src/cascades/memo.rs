@@ -7,7 +7,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use itertools::Itertools;
 use tracing::trace;
 
@@ -217,6 +217,19 @@ pub struct NaiveMemo<T: NodeType> {
     // In this case, we need this mapping to redirect to the merged group ID.
     merged_group_mapping: HashMap<GroupId, GroupId>,
     dup_expr_mapping: HashMap<ExprId, ExprId>,
+
+    // DEBUG
+    group_physical_expr_count: HashMap<GroupId, usize>,
+}
+
+// DEBUG
+impl<T: NodeType> NaiveMemo<T> {
+    pub fn get_group_physical_expr_count(&self, group_id: GroupId) -> usize {
+        self.group_physical_expr_count
+            .get(&group_id)
+            .copied()
+            .unwrap_or(0)
+    }
 }
 
 impl<T: NodeType> Memo<T> for NaiveMemo<T> {
@@ -243,8 +256,16 @@ impl<T: NodeType> Memo<T> for NaiveMemo<T> {
             PlanNodeOrGroup::PlanNode(rel_node) => {
                 let reduced_group_id = self.reduce_group(group_id);
                 let (returned_group_id, expr_id) = self
-                    .add_new_group_expr_inner(rel_node, Some(reduced_group_id))
+                    .add_new_group_expr_inner(rel_node.clone(), Some(reduced_group_id))
                     .unwrap();
+
+                if !rel_node.typ.is_logical() {
+                    self.group_physical_expr_count
+                        .entry(reduced_group_id)
+                        .and_modify(|x| *x += 1)
+                        .or_insert(1);
+                }
+
                 assert_eq!(returned_group_id, reduced_group_id);
                 self.verify_integrity();
                 Some(expr_id)
@@ -320,7 +341,7 @@ impl<T: NodeType> Memo<T> for NaiveMemo<T> {
     }
 
     fn reduce_group(&self, group_id: GroupId) -> GroupId {
-		self.merged_group_mapping[&group_id]
+        self.merged_group_mapping[&group_id]
     }
 }
 
@@ -337,6 +358,7 @@ impl<T: NodeType> NaiveMemo<T> {
             merged_group_mapping: HashMap::new(),
             property_builders,
             dup_expr_mapping: HashMap::new(),
+            group_physical_expr_count: HashMap::new(),
         }
     }
 
@@ -472,7 +494,7 @@ impl<T: NodeType> NaiveMemo<T> {
                         self.expr_id_to_group_id.remove(expr_id);
                         self.dup_expr_mapping.insert(*expr_id, *dup_expr);
                         new_expr_list.insert(*dup_expr); // adding this temporarily -- should be
-                                                         // removed once recursive merge finishes
+                    // removed once recursive merge finishes
                     } else {
                         self.expr_node_to_expr_id.insert(new_expr, *expr_id);
                         new_expr_list.insert(*expr_id);
@@ -641,7 +663,7 @@ pub(crate) mod tests {
     use crate::{
         nodes::Value,
         tests::common::{
-            expr, group, join, list, project, scan, MemoTestRelTyp, TestProp, TestPropertyBuilder,
+            MemoTestRelTyp, TestProp, TestPropertyBuilder, expr, group, join, list, project, scan,
         },
     };
 
